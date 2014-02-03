@@ -19,7 +19,13 @@ import java.math.BigInteger;
 import java.sql.Date;
 import java.sql.Time;
 
-
+/**
+ * Row in a query result set. A row consist of 0-n columns
+ * of a single type. Column values can be accessed with a 0-based
+ * index or column label.
+ * 
+ * @author Antti Laisi
+ */
 public interface Row {
 
 	String getString(int index);

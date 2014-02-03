@@ -20,15 +20,15 @@ import com.github.pgasync.impl.message.ReadyForQuery;
 
 public class ReadyForQueryDecoder implements Decoder<ReadyForQuery> {
 
-	@Override
-	public ReadyForQuery read(ByteBuffer buffer) {
-		buffer.get();
-		return ReadyForQuery.INSTANCE;
-	}
+    @Override
+    public ReadyForQuery read(ByteBuffer buffer) {
+        buffer.get();
+        return ReadyForQuery.INSTANCE;
+    }
 
-	@Override
-	public byte getMessageId() {
-		return (byte) 'Z';
-	}
+    @Override
+    public byte getMessageId() {
+        return (byte) 'Z';
+    }
 
 }

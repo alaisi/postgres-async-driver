@@ -20,44 +20,47 @@ import com.github.pgasync.impl.message.ExtendedQuery;
 
 public class ExtendedQueryEncoder implements Encoder<ExtendedQuery> {
 
-	@Override
-	public Class<ExtendedQuery> getMessageType() {
-		return ExtendedQuery.class;
-	}
+    @Override
+    public Class<ExtendedQuery> getMessageType() {
+        return ExtendedQuery.class;
+    }
 
-	@Override
-	public void write(ExtendedQuery msg, ByteBuffer buffer) {
-		switch (msg) {
-		case DESCRIBE:
-			describe(buffer); break;
-		case EXECUTE:
-			execute(buffer); break;
-		case SYNC:
-			sync(buffer); break;
-		default:
-			throw new IllegalStateException(msg.name());
-		}
-	}
+    @Override
+    public void write(ExtendedQuery msg, ByteBuffer buffer) {
+        switch (msg) {
+        case DESCRIBE:
+            describe(buffer);
+            break;
+        case EXECUTE:
+            execute(buffer);
+            break;
+        case SYNC:
+            sync(buffer);
+            break;
+        default:
+            throw new IllegalStateException(msg.name());
+        }
+    }
 
-	void describe(ByteBuffer buffer) {
-		buffer.put((byte) 'D');
-		buffer.putInt(0);
-		buffer.put((byte) 'S');
-		buffer.put((byte) 0);
-		buffer.putInt(1, buffer.position() - 1);
-	}
+    void describe(ByteBuffer buffer) {
+        buffer.put((byte) 'D');
+        buffer.putInt(0);
+        buffer.put((byte) 'S');
+        buffer.put((byte) 0);
+        buffer.putInt(1, buffer.position() - 1);
+    }
 
-	void execute(ByteBuffer buffer) {
-		buffer.put((byte) 'E');
-		buffer.putInt(0);
-		buffer.put((byte) 0);
-		buffer.putInt(0);
-		buffer.putInt(1, buffer.position() - 1);
-	}
+    void execute(ByteBuffer buffer) {
+        buffer.put((byte) 'E');
+        buffer.putInt(0);
+        buffer.put((byte) 0);
+        buffer.putInt(0);
+        buffer.putInt(1, buffer.position() - 1);
+    }
 
-	void sync(ByteBuffer buffer) {
-		buffer.put((byte) 'S');
-		buffer.putInt(4);
-	}
+    void sync(ByteBuffer buffer) {
+        buffer.put((byte) 'S');
+        buffer.putInt(4);
+    }
 
 }

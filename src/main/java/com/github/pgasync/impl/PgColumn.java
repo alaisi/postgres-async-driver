@@ -14,13 +14,18 @@
 
 package com.github.pgasync.impl;
 
+/**
+ * Column index/type pair.
+ * 
+ * @author Antti Laisi
+ */
 class PgColumn {
 
-	final int index;
-	final Oid type;
+    final int index;
+    final Oid type;
 
-	public PgColumn(int index, Oid type) {
-		this.index = index;
-		this.type = type;
-	}
+    public PgColumn(int index, Oid type) {
+        this.index = index;
+        this.type = type;
+    }
 }

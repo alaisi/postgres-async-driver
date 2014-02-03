@@ -24,25 +24,25 @@ import com.github.pgasync.impl.message.RowDescription.ColumnDescription;
 
 public class RowDescriptionDecoder implements Decoder<RowDescription> {
 
-	@Override
-	public byte getMessageId() {
-		return (byte) 'T';
-	}
+    @Override
+    public byte getMessageId() {
+        return (byte) 'T';
+    }
 
-	@Override
-	public RowDescription read(ByteBuffer buffer) {
-		byte[] bytes = new byte[255];
-		ColumnDescription[] columns = new ColumnDescription[buffer.getShort()];
+    @Override
+    public RowDescription read(ByteBuffer buffer) {
+        byte[] bytes = new byte[255];
+        ColumnDescription[] columns = new ColumnDescription[buffer.getShort()];
 
-		for(int i = 0; i < columns.length; i++) {
-			String name = getCString(buffer, bytes);
-			buffer.position(buffer.position() + 6);
-			Oid type = Oid.valueOfId(buffer.getInt());
-			buffer.position(buffer.position() + 8);
-			columns[i] = new ColumnDescription(name, type);
-		}
+        for (int i = 0; i < columns.length; i++) {
+            String name = getCString(buffer, bytes);
+            buffer.position(buffer.position() + 6);
+            Oid type = Oid.valueOfId(buffer.getInt());
+            buffer.position(buffer.position() + 8);
+            columns[i] = new ColumnDescription(name, type);
+        }
 
-		return new RowDescription(columns);
-	}
+        return new RowDescription(columns);
+    }
 
 }

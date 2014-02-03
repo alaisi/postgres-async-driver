@@ -20,25 +20,25 @@ import com.github.pgasync.impl.message.Authentication;
 
 public class AuthenticationDecoder implements Decoder<Authentication> {
 
-	static final int OK = 0;
-	static final int PASSWORD_MD5_CHALLENGE = 5;
+    static final int OK = 0;
+    static final int PASSWORD_MD5_CHALLENGE = 5;
 
-	@Override
-	public byte getMessageId() {
-		return (byte) 'R';
-	}
+    @Override
+    public byte getMessageId() {
+        return (byte) 'R';
+    }
 
-	@Override
-	public Authentication read(ByteBuffer buffer) {
-		Authentication msg = new Authentication();
-		int type = buffer.getInt();
-		if(type == OK) {
-			msg.setAuthenticationOk();
-		} else if(type == PASSWORD_MD5_CHALLENGE) {
-			msg.setMd5Salt(new byte[4]);
-			buffer.get(msg.getMd5Salt());
-		}
-		return msg;
-	}
+    @Override
+    public Authentication read(ByteBuffer buffer) {
+        Authentication msg = new Authentication();
+        int type = buffer.getInt();
+        if (type == OK) {
+            msg.setAuthenticationOk();
+        } else if (type == PASSWORD_MD5_CHALLENGE) {
+            msg.setMd5Salt(new byte[4]);
+            buffer.get(msg.getMd5Salt());
+        }
+        return msg;
+    }
 
 }

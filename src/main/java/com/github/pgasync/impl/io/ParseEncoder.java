@@ -22,19 +22,19 @@ import com.github.pgasync.impl.message.Parse;
 
 public class ParseEncoder implements Encoder<Parse> {
 
-	@Override
-	public Class<Parse> getMessageType() {
-		return Parse.class;
-	}
+    @Override
+    public Class<Parse> getMessageType() {
+        return Parse.class;
+    }
 
-	@Override
-	public void write(Parse msg, ByteBuffer buffer) {
-		buffer.put((byte) 'P');
-		buffer.putInt(0);
-		buffer.put((byte) 0); // unnamed prepared statement
-		putCString(buffer, msg.getQuery());
-		buffer.putShort((short) 0); // no parameter types
-		buffer.putInt(1, buffer.position() - 1);
-	}
+    @Override
+    public void write(Parse msg, ByteBuffer buffer) {
+        buffer.put((byte) 'P');
+        buffer.putInt(0);
+        buffer.put((byte) 0); // unnamed prepared statement
+        putCString(buffer, msg.getQuery());
+        buffer.putShort((short) 0); // no parameter types
+        buffer.putInt(1, buffer.position() - 1);
+    }
 
 }

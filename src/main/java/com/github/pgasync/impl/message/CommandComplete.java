@@ -16,18 +16,18 @@ package com.github.pgasync.impl.message;
 
 public class CommandComplete implements Message {
 
-	final int updatedRows;
+    final int updatedRows;
 
-	public CommandComplete(String tag) {
-		if(tag.contains("INSERT") || tag.contains("UPDATE") || tag.contains("DELETE")) {
-			String[] parts = tag.split(" ");
-			updatedRows = Integer.parseInt(parts[parts.length - 1]);
-		} else {
-			updatedRows = 0;
-		}
-	}
+    public CommandComplete(String tag) {
+        if (tag.contains("INSERT") || tag.contains("UPDATE") || tag.contains("DELETE")) {
+            String[] parts = tag.split(" ");
+            updatedRows = Integer.parseInt(parts[parts.length - 1]);
+        } else {
+            updatedRows = 0;
+        }
+    }
 
-	public int getUpdatedRows() {
-		return updatedRows;
-	}
+    public int getUpdatedRows() {
+        return updatedRows;
+    }
 }

@@ -20,8 +20,8 @@ import com.github.pgasync.impl.message.Message;
 
 public interface Encoder<T extends Message> {
 
-	Class<T> getMessageType();
+    Class<T> getMessageType();
 
-	void write(T msg, ByteBuffer buffer) ;
+    void write(T msg, ByteBuffer buffer);
 
 }

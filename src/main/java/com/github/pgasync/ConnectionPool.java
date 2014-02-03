@@ -20,50 +20,68 @@ import com.github.pgasync.callback.ConnectionHandler;
 import com.github.pgasync.callback.ErrorHandler;
 import com.github.pgasync.impl.netty.NettyPgConnectionPool;
 
+/**
+ * Pool of backend {@link Connection}s.
+ * 
+ * @author Antti Laisi
+ */
 public interface ConnectionPool extends Connection {
 
-	void getConnection(ConnectionHandler handler, ErrorHandler onError);
+    /**
+     * Executes a {@link ConnectionHandler} callback when a connection is
+     * available.
+     * 
+     * @param handler Called when a connection is acquired
+     * @param onError Called on exception thrown
+     */
+    void getConnection(ConnectionHandler handler, ErrorHandler onError);
 
-	/**
-	 * Builder
-	 */
-	public static class Builder {
+    /**
+     * Builder
+     */
+    public static class Builder {
 
-		String hostname = "localhost";
-		int port = 5432;
-		String username;
-		String password;
-		String database;
-		int poolSize = 20;
+        String hostname = "localhost";
+        int port = 5432;
+        String username;
+        String password;
+        String database;
+        int poolSize = 20;
 
-		public Builder hostname(String hostname) {
-			this.hostname = hostname;
-			return this;
-		}
-		public Builder port(int port) {
-			this.port = port;
-			return this;
-		}
-		public Builder username(String username) {
-			this.username = username;
-			return this;
-		}
-		public Builder password(String password) {
-			this.password = password;
-			return this;
-		}
-		public Builder database(String database) {
-			this.database = database;
-			return this;
-		}
-		public Builder poolSize(int poolSize) {
-			this.poolSize = poolSize;
-			return this;
-		}
-		public ConnectionPool build() {
-			return new NettyPgConnectionPool(new InetSocketAddress(hostname, port), 
-					username, password, database, poolSize);
-		}
-	}
+        public Builder hostname(String hostname) {
+            this.hostname = hostname;
+            return this;
+        }
+
+        public Builder port(int port) {
+            this.port = port;
+            return this;
+        }
+
+        public Builder username(String username) {
+            this.username = username;
+            return this;
+        }
+
+        public Builder password(String password) {
+            this.password = password;
+            return this;
+        }
+
+        public Builder database(String database) {
+            this.database = database;
+            return this;
+        }
+
+        public Builder poolSize(int poolSize) {
+            this.poolSize = poolSize;
+            return this;
+        }
+
+        public ConnectionPool build() {
+            return new NettyPgConnectionPool(new InetSocketAddress(hostname, port), 
+                    username, password, database, poolSize);
+        }
+    }
 
 }

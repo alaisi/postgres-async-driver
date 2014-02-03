@@ -21,20 +21,25 @@ import com.github.pgasync.impl.message.ErrorResponse;
 import com.github.pgasync.impl.message.ReadyForQuery;
 import com.github.pgasync.impl.message.RowDescription;
 
+/**
+ * Callback interface for handling messages sent by backend.
+ * 
+ * @author Antti Laisi
+ */
 public interface PgProtocolCallbacks {
 
-	void onThrowable(Throwable t);
+    void onThrowable(Throwable t);
 
-	void onErrorResponse(ErrorResponse msg);
+    void onErrorResponse(ErrorResponse msg);
 
-	void onAuthentication(Authentication msg);
+    void onAuthentication(Authentication msg);
 
-	void onRowDescription(RowDescription msg);
+    void onRowDescription(RowDescription msg);
 
-	void onDataRow(DataRow msg);
+    void onDataRow(DataRow msg);
 
-	void onCommandComplete(CommandComplete msg);
+    void onCommandComplete(CommandComplete msg);
 
-	void onReadyForQuery(ReadyForQuery msg);
+    void onReadyForQuery(ReadyForQuery msg);
 
 }

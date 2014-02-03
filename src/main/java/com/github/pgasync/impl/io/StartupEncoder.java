@@ -22,27 +22,23 @@ import com.github.pgasync.impl.message.Startup;
 
 public class StartupEncoder implements Encoder<Startup> {
 
-	@Override
-	public Class<Startup> getMessageType() {
-		return Startup.class;
-	}
+    @Override
+    public Class<Startup> getMessageType() {
+        return Startup.class;
+    }
 
-	@Override
-	public void write(Startup msg, ByteBuffer buffer) {
-		buffer.putInt(0);
-		buffer.putInt(msg.getProtocol());
+    @Override
+    public void write(Startup msg, ByteBuffer buffer) {
+        buffer.putInt(0);
+        buffer.putInt(msg.getProtocol());
 
-		for(String s : new String[]{
-				"user", msg.getUsername(), 
-				"database", msg.getDatabase(), 
-				"client_encoding", "UTF8"}) {
-			putCString(buffer, s);
-		}
+        for (String s : new String[] { "user", msg.getUsername(), "database", msg.getDatabase(),
+                "client_encoding", "UTF8" }) {
+            putCString(buffer, s);
+        }
 
-		buffer.put((byte) 0);
-		buffer.putInt(0, buffer.position());
-	}
-
-	
+        buffer.put((byte) 0);
+        buffer.putInt(0, buffer.position());
+    }
 
 }

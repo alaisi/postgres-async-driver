@@ -14,6 +14,8 @@
 
 package com.github.pgasync.impl;
 
+import static com.github.pgasync.impl.message.ErrorResponse.Level.FATAL;
+
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -40,191 +42,214 @@ import com.github.pgasync.impl.message.ReadyForQuery;
 import com.github.pgasync.impl.message.RowDescription;
 import com.github.pgasync.impl.message.Startup;
 
-
+/**
+ * A connection to PostgreSQL backed. The postmaster forks a backend process for
+ * each connection. A connection can process only a single query at a time.
+ * 
+ * @author Antti Laisi
+ */
 public class PgConnection implements Connection, PgProtocolCallbacks {
 
-	final PgProtocolStream stream;
+    final PgProtocolStream stream;
 
-	boolean connected;
-	String username;
-	String password;
+    String username;
+    String password;
 
-	ConnectionHandler connectedHandler;
-	ErrorHandler errorHandler;
-	ResultHandler queryHandler;
-	PgResultSet resultSet;
+    // errorHandler must be read before and be written after queryHandler/connectedHandler (memory barrier)
+    volatile ErrorHandler errorHandler;
+    ConnectionHandler connectedHandler;
+    ResultHandler queryHandler; 
 
-	public PgConnection(PgProtocolStream stream) {
-		this.stream = stream;
-	}
+    volatile boolean connected;
 
-	public void connect(String username, String password, String database, ConnectionHandler onConnected, ErrorHandler onError) {
-		this.username = username;
-		this.password = password;
-		this.errorHandler = onError;
-		this.connectedHandler = onConnected;
-		stream.connect(new Startup(username, database), this);
-	}
+    PgResultSet resultSet;
 
-	@Override
-	public void close() {
-		stream.close();
-	}
+    public PgConnection(PgProtocolStream stream) {
+        this.stream = stream;
+    }
 
-	// Connection
+    public void connect(String username, String password, String database, 
+            ConnectionHandler onConnected, ErrorHandler onError) {
+        this.username = username;
+        this.password = password;
+        this.connectedHandler = onConnected;
+        this.errorHandler = onError;
+        stream.connect(new Startup(username, database), this);
+    }
 
-	@Override
-	public void query(String sql, ResultHandler onQuery, ErrorHandler onError) {
-		if(queryHandler != null) {
-			onError.onError(new IllegalStateException("Query already in progress"));
-			return;
-		}
-		errorHandler = onError;
-		queryHandler = onQuery;
-		stream.send(new Query(sql));
-	}
+    public boolean isConnected() {
+        return connected;
+    }
 
-	@Override
-	@SuppressWarnings({"unchecked","rawtypes"})
-	public void query(String sql, List params, ResultHandler onQuery, ErrorHandler onError) {
-		if(params == null || params.isEmpty()) {
-			query(sql, onQuery, onError);
-			return;
-		}
-		if(queryHandler != null) {
-			onError.onError(new IllegalStateException("Query already in progress"));
-			return;
-		}
-		errorHandler = onError;
-		queryHandler = onQuery;
-		stream.send(new Parse(sql), new Bind(params), ExtendedQuery.DESCRIBE, ExtendedQuery.EXECUTE, ExtendedQuery.SYNC);
-	}
+    @Override
+    public void close() {
+        stream.close();
+        connected = false;
+    }
 
-	@Override
-	public void begin(final TransactionHandler handler, final ErrorHandler onError) {
+    // Connection
 
-		final TransactionCompletedHandler[] onCompletedRef = new TransactionCompletedHandler[1];
-		final ResultHandler queryToComplete = new ResultHandler() {
-			@Override
-			public void onResult(ResultSet rows) {
-				onCompletedRef[0].onComplete();
-			}
-		};
+    @Override
+    public void query(String sql, ResultHandler onQuery, ErrorHandler onError) {
+        if (queryHandler != null) {
+            onError.onError(new IllegalStateException("Query already in progress"));
+            return;
+        }
+        queryHandler = onQuery;
+        errorHandler = onError;
+        stream.send(new Query(sql));
+    }
 
-		final Transaction transaction = new Transaction() {
-			@Override
-			public void commit(TransactionCompletedHandler completed, ErrorHandler onCommitError) {
-				onCompletedRef[0] = completed;
-				query("COMMIT", queryToComplete, onCommitError);
-			}
-			@Override
-			public void rollback(TransactionCompletedHandler onCompleted, ErrorHandler onRollbackError) {
-				onCompletedRef[0] = onCompleted;
-				query("ROLLBACK", queryToComplete, onRollbackError);
-			}
-		};
+    @Override
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+    public void query(String sql, List params, ResultHandler onQuery, ErrorHandler onError) {
+        if (params == null || params.isEmpty()) {
+            query(sql, onQuery, onError);
+            return;
+        }
+        if (queryHandler != null) {
+            onError.onError(new IllegalStateException("Query already in progress"));
+            return;
+        }
+        queryHandler = onQuery;
+        errorHandler = onError;
+        stream.send(
+                new Parse(sql), 
+                new Bind(params), 
+                ExtendedQuery.DESCRIBE, 
+                ExtendedQuery.EXECUTE,
+                ExtendedQuery.SYNC);
+    }
 
-		query("BEGIN", new ResultHandler() {
-			@Override
-			public void onResult(ResultSet ignored) {
-				try {
-					handler.onBegin(PgConnection.this, transaction);
-				} catch(Exception e) {
-					invokeOnError(onError, e);
-				}
-			}
-		}, onError);
-	}
+    @Override
+    public void begin(final TransactionHandler handler, final ErrorHandler onError) {
 
-	// PgProtocolCallbacks
+        final TransactionCompletedHandler[] onCompletedRef = new TransactionCompletedHandler[1];
+        final ResultHandler queryToComplete = new ResultHandler() {
+            @Override
+            public void onResult(ResultSet rows) {
+                onCompletedRef[0].onComplete();
+            }
+        };
 
-	@Override
-	public void onThrowable(Throwable t) {
-		ErrorHandler err = errorHandler;
+        final Transaction transaction = new Transaction() {
+            @Override
+            public void commit(TransactionCompletedHandler onCompleted, ErrorHandler onCommitError) {
+                onCompletedRef[0] = onCompleted;
+                query("COMMIT", queryToComplete, onCommitError);
+            }
 
-		errorHandler = null;
-		queryHandler = null;
-		resultSet = null;
+            @Override
+            public void rollback(TransactionCompletedHandler onCompleted, ErrorHandler onRollbackError) {
+                onCompletedRef[0] = onCompleted;
+                query("ROLLBACK", queryToComplete, onRollbackError);
+            }
+        };
 
-		invokeOnError(err, t);
-	}
+        query("BEGIN", new ResultHandler() {
+            @Override
+            public void onResult(ResultSet ignored) {
+                try {
+                    handler.onBegin(PgConnection.this, transaction);
+                } catch (Exception e) {
+                    invokeOnError(onError, e);
+                }
+            }
+        }, onError);
+    }
 
-	@Override
-	public void onErrorResponse(ErrorResponse msg) {
-		onThrowable(new SqlException(msg.getLevel(), msg.getCode(), msg.getMessage()));
-	}
+    // PgProtocolCallbacks
 
-	@Override
-	public void onAuthentication(Authentication msg) {
-		if(!msg.isAuthenticationOk()) {
-			stream.send(new PasswordMessage(username, password, msg.getMd5Salt()));
-			username = password = null;
-		}
-	}
+    @Override
+    public void onThrowable(Throwable t) {
+        ErrorHandler err = errorHandler;
 
-	@Override
-	public void onRowDescription(RowDescription msg) {
-		resultSet = new PgResultSet(msg.getColumns());
-	}
+        queryHandler = null;
+        resultSet = null;
+        errorHandler = null;
+        
+        invokeOnError(err, t);
+    }
 
-	@Override
-	public void onCommandComplete(CommandComplete msg) {
-		if(resultSet == null) {
-			resultSet = new PgResultSet();
-		}
-		resultSet.setUpdatedRows(msg.getUpdatedRows());
-	}
+    @Override
+    public void onErrorResponse(ErrorResponse msg) {
+        if(msg.getLevel() == FATAL) {
+            close();
+        }
+        onThrowable(new SqlException(msg.getLevel().toString(), msg.getCode(), msg.getMessage()));
+    }
 
-	@Override
-	public void onDataRow(DataRow msg) {
-		resultSet.add(new PgRow(msg));
-	}
+    @Override
+    public void onAuthentication(Authentication msg) {
+        if (!msg.isAuthenticationOk()) {
+            stream.send(new PasswordMessage(username, password, msg.getMd5Salt()));
+            username = password = null;
+        }
+    }
 
-	@Override
-	public void onReadyForQuery(ReadyForQuery msg) {
-		if(!connected) {
-			onConnected();
-			return;
-		}
-		if(queryHandler != null) {
-			ResultHandler onResult = queryHandler;
-			ErrorHandler onError = errorHandler;
-			ResultSet result = resultSet;
+    @Override
+    public void onRowDescription(RowDescription msg) {
+        resultSet = new PgResultSet(msg.getColumns());
+    }
 
-			queryHandler = null;
-			errorHandler = null;
-			resultSet = null;
+    @Override
+    public void onCommandComplete(CommandComplete msg) {
+        if (resultSet == null) {
+            resultSet = new PgResultSet();
+        }
+        resultSet.setUpdatedRows(msg.getUpdatedRows());
+    }
 
-			try {
-				onResult.onResult(result);
-			} catch(Exception e) {
-				invokeOnError(onError, e);
-			}
-		}
-	}
+    @Override
+    public void onDataRow(DataRow msg) {
+        resultSet.add(new PgRow(msg));
+    }
 
-	void onConnected() {
-		connected = true;
-		try {
-			connectedHandler.onConnection(this);
-		} catch (Exception e) {
-			invokeOnError(errorHandler, e);
-		}
-		connectedHandler = null;
-	}
+    @Override
+    public void onReadyForQuery(ReadyForQuery msg) {
+        if (!connected) {
+            onConnected();
+            return;
+        }
+        ErrorHandler onError = errorHandler;
+        if (queryHandler != null) {
+            ResultHandler onResult = queryHandler;
+            ResultSet result = resultSet;
 
-	void invokeOnError(ErrorHandler err, Throwable t) {
-		if(err != null) {
-			try {
-				err.onError(t);
-			} catch(Exception e) {
-				Logger.getLogger(getClass().getName()).log(Level.SEVERE, 
-						"ErrorHandler " + err + " failed with exception", e);
-			}	
-		} else {
-			Logger.getLogger(getClass().getName()).log(Level.SEVERE, 
-					"Exception caught but no error handler is set", t);
-		}
-	}
+            queryHandler = null;
+            resultSet = null;
+            errorHandler = null;
+
+            try {
+                onResult.onResult(result);
+            } catch (Exception e) {
+                invokeOnError(onError, e);
+            }
+        }
+    }
+
+    void onConnected() {
+        connected = true;
+        try {
+            connectedHandler.onConnection(this);
+        } catch (Exception e) {
+            invokeOnError(errorHandler, e);
+        }
+        connectedHandler = null;
+    }
+
+    void invokeOnError(ErrorHandler err, Throwable t) {
+        if (err != null) {
+            try {
+                err.onError(t);
+            } catch (Exception e) {
+                Logger.getLogger(getClass().getName()).log(Level.SEVERE,
+                        "ErrorHandler " + err + " failed with exception", e);
+            }
+        } else {
+            Logger.getLogger(getClass().getName()).log(Level.SEVERE,
+                    "Exception caught but no error handler is set", t);
+        }
+    }
 
 }

@@ -25,55 +25,61 @@ import com.github.pgasync.ResultSet;
 import com.github.pgasync.Row;
 import com.github.pgasync.impl.message.RowDescription.ColumnDescription;
 
+/**
+ * {@link ResultSet} constructed from Query/Execute response messages.
+ * 
+ * @author Antti Laisi
+ */
 public class PgResultSet implements ResultSet {
 
-	List<Row> rows;
-	Map<String,PgColumn> columns;
-	int updatedRows;
+    List<Row> rows;
+    Map<String, PgColumn> columns;
+    int updatedRows;
 
-	public PgResultSet() { }
+    public PgResultSet() {
+    }
 
-	public PgResultSet(ColumnDescription[] columnDescriptions) {
-		columns = new LinkedHashMap<>();
-		for(int i = 0; i < columnDescriptions.length; i++) {
-			columns.put(columnDescriptions[i].getName().toUpperCase(), 
-				new PgColumn(i, columnDescriptions[i].getType()));
-		}
-	}
+    public PgResultSet(ColumnDescription[] columnDescriptions) {
+        columns = new LinkedHashMap<>();
+        for (int i = 0; i < columnDescriptions.length; i++) {
+            columns.put(columnDescriptions[i].getName().toUpperCase(),
+                    new PgColumn(i, columnDescriptions[i].getType()));
+        }
+    }
 
-	@Override
-	public Iterator<Row> iterator() {
-		return rows != null ? rows.iterator() : Collections.<Row>emptyIterator();
-	}
+    @Override
+    public Iterator<Row> iterator() {
+        return rows != null ? rows.iterator() : Collections.<Row> emptyIterator();
+    }
 
-	@Override
-	public Row get(int index) {
-		if(rows == null) {
-			throw new IndexOutOfBoundsException();
-		}
-		return rows.get(index);
-	}
+    @Override
+    public Row get(int index) {
+        if (rows == null) {
+            throw new IndexOutOfBoundsException();
+        }
+        return rows.get(index);
+    }
 
-	@Override
-	public int size() {
-		return rows != null ? rows.size() : 0;
-	}
+    @Override
+    public int size() {
+        return rows != null ? rows.size() : 0;
+    }
 
-	@Override
-	public int updatedRows() {
-		return updatedRows;
-	}
+    @Override
+    public int updatedRows() {
+        return updatedRows;
+    }
 
-	void setUpdatedRows(int updatedRows) {
-		this.updatedRows = updatedRows;
-	}
+    void setUpdatedRows(int updatedRows) {
+        this.updatedRows = updatedRows;
+    }
 
-	void add(PgRow row) {
-		if(rows == null) {
-			rows = new ArrayList<>();
-		}
-		row.setColumns(columns);
-		rows.add(row);
-	}
+    void add(PgRow row) {
+        if (rows == null) {
+            rows = new ArrayList<>();
+        }
+        row.setColumns(columns);
+        rows.add(row);
+    }
 
 }

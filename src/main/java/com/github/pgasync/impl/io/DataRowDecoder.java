@@ -20,24 +20,24 @@ import com.github.pgasync.impl.message.DataRow;
 
 public class DataRowDecoder implements Decoder<DataRow> {
 
-	@Override
-	public byte getMessageId() {
-		return (byte) 'D';
-	}
+    @Override
+    public byte getMessageId() {
+        return (byte) 'D';
+    }
 
-	@Override
-	public DataRow read(ByteBuffer buffer) {
-		byte[][] values = new byte[buffer.getShort()][];
-		for(int i = 0; i < values.length; i++) {
-			int length = buffer.getInt();
-			if(length != - 1) {
-				values[i] = new byte[length];
-				buffer.get(values[i]);	
-			} else {
-				values[i] = null;
-			}
-		}
-		return new DataRow(values);
-	}
+    @Override
+    public DataRow read(ByteBuffer buffer) {
+        byte[][] values = new byte[buffer.getShort()][];
+        for (int i = 0; i < values.length; i++) {
+            int length = buffer.getInt();
+            if (length != -1) {
+                values[i] = new byte[length];
+                buffer.get(values[i]);
+            } else {
+                values[i] = null;
+            }
+        }
+        return new DataRow(values);
+    }
 
 }

@@ -14,19 +14,23 @@
 
 package com.github.pgasync;
 
-import com.github.pgasync.impl.message.ErrorResponse.Level;
 
+/**
+ * Backend or client error. If the error is sent by backend, SQLSTATE error
+ * code is available.
+ * 
+ * @author Antti Laisi
+ */
 public class SqlException extends RuntimeException {
 
 	private static final long serialVersionUID = 1L;
 
 	final String code;
 
-	public SqlException(Level level, String code, String message) {
+	public SqlException(String level, String code, String message) {
 		super(level + ": SQLSTATE=" + code + ", MESSAGE=" + message);
 		this.code = code;
 	}
-
 	public SqlException(String message) {
 		super(message);
 		this.code = null;

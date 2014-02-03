@@ -22,18 +22,18 @@ import com.github.pgasync.impl.message.PasswordMessage;
 
 public class PasswordMessageEncoder implements Encoder<PasswordMessage> {
 
-	@Override
-	public Class<PasswordMessage> getMessageType() {
-		return PasswordMessage.class;
-	}
+    @Override
+    public Class<PasswordMessage> getMessageType() {
+        return PasswordMessage.class;
+    }
 
-	@Override
-	public void write(PasswordMessage msg, ByteBuffer buffer) {
-		buffer.put((byte) 'p');
-		buffer.putInt(0);
-		buffer.put(msg.getPasswordHash() != null ? msg.getPasswordHash() : bytes(msg.getPassword()));
-		buffer.put((byte) 0);
-		buffer.putInt(1, buffer.position() - 1);
-	}
+    @Override
+    public void write(PasswordMessage msg, ByteBuffer buffer) {
+        buffer.put((byte) 'p');
+        buffer.putInt(0);
+        buffer.put(msg.getPasswordHash() != null ? msg.getPasswordHash() : bytes(msg.getPassword()));
+        buffer.put((byte) 0);
+        buffer.putInt(1, buffer.position() - 1);
+    }
 
 }

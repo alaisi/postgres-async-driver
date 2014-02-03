@@ -20,15 +20,46 @@ import com.github.pgasync.callback.ErrorHandler;
 import com.github.pgasync.callback.ResultHandler;
 import com.github.pgasync.callback.TransactionHandler;
 
+/**
+ * Main interface to a PostgreSQL backend.
+ * 
+ * @author Antti Laisi
+ */
+@SuppressWarnings("rawtypes")
 public interface Connection {
 
+    /**
+     * Executes a simple query.
+     * 
+     * @param sql SQL to execute.
+     * @param onResult Called when query is completed
+     * @param onError Called on exception thrown
+     */
 	void query(String sql, ResultHandler onResult, ErrorHandler onError);
 
-	@SuppressWarnings("rawtypes")
+	/**
+	 * Executes an anonymous prepared statement. Uses native PostgreSQL syntax with $arg instead of ?
+	 * to mark parameters. Supported parameter types are String, Character, Number, Time, Date, Timestamp
+	 * and byte[].
+	 * 
+	 * @param sql SQL to execute
+	 * @param params List of parameters
+	 * @param onResult
+	 * @param onError
+	 */
 	void query(String sql, List/*<Object>*/ params, ResultHandler onResult, ErrorHandler onError);
 
+	/**
+	 * Begins a transaction.
+	 * 
+	 * @param onTransaction Called when transaction is successfully started.
+	 * @param onError Called on exception thrown
+	 */
 	void begin(TransactionHandler onTransaction, ErrorHandler onError);
 
+	/**
+	 * Closes the connection.
+	 */
 	void close();
 
 }

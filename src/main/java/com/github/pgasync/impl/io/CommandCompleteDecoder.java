@@ -22,16 +22,16 @@ import com.github.pgasync.impl.message.CommandComplete;
 
 public class CommandCompleteDecoder implements Decoder<CommandComplete> {
 
-	@Override
-	public byte getMessageId() {
-		return (byte) 'C';
-	}
+    @Override
+    public byte getMessageId() {
+        return (byte) 'C';
+    }
 
-	@Override
-	public CommandComplete read(ByteBuffer buffer) {
-		byte[] tmp = new byte[255];
-		String tag = getCString(buffer, tmp);
-		return new CommandComplete(tag);
-	}
+    @Override
+    public CommandComplete read(ByteBuffer buffer) {
+        byte[] tmp = new byte[255];
+        String tag = getCString(buffer, tmp);
+        return new CommandComplete(tag);
+    }
 
 }

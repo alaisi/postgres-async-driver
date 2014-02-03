@@ -17,12 +17,17 @@ package com.github.pgasync.impl;
 import com.github.pgasync.impl.message.Message;
 import com.github.pgasync.impl.message.Startup;
 
+/**
+ * Stream of messages from/to backend server.
+ * 
+ * @author Antti Laisi
+ */
 public interface PgProtocolStream {
 
-	void connect(Startup startup, PgProtocolCallbacks callbacks);
+    void connect(Startup startup, PgProtocolCallbacks callbacks);
 
-	void send(Message... messages);
+    void send(Message... messages);
 
-	void close();
+    void close();
 
 }

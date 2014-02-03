@@ -13,16 +13,12 @@ import java.util.Calendar;
 
 import org.junit.Test;
 
-import com.github.pgasync.Connection;
-
 /**
  * Conversion tests from/to SQL types.
  * 
  * @author Antti Laisi
  */
 public class TypeConverterTest extends ConnectedTest {
-
-	final Connection connection = connection();
 
 	@Test
 	public void shouldConvertNullToString() {

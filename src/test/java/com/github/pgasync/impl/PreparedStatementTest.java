@@ -14,7 +14,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 /**
- * Tests for prepared statements.
+ * Tests for parameter binding.
  * 
  * @author Antti Laisi
  */

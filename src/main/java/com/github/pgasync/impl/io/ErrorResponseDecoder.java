@@ -23,26 +23,26 @@ import com.github.pgasync.impl.message.ErrorResponse.Level;
 
 public class ErrorResponseDecoder implements Decoder<ErrorResponse> {
 
-	@Override
-	public byte getMessageId() {
-		return (byte) 'E';
-	}
+    @Override
+    public byte getMessageId() {
+        return (byte) 'E';
+    }
 
-	@Override
-	public ErrorResponse read(ByteBuffer buffer) {
-		ErrorResponse error = new ErrorResponse();
-		byte[] field = new byte[255];
-		for(byte type = buffer.get(); type != 0; type = buffer.get()) {
-			String value = getCString(buffer, field);
-			if(type == (byte) 'S') {
-				error.setLevel(Level.valueOf(value));
-			} else if(type == 'C') {
-				error.setCode(value);
-			} else if(type == 'M') {
-				error.setMessage(value);
-			}
-		}
-		return error;
-	}
+    @Override
+    public ErrorResponse read(ByteBuffer buffer) {
+        ErrorResponse error = new ErrorResponse();
+        byte[] field = new byte[255];
+        for (byte type = buffer.get(); type != 0; type = buffer.get()) {
+            String value = getCString(buffer, field);
+            if (type == (byte) 'S') {
+                error.setLevel(Level.valueOf(value));
+            } else if (type == 'C') {
+                error.setCode(value);
+            } else if (type == 'M') {
+                error.setMessage(value);
+            }
+        }
+        return error;
+    }
 
 }

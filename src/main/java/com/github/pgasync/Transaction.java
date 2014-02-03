@@ -17,10 +17,28 @@ package com.github.pgasync;
 import com.github.pgasync.callback.ErrorHandler;
 import com.github.pgasync.callback.TransactionCompletedHandler;
 
+/**
+ * A unit of work. Transactions must be commited or rolled back, otherwise
+ * a connection left is a stale state.
+ * 
+ * @author Antti Laisi
+ */
 public interface Transaction {
 
+    /**
+     * Commits a transaction.
+     * 
+     * @param onCompleted Called when commit completes
+     * @param onError Called on exception thrown
+     */
 	void commit(TransactionCompletedHandler onCompleted, ErrorHandler onError);
 
+	/**
+	 * Rollbacks a transaction.
+	 * 
+	 * @param onCompleted Called when rollback completes
+	 * @param onError Called on exception thrown
+	 */
 	void rollback(TransactionCompletedHandler onCompleted, ErrorHandler onError);
 
 }

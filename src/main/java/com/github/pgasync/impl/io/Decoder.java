@@ -20,8 +20,8 @@ import com.github.pgasync.impl.message.Message;
 
 public interface Decoder<T extends Message> {
 
-	byte getMessageId();
+    byte getMessageId();
 
-	T read(ByteBuffer buffer);
+    T read(ByteBuffer buffer);
 
 }
