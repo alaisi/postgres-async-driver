@@ -35,31 +35,31 @@ public interface Connection {
      * @param onResult Called when query is completed
      * @param onError Called on exception thrown
      */
-	void query(String sql, ResultHandler onResult, ErrorHandler onError);
+    void query(String sql, ResultHandler onResult, ErrorHandler onError);
 
-	/**
-	 * Executes an anonymous prepared statement. Uses native PostgreSQL syntax with $arg instead of ?
-	 * to mark parameters. Supported parameter types are String, Character, Number, Time, Date, Timestamp
-	 * and byte[].
-	 * 
-	 * @param sql SQL to execute
-	 * @param params List of parameters
-	 * @param onResult
-	 * @param onError
-	 */
-	void query(String sql, List/*<Object>*/ params, ResultHandler onResult, ErrorHandler onError);
+    /**
+     * Executes an anonymous prepared statement. Uses native PostgreSQL syntax with $arg instead of ?
+     * to mark parameters. Supported parameter types are String, Character, Number, Time, Date, Timestamp
+     * and byte[].
+     * 
+     * @param sql SQL to execute
+     * @param params List of parameters
+     * @param onResult
+     * @param onError
+     */
+    void query(String sql, List/*<Object>*/ params, ResultHandler onResult, ErrorHandler onError);
 
-	/**
-	 * Begins a transaction.
-	 * 
-	 * @param onTransaction Called when transaction is successfully started.
-	 * @param onError Called on exception thrown
-	 */
-	void begin(TransactionHandler onTransaction, ErrorHandler onError);
+    /**
+     * Begins a transaction.
+     * 
+     * @param onTransaction Called when transaction is successfully started.
+     * @param onError Called on exception thrown
+     */
+    void begin(TransactionHandler onTransaction, ErrorHandler onError);
 
-	/**
-	 * Closes the connection.
-	 */
-	void close();
+    /**
+     * Closes the connection.
+     */
+    void close();
 
 }
