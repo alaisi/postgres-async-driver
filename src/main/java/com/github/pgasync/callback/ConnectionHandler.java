@@ -18,6 +18,6 @@ import com.github.pgasync.Connection;
 
 public interface ConnectionHandler {
 
-	void onConnection(Connection connection);
+    void onConnection(Connection connection);
 
 }

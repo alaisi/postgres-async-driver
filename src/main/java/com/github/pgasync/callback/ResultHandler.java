@@ -18,6 +18,6 @@ import com.github.pgasync.ResultSet;
 
 public interface ResultHandler {
 
-	void onResult(ResultSet result);
+    void onResult(ResultSet result);
 
 }

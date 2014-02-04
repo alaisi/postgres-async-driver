@@ -19,6 +19,6 @@ import com.github.pgasync.Transaction;
 
 public interface TransactionHandler {
 
-	void onBegin(Connection txconn, Transaction transaction);
+    void onBegin(Connection txconn, Transaction transaction);
 
 }

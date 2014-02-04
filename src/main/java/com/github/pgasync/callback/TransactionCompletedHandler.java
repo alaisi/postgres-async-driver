@@ -16,6 +16,6 @@ package com.github.pgasync.callback;
 
 public interface TransactionCompletedHandler {
 
-	void onComplete();
+    void onComplete();
 
 }

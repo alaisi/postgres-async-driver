@@ -23,27 +23,28 @@ import com.github.pgasync.impl.PgConnection;
 import com.github.pgasync.impl.PgConnectionPool;
 
 /**
- * {@link PgConnectionPool} that uses {@link NettyPgProtocolStream}. Each pool starts a single 
- * Netty IO thread.
+ * {@link PgConnectionPool} that uses {@link NettyPgProtocolStream}. Each pool
+ * starts a single Netty IO thread.
  * 
  * @author Antti Laisi
  */
 public class NettyPgConnectionPool extends PgConnectionPool {
 
-	final EventLoopGroup group = new NioEventLoopGroup(1);
+    final EventLoopGroup group = new NioEventLoopGroup(1);
 
-	public NettyPgConnectionPool(InetSocketAddress address, String username, String password, String database, int poolSize) {
-		super(address, username, password, database, poolSize);
-	}
+    public NettyPgConnectionPool(InetSocketAddress address, String username, String password, String database,
+            int poolSize) {
+        super(address, username, password, database, poolSize);
+    }
 
-	@Override
-	protected PgConnection newConnection(InetSocketAddress address) {
-		return new PgConnection(new NettyPgProtocolStream(address, group));
-	}
+    @Override
+    protected PgConnection newConnection(InetSocketAddress address) {
+        return new PgConnection(new NettyPgProtocolStream(address, group));
+    }
 
-	@Override
-	public void close() {
-		super.close();
-		group.shutdownGracefully();
-	}
+    @Override
+    public void close() {
+        super.close();
+        group.shutdownGracefully();
+    }
 }

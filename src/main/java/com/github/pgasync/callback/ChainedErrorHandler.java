@@ -16,13 +16,14 @@ package com.github.pgasync.callback;
 
 public class ChainedErrorHandler implements ErrorHandler {
 
-	final ErrorHandler onError;
+    final ErrorHandler onError;
 
-	public ChainedErrorHandler(ErrorHandler onError) {
-		this.onError = onError;
-	}
-	@Override
-	public void onError(Throwable t) {
-		onError.onError(t);
-	}
+    public ChainedErrorHandler(ErrorHandler onError) {
+        this.onError = onError;
+    }
+
+    @Override
+    public void onError(Throwable t) {
+        onError.onError(t);
+    }
 }

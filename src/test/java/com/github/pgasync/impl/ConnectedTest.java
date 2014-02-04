@@ -37,12 +37,9 @@ public abstract class ConnectedTest {
     }
 
     protected static ConnectionPool createPool(int size) {
-        return new ConnectionPool.Builder()
-            .database(envOrDefault("PG_DATABASE", "postgres"))
-            .username(envOrDefault("PG_USERNAME", "postgres"))
-            .password(envOrDefault("PG_PASSWORD", "postgres"))
-            .poolSize(size)
-            .build();
+        return new ConnectionPool.Builder().database(envOrDefault("PG_DATABASE", "postgres"))
+                .username(envOrDefault("PG_USERNAME", "postgres"))
+                .password(envOrDefault("PG_PASSWORD", "postgres")).poolSize(size).build();
     }
 
     protected static Connection connection() {

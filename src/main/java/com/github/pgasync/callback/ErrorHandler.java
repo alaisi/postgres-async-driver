@@ -16,6 +16,6 @@ package com.github.pgasync.callback;
 
 public interface ErrorHandler {
 
-	void onError(Throwable t);
+    void onError(Throwable t);
 
 }

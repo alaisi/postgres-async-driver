@@ -38,41 +38,37 @@ import com.github.pgasync.impl.io.RowDescriptionDecoder;
  */
 class ByteBufMessageDecoder extends ByteToMessageDecoder {
 
-	static final Map<Byte, Decoder<?>> DECODERS = new HashMap<>();
-	static {
-		for(Decoder<?> decoder : new Decoder<?>[]{ 
-				new ErrorResponseDecoder(),
-				new AuthenticationDecoder(),
-				new ReadyForQueryDecoder(),
-				new RowDescriptionDecoder(),
-				new CommandCompleteDecoder(),
-				new DataRowDecoder() }) {
-			DECODERS.put(decoder.getMessageId(), decoder);
-		}
-	}
+    static final Map<Byte,Decoder<?>> DECODERS = new HashMap<>();
+    static {
+        for (Decoder<?> decoder : new Decoder<?>[] { new ErrorResponseDecoder(), new AuthenticationDecoder(),
+                new ReadyForQueryDecoder(), new RowDescriptionDecoder(), new CommandCompleteDecoder(),
+                new DataRowDecoder() }) {
+            DECODERS.put(decoder.getMessageId(), decoder);
+        }
+    }
 
-	@Override
-	protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
-		if(in.readableBytes() == 0) {
-			return;
-		}
+    @Override
+    protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
+        if (in.readableBytes() == 0) {
+            return;
+        }
 
-		byte id = in.readByte();
-		int length = in.readInt();
+        byte id = in.readByte();
+        int length = in.readInt();
 
-		ByteBuffer buffer = in.nioBuffer();
-		Decoder<?> decoder =  DECODERS.get(id);
+        ByteBuffer buffer = in.nioBuffer();
+        Decoder<?> decoder = DECODERS.get(id);
 
-		try {
-			if(decoder != null) {
-				out.add(decoder.read(buffer));
-				in.skipBytes(buffer.position());
-			} else {
-			    in.skipBytes(length - 4);
-			}
-		} catch(Throwable t) {
-			// broad catch as otherwise the exception is silently dropped
-			ctx.fireExceptionCaught(t);
-		}
-	}
+        try {
+            if (decoder != null) {
+                out.add(decoder.read(buffer));
+                in.skipBytes(buffer.position());
+            } else {
+                in.skipBytes(length - 4);
+            }
+        } catch (Throwable t) {
+            // broad catch as otherwise the exception is silently dropped
+            ctx.fireExceptionCaught(t);
+        }
+    }
 }

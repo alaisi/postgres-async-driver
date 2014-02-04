@@ -56,7 +56,7 @@ public class TransactionTest extends ConnectedTest {
                         assertEquals(1L, result.get(0).getLong(0).longValue());
                         transaction.commit(new TransactionCompletedHandler() {
                             @Override
-                             public void onComplete() {
+                            public void onComplete() {
                                 sync.countDown();
                             }
                         }, err);
@@ -81,7 +81,7 @@ public class TransactionTest extends ConnectedTest {
                         assertEquals(1, result.updatedRows());
                         transaction.commit(new TransactionCompletedHandler() {
                             @Override
-                             public void onComplete() {
+                            public void onComplete() {
                                 sync.countDown();
                             }
                         }, err);
@@ -107,7 +107,7 @@ public class TransactionTest extends ConnectedTest {
                         assertEquals(1, result.updatedRows());
                         transaction.rollback(new TransactionCompletedHandler() {
                             @Override
-                             public void onComplete() {
+                            public void onComplete() {
                                 sync.countDown();
                             }
                         }, err);

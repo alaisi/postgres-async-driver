@@ -38,93 +38,91 @@ import com.github.pgasync.impl.message.RowDescription;
 import com.github.pgasync.impl.message.Startup;
 
 /**
- * Netty connection to PostgreSQL backend. Passes received messages to {@link PgProtocolCallbacks}.
+ * Netty connection to PostgreSQL backend. Passes received messages to
+ * {@link PgProtocolCallbacks}.
  * 
  * @author Antti Laisi
  */
 public class NettyPgProtocolStream implements PgProtocolStream {
 
-	final SocketAddress address;
-	final EventLoopGroup group;
+    final SocketAddress address;
+    final EventLoopGroup group;
 
-	PgProtocolCallbacks callbacks;
-	ChannelHandlerContext ctx;
+    PgProtocolCallbacks callbacks;
+    ChannelHandlerContext ctx;
 
-	public NettyPgProtocolStream(SocketAddress address, EventLoopGroup group) {
-		this.address = address;
-		this.group = group;
-	}
+    public NettyPgProtocolStream(SocketAddress address, EventLoopGroup group) {
+        this.address = address;
+        this.group = group;
+    }
 
-	@Override
-	public void connect(final Startup startup, PgProtocolCallbacks callbacks) {
-		this.callbacks = callbacks;
+    @Override
+    public void connect(final Startup startup, PgProtocolCallbacks callbacks) {
+        this.callbacks = callbacks;
 
-		final ChannelHandler writeStartup = new ChannelInboundHandlerAdapter() {
-			@Override
-			public void channelActive(ChannelHandlerContext context) throws Exception {
-				context.writeAndFlush(startup);
-			}
-		};
-		new Bootstrap()
-			.group(group)
-			.channel(NioSocketChannel.class)
-			.handler(new ChannelInitializer<Channel>() {
-				@Override
-				protected void initChannel(Channel channel) throws Exception {
-					channel.pipeline().addLast("frame-decoder", new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 1, 4, -4, 0, true));
-					channel.pipeline().addLast("message-decoder", new ByteBufMessageDecoder());
-					channel.pipeline().addLast("message-encoder", new ByteBufMessageEncoder());
-					channel.pipeline().addLast("handler", new PgProtocolHandler());
-					channel.pipeline().addLast("startup", writeStartup);
-				}
-			})
-			.connect(address);
-	}
+        final ChannelHandler writeStartup = new ChannelInboundHandlerAdapter() {
+            @Override
+            public void channelActive(ChannelHandlerContext context) throws Exception {
+                context.writeAndFlush(startup);
+            }
+        };
+        new Bootstrap().group(group).channel(NioSocketChannel.class).handler(new ChannelInitializer<Channel>() {
+            @Override
+            protected void initChannel(Channel channel) throws Exception {
+                channel.pipeline().addLast("frame-decoder",
+                        new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 1, 4, -4, 0, true));
+                channel.pipeline().addLast("message-decoder", new ByteBufMessageDecoder());
+                channel.pipeline().addLast("message-encoder", new ByteBufMessageEncoder());
+                channel.pipeline().addLast("handler", new PgProtocolHandler());
+                channel.pipeline().addLast("startup", writeStartup);
+            }
+        }).connect(address);
+    }
 
-	@Override
-	public void send(Message... messages) {
-		for(Message message : messages) {
-			ctx.write(message);
-		}
-		ctx.flush();
-	}
+    @Override
+    public void send(Message... messages) {
+        for (Message message : messages) {
+            ctx.write(message);
+        }
+        ctx.flush();
+    }
 
-	@Override
-	public void close() {
-		ctx.close();
-	}
+    @Override
+    public void close() {
+        ctx.close();
+    }
 
-	/**
-	 * Protocol message handler, methods are called from Netty IO thread.
-	 */
-	class PgProtocolHandler extends ChannelInboundHandlerAdapter {
+    /**
+     * Protocol message handler, methods are called from Netty IO thread.
+     */
+    class PgProtocolHandler extends ChannelInboundHandlerAdapter {
 
-		@Override
-		public void handlerAdded(ChannelHandlerContext context) {
-			ctx = context;
-		}
+        @Override
+        public void handlerAdded(ChannelHandlerContext context) {
+            ctx = context;
+        }
 
-		@Override
-		public void exceptionCaught(ChannelHandlerContext context, Throwable cause) {
-			callbacks.onThrowable(cause);
-		}
+        @Override
+        public void exceptionCaught(ChannelHandlerContext context, Throwable cause) {
+            callbacks.onThrowable(cause);
+        }
 
-		@Override
-		public void channelRead(ChannelHandlerContext context, Object msg) {
-			if(msg instanceof ErrorResponse) {
-				callbacks.onErrorResponse((ErrorResponse) msg);
-			} else if(msg instanceof Authentication) {
-				callbacks.onAuthentication((Authentication) msg);
-			} else if(msg instanceof RowDescription) {
-				callbacks.onRowDescription((RowDescription) msg);
-			} else if(msg instanceof DataRow) {
-				callbacks.onDataRow((DataRow) msg);
-			} else if(msg instanceof CommandComplete) {
-				callbacks.onCommandComplete((CommandComplete) msg);
-			} else if(msg instanceof ReadyForQuery) {
-				callbacks.onReadyForQuery((ReadyForQuery) msg);
-			}
-		}
-	}
+        @Override
+        public void channelRead(ChannelHandlerContext context, Object msg) {
+            if (msg instanceof ErrorResponse) {
+                callbacks.onErrorResponse((ErrorResponse) msg);
+            } else if (msg instanceof Authentication) {
+                callbacks.onAuthentication((Authentication) msg);
+            } else if (msg instanceof RowDescription) {
+                callbacks.onRowDescription((RowDescription) msg);
+            } else if (msg instanceof DataRow) {
+                callbacks.onDataRow((DataRow) msg);
+            } else if (msg instanceof CommandComplete) {
+                callbacks.onCommandComplete((CommandComplete) msg);
+            } else if (msg instanceof ReadyForQuery) {
+                callbacks.onReadyForQuery((ReadyForQuery) msg);
+            }
+        }
+    }
 
 }
