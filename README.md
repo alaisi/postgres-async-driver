@@ -2,6 +2,8 @@
 
 Pg-async-driver is a non-blocking Java driver for PostgreSQL. The driver supports connection pooling, prepared statements, transactions and all standard SQL types. 
 
+## Download
+
 Pg-async-driver is available on [Maven Central](http://search.maven.org/#search|ga|1|g%3A%22com.github.alaisi.pgasync%22).
 
 ```xml
@@ -42,9 +44,28 @@ pool.query("SELECT 'Hello world!' AS message",
 
 ### Connection pools
 
+Connection pools are created with [`com.github.pgasync.ConnectionPoolBuilder`](https://github.com/alaisi/pg-async-driver/blob/master/src/main/java/com/github/pgasync/ConnectionPoolBuilder.java)
+
+```java
+ConnectionPool pool = return new ConnectionPoolBuilder()
+    .database("db")
+    .username("user")
+    .password("pass")
+    .poolSize(20)
+    .build();
+```
+
+Each connection pool will start one IO thread used in communicating with PostgreSQL backend.
+
+### Prepared statements
+
+TODO
+
+### Transactions
+
 TODO
 
 ## References
 * [Scala postgresql-async](https://raw.github.com/mauricio/postgresql-async)
-* [PostgreSQL JDBC Driver](http://jdbc.postgresql.org)
+* [PostgreSQL JDBC Driver](http://jdbc.postgresql.org/about/about.html)
 
