@@ -25,6 +25,7 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 
 import java.net.SocketAddress;
+import java.nio.channels.ClosedChannelException;
 
 import com.github.pgasync.impl.PgProtocolCallbacks;
 import com.github.pgasync.impl.PgProtocolStream;
@@ -105,6 +106,11 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         @Override
         public void exceptionCaught(ChannelHandlerContext context, Throwable cause) {
             callbacks.onThrowable(cause);
+        }
+        
+        @Override
+        public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+            callbacks.onThrowable(new ClosedChannelException());
         }
 
         @Override

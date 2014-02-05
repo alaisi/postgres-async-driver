@@ -18,47 +18,62 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Date;
 import java.sql.Time;
+import java.sql.Timestamp;
 
 /**
- * Row in a query result set. A row consist of 0-n columns
- * of a single type. Column values can be accessed with a 0-based
- * index or column label.
+ * Row in a query result set. A row consist of 0-n columns of a single type.
+ * Column values can be accessed with a 0-based index or column label.
  * 
  * @author Antti Laisi
  */
 public interface Row {
 
-	String getString(int index);
-	String getString(String column);
+    String getString(int index);
 
-	Byte getByte(int index);
-	Byte getByte(String column);
+    String getString(String column);
 
-	Character getChar(int index);
-	Character getChar(String column);
+    Byte getByte(int index);
 
-	Short getShort(int index);
-	Short getShort(String column);
+    Byte getByte(String column);
 
-	Integer getInt(int index);
-	Integer getInt(String column);
+    Character getChar(int index);
 
-	Long getLong(int index);
-	Long getLong(String column);
+    Character getChar(String column);
 
-	BigInteger getBigInteger(int index);
-	BigInteger getBigInteger(String column);
+    Short getShort(int index);
 
-	BigDecimal getBigDecimal(int index);
-	BigDecimal getBigDecimal(String column);
-	
-	Date getDate(int index);
-	Date getDate(String column);
+    Short getShort(String column);
 
-	Time getTime(int index);
-	Time getTime(String column);
+    Integer getInt(int index);
 
-	byte[] getBytes(int index);
-	byte[] getBytes(String column);
+    Integer getInt(String column);
+
+    Long getLong(int index);
+
+    Long getLong(String column);
+
+    BigInteger getBigInteger(int index);
+
+    BigInteger getBigInteger(String column);
+
+    BigDecimal getBigDecimal(int index);
+
+    BigDecimal getBigDecimal(String column);
+
+    Date getDate(int index);
+
+    Date getDate(String column);
+
+    Time getTime(int index);
+
+    Time getTime(String column);
+
+    Timestamp getTimestamp(int index);
+
+    Timestamp getTimestamp(String column);
+
+    byte[] getBytes(int index);
+
+    byte[] getBytes(String column);
 
 }

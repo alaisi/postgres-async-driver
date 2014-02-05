@@ -17,19 +17,19 @@ package com.github.pgasync;
 import java.util.Iterator;
 
 /**
- * SQL result set. Consists of 0-n result rows and amount
- * of updated (INSERT/UPDATE/DELETE) rows.
+ * SQL result set. Consists of 0-n result rows and amount of updated
+ * (INSERT/UPDATE/DELETE) rows.
  * 
  * @author Antti Laisi
  */
 public interface ResultSet extends Iterable<Row> {
 
-	Iterator<Row> iterator();
+    Iterator<Row> iterator();
 
-	Row get(int index);
+    Row get(int index);
 
-	int size();
+    int size();
 
-	int updatedRows();
+    int updatedRows();
 
 }

@@ -22,9 +22,11 @@ import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.sql.Date;
 import java.sql.Time;
+import java.sql.Timestamp;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.TimeZone;
 
 import com.github.pgasync.SqlException;
 import com.github.pgasync.impl.io.IO;
@@ -40,19 +42,25 @@ public enum TypeConverter {
     static final ThreadLocal<DateFormat> DATE_FORMAT = new ThreadLocal<DateFormat>() {
         @Override
         protected DateFormat initialValue() {
-            return new SimpleDateFormat("yyyy-MM-dd");
+            return zoned(new SimpleDateFormat("yyyy-MM-dd"));
         };
     };
     static final ThreadLocal<DateFormat> TIME_FORMAT = new ThreadLocal<DateFormat>() {
         @Override
         protected DateFormat initialValue() {
-            return new SimpleDateFormat("HH:mm:ss.SSS");
+            return zoned(new SimpleDateFormat("HH:mm:ss.SSS"));
         };
     };
     static final ThreadLocal<DateFormat> TIME_FORMAT_NO_MILLIS = new ThreadLocal<DateFormat>() {
         @Override
         protected DateFormat initialValue() {
-            return new SimpleDateFormat("HH:mm:ss");
+            return zoned(new SimpleDateFormat("HH:mm:ss"));
+        };
+    };
+    static final ThreadLocal<DateFormat> TIMESTAMP_FORMAT = new ThreadLocal<DateFormat>() {
+        @Override
+        protected DateFormat initialValue() {
+            return zoned(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS"));
         };
     };
 
@@ -210,12 +218,31 @@ public enum TypeConverter {
         }
         switch (oid) {
         case UNSPECIFIED: // fallthrough
-        case TIMETZ:
+        case TIMETZ: // fallthrough
         case TIME:
             String time = new String(value, IO.UTF8);
             try {
                 DateFormat format = time.length() == 8 ? TIME_FORMAT_NO_MILLIS.get() : TIME_FORMAT.get();
                 return new Time(format.parse(time).getTime());
+            } catch (ParseException e) {
+                throw new SqlException("Invalid time: " + time);
+            }
+        default:
+            throw new SqlException("Unsupported conversion " + oid.name() + " -> Time");
+        }
+    }
+
+    static Timestamp toTimestamp(Oid oid, byte[] value) {
+        if (value == null) {
+            return null;
+        }
+        switch (oid) {
+        case UNSPECIFIED: // fallthrough
+        case TIMESTAMP: // fallthrough
+        case TIMESTAMPTZ:
+            String time = new String(value, IO.UTF8);
+            try {
+                return new Timestamp(TIMESTAMP_FORMAT.get().parse(time).getTime());
             } catch (ParseException e) {
                 throw new SqlException("Invalid time: " + time);
             }
@@ -237,4 +264,8 @@ public enum TypeConverter {
         }
     }
 
+    private static SimpleDateFormat zoned(SimpleDateFormat format) {
+        format.setTimeZone(TimeZone.getTimeZone("UTC"));
+        return format;
+    }
 }

@@ -19,6 +19,7 @@ import io.netty.channel.nio.NioEventLoopGroup;
 
 import java.net.InetSocketAddress;
 
+import com.github.pgasync.ConnectionPoolBuilder.PoolProperties;
 import com.github.pgasync.impl.PgConnection;
 import com.github.pgasync.impl.PgConnectionPool;
 
@@ -32,9 +33,8 @@ public class NettyPgConnectionPool extends PgConnectionPool {
 
     final EventLoopGroup group = new NioEventLoopGroup(1);
 
-    public NettyPgConnectionPool(InetSocketAddress address, String username, String password, String database,
-            int poolSize) {
-        super(address, username, password, database, poolSize);
+    public NettyPgConnectionPool(PoolProperties properties) {
+        super(properties);
     }
 
     @Override

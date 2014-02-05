@@ -1,3 +1,17 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.github.pgasync.impl;
 
 import static com.github.pgasync.impl.io.IO.bytes;
@@ -8,6 +22,7 @@ import static org.junit.Assert.assertEquals;
 import java.sql.Date;
 import java.sql.Time;
 import java.text.SimpleDateFormat;
+import java.util.TimeZone;
 
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -18,7 +33,7 @@ import org.junit.Test;
  * 
  * @author Antti Laisi
  */
-public class PreparedStatementTest extends ConnectedTest {
+public class PreparedStatementTest extends ConnectedTestBase {
 
     @BeforeClass
     public static void create() {
@@ -89,7 +104,7 @@ public class PreparedStatementTest extends ConnectedTest {
 
     @Test
     public void shouldBindTime() throws Exception {
-        Time time = new Time(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS").parse("1970-01-01 16:47:59.897")
+        Time time = new Time(zoned(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS")).parse("1970-01-01 16:47:59.897")
                 .getTime());
         query("INSERT INTO PS_TEST(TIME) VALUES ($1)", asList(time));
         assertEquals(time, query("SELECT TIME FROM PS_TEST WHERE TIME = $1", asList(time)).get(0).getTime(0));
@@ -97,7 +112,7 @@ public class PreparedStatementTest extends ConnectedTest {
 
     @Test
     public void shouldBindDate() throws Exception {
-        Date date = new Date(new SimpleDateFormat("yyyy-MM-dd").parse("2014-01-19").getTime());
+        Date date = new Date(zoned(new SimpleDateFormat("yyyy-MM-dd")).parse("2014-01-19").getTime());
         query("INSERT INTO PS_TEST(DATE) VALUES ($1)", asList(date));
         assertEquals(date, query("SELECT DATE FROM PS_TEST WHERE DATE = $1", asList(date)).get(0).getDate(0));
     }
@@ -109,4 +124,8 @@ public class PreparedStatementTest extends ConnectedTest {
         assertArrayEquals(b, query("SELECT BYTEA FROM PS_TEST WHERE BYTEA = $1", asList(b)).get(0).getBytes(0));
     }
 
+    SimpleDateFormat zoned(SimpleDateFormat format) {
+        format.setTimeZone(TimeZone.getTimeZone("UTC"));
+        return format;
+    }
 }

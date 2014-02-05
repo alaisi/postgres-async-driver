@@ -16,6 +16,7 @@ package com.github.pgasync.impl;
 
 import static com.github.pgasync.impl.message.ErrorResponse.Level.FATAL;
 
+import java.nio.channels.ClosedChannelException;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -167,7 +168,11 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
         queryHandler = null;
         resultSet = null;
         errorHandler = null;
-        
+
+        if(t instanceof ClosedChannelException && connected) {
+            close();
+        }
+
         invokeOnError(err, t);
     }
 
@@ -246,7 +251,7 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
                 Logger.getLogger(getClass().getName()).log(Level.SEVERE,
                         "ErrorHandler " + err + " failed with exception", e);
             }
-        } else {
+        } else if(!(t instanceof ClosedChannelException)) {
             Logger.getLogger(getClass().getName()).log(Level.SEVERE,
                     "Exception caught but no error handler is set", t);
         }

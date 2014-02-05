@@ -21,6 +21,7 @@ import java.util.Queue;
 
 import com.github.pgasync.Connection;
 import com.github.pgasync.ConnectionPool;
+import com.github.pgasync.ConnectionPoolBuilder.PoolProperties;
 import com.github.pgasync.ResultSet;
 import com.github.pgasync.SqlException;
 import com.github.pgasync.Transaction;
@@ -39,8 +40,18 @@ import com.github.pgasync.callback.TransactionHandler;
  */
 public abstract class PgConnectionPool implements ConnectionPool {
 
-    final Queue<ConnectionHandler> waiters = new LinkedList<>();
+    static class QueuedCallback {
+        final ConnectionHandler connectionHandler;
+        final ErrorHandler errorHandler;
+        QueuedCallback(ConnectionHandler connectionHandler, ErrorHandler errorHandler) {
+            this.connectionHandler = connectionHandler;
+            this.errorHandler = errorHandler;
+        }
+    }
+
+    final Queue<QueuedCallback> waiters = new LinkedList<>();
     final Queue<Connection> connections = new LinkedList<>();
+    final Object lock = new Object[0];
 
     final InetSocketAddress address;
     final String username;
@@ -49,14 +60,14 @@ public abstract class PgConnectionPool implements ConnectionPool {
 
     final int poolSize;
     int currentSize;
+    volatile boolean closed;
 
-    public PgConnectionPool(InetSocketAddress address, String username, String password, String database,
-            int poolSize) {
-        this.address = address;
-        this.username = username;
-        this.password = password;
-        this.database = database;
-        this.poolSize = poolSize;
+    public PgConnectionPool(PoolProperties properties) {
+        this.address = new InetSocketAddress(properties.getHostname(), properties.getPort());
+        this.username = properties.getUsername();
+        this.password = properties.getPassword();
+        this.database = properties.getDatabase();
+        this.poolSize = properties.getPoolSize();
     }
 
     @Override
@@ -85,8 +96,8 @@ public abstract class PgConnectionPool implements ConnectionPool {
                 connection.begin(new TransactionHandler() {
                     @Override
                     public void onBegin(final Connection txconn, Transaction transaction) {
-                        Transaction releasingTx = new ReleasingTransaction(txconn, transaction);
-                        onTransaction.onBegin(new TransactionalConnection(txconn, releasingTx), releasingTx);
+                        onTransaction.onBegin(new TransactionalConnection(txconn, transaction), 
+                                new ReleasingTransaction(txconn, transaction));
                     }
                 }, new ReleasingErrorHandler(connection, onError));
             }
@@ -95,21 +106,34 @@ public abstract class PgConnectionPool implements ConnectionPool {
 
     @Override
     public void close() {
-        // TODO
+        closed = true;
+        synchronized (lock) {
+            for(Connection conn = connections.poll(); conn != null; conn = connections.poll()) {
+                conn.close();
+            }
+            for(QueuedCallback waiter = waiters.poll(); waiter != null; waiter = waiters.poll()) {
+                waiter.errorHandler.onError(new SqlException("Connection pool is closed"));
+            }
+        }
     }
 
     @Override
     public void getConnection(final ConnectionHandler onConnection, final ErrorHandler onError) {
+        if(closed) {
+            onError.onError(new SqlException("Connection pool is closed"));
+            return;
+        }
+
         Connection connection;
         boolean create = false;
-        synchronized (this) {
+        synchronized (lock) {
             connection = connections.poll();
             if (connection == null) {
                 if (currentSize < poolSize) {
                     create = true;
                     currentSize++;
                 } else {
-                    waiters.add(onConnection);
+                    waiters.add(new QueuedCallback(onConnection, onError));
                     return;
                 }
             }
@@ -121,23 +145,32 @@ public abstract class PgConnectionPool implements ConnectionPool {
         }
     }
 
-    /**
-     * Releases a connection back to the pool.
-     */
-    void release(Connection connection) {
-        ConnectionHandler waiter;
-        synchronized (this) {
-            if(!((PgConnection) connection).isConnected()) {
-                currentSize--;
-                return; // TODO: stale pool?
-            }
-            waiter = waiters.poll();
-            if (waiter == null) {
-                connections.add(connection);
+    @Override
+    public void release(Connection connection) {
+        if(closed) {
+            connection.close();
+            return;
+        }
+
+        QueuedCallback next;
+        boolean failed;
+        synchronized (lock) {
+            failed = !((PgConnection) connection).isConnected();
+            next = waiters.poll();
+            if (next == null) {
+                if(failed) {
+                    currentSize--;
+                } else {
+                    connections.add(connection);
+                }
             }
         }
-        if (waiter != null) {
-            waiter.onConnection(connection);
+        if (next != null) {
+            if(failed) {
+                getConnection(next.connectionHandler, next.errorHandler);
+            } else {
+                next.connectionHandler.onConnection(connection);
+            }
         }
     }
 
@@ -194,7 +227,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
      */
     class TransactionalConnection implements Connection {
         Connection txconn;
-        Transaction transaction;
+        final Transaction transaction;
 
         TransactionalConnection(Connection txconn, Transaction transaction) {
             this.txconn = txconn;
@@ -204,15 +237,21 @@ public abstract class PgConnectionPool implements ConnectionPool {
         @Override
         @SuppressWarnings("rawtypes")
         public void query(String sql, List params, ResultHandler onResult, final ErrorHandler onError) {
+            if(txconn == null) {
+                onError.onError(new SqlException("Transaction is rolled back"));
+                return;
+            }
             txconn.query(sql, params, onResult, new ErrorHandler() {
                 @Override
                 public void onError(final Throwable t) {
                     transaction.rollback(new TransactionCompletedHandler() {
                         @Override
                         public void onComplete() {
+                            release(txconn);
+                            txconn = null;
                             onError.onError(t);
                         }
-                    }, onError);
+                    }, new ReleasingErrorHandler(txconn, onError));
                 }
             });
         }
@@ -224,12 +263,14 @@ public abstract class PgConnectionPool implements ConnectionPool {
 
         @Override
         public void begin(TransactionHandler onTransaction, ErrorHandler onError) {
-            throw new SqlException("Nested transactions are not supported");
+            onError.onError(new SqlException("Nested transactions are not supported"));
         }
 
         @Override
         public void close() {
-            txconn.close();
+            if(txconn != null) {
+                txconn.close();
+            }
         }
     }
 

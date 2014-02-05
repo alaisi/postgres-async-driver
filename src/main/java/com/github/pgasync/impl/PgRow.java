@@ -18,6 +18,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Date;
 import java.sql.Time;
+import java.sql.Timestamp;
 import java.util.Collection;
 import java.util.Map;
 
@@ -158,6 +159,17 @@ public class PgRow implements Row {
     }
 
     @Override
+    public Timestamp getTimestamp(String column) {
+        PgColumn pgColumn = getColumn(column);
+        return TypeConverter.toTimestamp(pgColumn.type, data.getValue(pgColumn.index));
+    }
+
+    @Override
+    public Timestamp getTimestamp(int index) {
+        return TypeConverter.toTimestamp(pgColumns[index].type, data.getValue(index));
+    }
+
+    @Override
     public byte[] getBytes(int index) {
         return TypeConverter.toBytes(pgColumns[index].type, data.getValue(index));
     }
@@ -178,4 +190,5 @@ public class PgRow implements Row {
         }
         return column;
     }
+
 }
