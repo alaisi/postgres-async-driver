@@ -36,7 +36,7 @@ import com.github.pgasync.impl.message.ErrorResponse;
 import com.github.pgasync.impl.message.Message;
 import com.github.pgasync.impl.message.ReadyForQuery;
 import com.github.pgasync.impl.message.RowDescription;
-import com.github.pgasync.impl.message.Startup;
+import com.github.pgasync.impl.message.StartupMessage;
 
 /**
  * Netty connection to PostgreSQL backend. Passes received messages to
@@ -58,7 +58,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     }
 
     @Override
-    public void connect(final Startup startup, PgProtocolCallbacks callbacks) {
+    public void connect(final StartupMessage startup, PgProtocolCallbacks callbacks) {
         this.callbacks = callbacks;
 
         final ChannelHandler writeStartup = new ChannelInboundHandlerAdapter() {
@@ -70,8 +70,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         new Bootstrap().group(group).channel(NioSocketChannel.class).handler(new ChannelInitializer<Channel>() {
             @Override
             protected void initChannel(Channel channel) throws Exception {
-                channel.pipeline().addLast("frame-decoder",
-                        new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 1, 4, -4, 0, true));
+                channel.pipeline().addLast("frame-decoder", new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 1, 4, -4, 0, true));
                 channel.pipeline().addLast("message-decoder", new ByteBufMessageDecoder());
                 channel.pipeline().addLast("message-encoder", new ByteBufMessageEncoder());
                 channel.pipeline().addLast("handler", new PgProtocolHandler());

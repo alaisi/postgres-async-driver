@@ -14,7 +14,9 @@
 
 package com.github.pgasync.impl.message;
 
-
+/**
+ * @author  Antti Laisi
+ */
 public class Authentication implements Message {
 
     byte[] md5salt;

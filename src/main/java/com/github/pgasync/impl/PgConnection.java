@@ -41,7 +41,7 @@ import com.github.pgasync.impl.message.PasswordMessage;
 import com.github.pgasync.impl.message.Query;
 import com.github.pgasync.impl.message.ReadyForQuery;
 import com.github.pgasync.impl.message.RowDescription;
-import com.github.pgasync.impl.message.Startup;
+import com.github.pgasync.impl.message.StartupMessage;
 
 /**
  * A connection to PostgreSQL backed. The postmaster forks a backend process for
@@ -75,7 +75,7 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
         this.password = password;
         this.connectedHandler = onConnected;
         this.errorHandler = onError;
-        stream.connect(new Startup(username, database), this);
+        stream.connect(new StartupMessage(username, database), this);
     }
 
     public boolean isConnected() {

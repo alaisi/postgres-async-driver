@@ -17,8 +17,19 @@ package com.github.pgasync.callback;
 import com.github.pgasync.Connection;
 import com.github.pgasync.Transaction;
 
+/**
+ * Callback for a started transaction.
+ *
+ * @author Antti Laisi
+ */
 public interface TransactionHandler {
 
+    /**
+     * Called when the transaction is started.
+     *
+     * @param txconn Transactional connection, queries are executed in the same transaction
+     * @param transaction Transaction, must be committed or rolled back
+     */
     void onBegin(Connection txconn, Transaction transaction);
 
 }

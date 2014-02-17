@@ -14,8 +14,17 @@
 
 package com.github.pgasync.callback;
 
+/**
+ * Callback for errors.
+ *
+ * @author Antti Laisi
+ */
 public interface ErrorHandler {
 
+    /**
+     * Executed on exception.
+     * @param t Error
+     */
     void onError(Throwable t);
 
 }

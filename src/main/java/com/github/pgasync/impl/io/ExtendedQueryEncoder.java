@@ -18,6 +18,39 @@ import java.nio.ByteBuffer;
 
 import com.github.pgasync.impl.message.ExtendedQuery;
 
+/**
+ * See <a href="www.postgresql.org/docs/9.3/static/protocol-message-formats.html">PostgreSQL message formats</a>
+ *
+ * <pre>
+ * Describe (F)
+ *  Byte1('D')
+ *      Identifies the message as a Describe command.
+ *  Int32
+ *      Length of message contents in bytes, including self.
+ *  Byte1
+ *      'S' to describe a prepared statement; or 'P' to describe a portal.
+ *  String
+ *      The name of the prepared statement or portal to describe (an empty string selects the unnamed prepared statement or portal).
+ *
+ * Execute (F)
+ *  Byte1('E')
+ *      Identifies the message as an Execute command.
+ *  Int32
+ *      Length of message contents in bytes, including self.
+ *  String
+ *      The name of the portal to execute (an empty string selects the unnamed portal).
+ *  Int32
+ *      Maximum number of rows to return, if portal contains a query that returns rows (ignored otherwise). Zero denotes "no limit".
+ *
+ * Sync (F)
+ *  Byte1('S')
+ *      Identifies the message as a Sync command.
+ *  Int32(4)
+ *      Length of message contents in bytes, including self.
+ * </pre>
+ *
+ * @author Antti Laisi
+ */
 public class ExtendedQueryEncoder implements Encoder<ExtendedQuery> {
 
     @Override

@@ -17,6 +17,7 @@ package com.github.pgasync.impl.netty;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
+import io.netty.util.ReferenceCountUtil;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -40,8 +41,12 @@ class ByteBufMessageDecoder extends ByteToMessageDecoder {
 
     static final Map<Byte,Decoder<?>> DECODERS = new HashMap<>();
     static {
-        for (Decoder<?> decoder : new Decoder<?>[] { new ErrorResponseDecoder(), new AuthenticationDecoder(),
-                new ReadyForQueryDecoder(), new RowDescriptionDecoder(), new CommandCompleteDecoder(),
+        for (Decoder<?> decoder : new Decoder<?>[] { 
+                new ErrorResponseDecoder(), 
+                new AuthenticationDecoder(),
+                new ReadyForQueryDecoder(), 
+                new RowDescriptionDecoder(), 
+                new CommandCompleteDecoder(),
                 new DataRowDecoder() }) {
             DECODERS.put(decoder.getMessageId(), decoder);
         }

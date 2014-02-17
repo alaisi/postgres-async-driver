@@ -16,6 +16,11 @@ package com.github.pgasync.callback;
 
 import com.github.pgasync.ResultSet;
 
+/**
+ * Callback for processing query results.
+ *
+ * @author Antti Laisi
+ */
 public interface ResultHandler {
 
     void onResult(ResultSet result);

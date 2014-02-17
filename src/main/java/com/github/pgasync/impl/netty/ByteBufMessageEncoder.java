@@ -29,7 +29,7 @@ import com.github.pgasync.impl.io.ExtendedQueryEncoder;
 import com.github.pgasync.impl.io.ParseEncoder;
 import com.github.pgasync.impl.io.PasswordMessageEncoder;
 import com.github.pgasync.impl.io.QueryEncoder;
-import com.github.pgasync.impl.io.StartupEncoder;
+import com.github.pgasync.impl.io.StartupMessageEncoder;
 import com.github.pgasync.impl.message.Message;
 
 /**
@@ -41,8 +41,13 @@ public class ByteBufMessageEncoder extends MessageToByteEncoder<Message> {
 
     static final Map<Class<?>,Encoder<?>> ENCODERS = new HashMap<>();
     static {
-        for (Encoder<?> encoder : new Encoder<?>[] { new StartupEncoder(), new PasswordMessageEncoder(),
-                new QueryEncoder(), new ParseEncoder(), new BindEncoder(), new ExtendedQueryEncoder() }) {
+        for (Encoder<?> encoder : new Encoder<?>[] { 
+                new StartupMessageEncoder(),
+                new PasswordMessageEncoder(),
+                new QueryEncoder(), 
+                new ParseEncoder(), 
+                new BindEncoder(), 
+                new ExtendedQueryEncoder() }) {
             ENCODERS.put(encoder.getMessageType(), encoder);
         }
     }
@@ -56,22 +61,23 @@ public class ByteBufMessageEncoder extends MessageToByteEncoder<Message> {
 
         buffer.clear();
         ByteBuffer msgbuf = buffer;
-        while (true) {
-            try {
-                encoder.write(msg, msgbuf);
-                break;
-            } catch (BufferOverflowException overflow) {
-                // large clob/blob, resize buffer aggressively
-                msgbuf = ByteBuffer.allocate(msgbuf.capacity() * 4);
-            } catch (Throwable t) {
-                // broad catch as otherwise the exception is silently dropped
-                ctx.fireExceptionCaught(t);
-                break;
+        try {
+            while (true) {
+                try {
+                    encoder.write(msg, msgbuf);
+                    break;
+                } catch (BufferOverflowException overflow) {
+                    // large clob/blob, resize buffer aggressively
+                    msgbuf = ByteBuffer.allocate(msgbuf.capacity() * 4);
+                } 
             }
-        }
 
-        msgbuf.flip();
-        out.writeBytes(msgbuf);
+            msgbuf.flip();
+            out.writeBytes(msgbuf);
+        } catch (Throwable t) {
+            // broad catch as otherwise the exception is silently dropped
+            ctx.fireExceptionCaught(t);
+        }
     }
 
 }

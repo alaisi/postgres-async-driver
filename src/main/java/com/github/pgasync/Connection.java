@@ -44,8 +44,8 @@ public interface Connection {
      * 
      * @param sql SQL to execute
      * @param params List of parameters
-     * @param onResult
-     * @param onError
+     * @param onResult Called when query is completed
+     * @param onError Called on exception thrown
      */
     void query(String sql, List/*<Object>*/ params, ResultHandler onResult, ErrorHandler onError);
 

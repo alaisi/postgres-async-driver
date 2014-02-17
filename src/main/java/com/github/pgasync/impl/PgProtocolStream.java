@@ -15,7 +15,7 @@
 package com.github.pgasync.impl;
 
 import com.github.pgasync.impl.message.Message;
-import com.github.pgasync.impl.message.Startup;
+import com.github.pgasync.impl.message.StartupMessage;
 
 /**
  * Stream of messages from/to backend server.
@@ -24,7 +24,7 @@ import com.github.pgasync.impl.message.Startup;
  */
 public interface PgProtocolStream {
 
-    void connect(Startup startup, PgProtocolCallbacks callbacks);
+    void connect(StartupMessage startup, PgProtocolCallbacks callbacks);
 
     void send(Message... messages);
 

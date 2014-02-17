@@ -18,10 +18,21 @@ import java.nio.ByteBuffer;
 
 import com.github.pgasync.impl.message.Message;
 
+/**
+ * Decoder reads messages from byte buffer.
+ *
+ * @author Antti Laisi
+ */
 public interface Decoder<T extends Message> {
 
+    /**
+     * @return Protocol message id
+     */
     byte getMessageId();
 
+    /**
+     * @return Decoded message
+     */
     T read(ByteBuffer buffer);
 
 }

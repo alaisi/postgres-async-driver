@@ -18,10 +18,22 @@ import java.nio.ByteBuffer;
 
 import com.github.pgasync.impl.message.Message;
 
+/**
+ * Encoder writes messages to byte buffer.
+ *
+ * @author Antti Laisi
+ */
 public interface Encoder<T extends Message> {
 
+    /**
+     * @return Message class
+     */
     Class<T> getMessageType();
 
+    /**
+     * @param msg Protocol message
+     * @param buffer Target buffer
+     */
     void write(T msg, ByteBuffer buffer);
 
 }

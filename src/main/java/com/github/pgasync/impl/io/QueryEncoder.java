@@ -20,6 +20,21 @@ import java.nio.ByteBuffer;
 
 import com.github.pgasync.impl.message.Query;
 
+/**
+ * See <a href="www.postgresql.org/docs/9.3/static/protocol-message-formats.html">PostgreSQL message formats</a>
+ *
+ * <pre>
+ * Query (F)
+ *  Byte1('Q')
+ *      Identifies the message as a simple query.
+ *  Int32
+ *      Length of message contents in bytes, including self.
+ *  String
+ *      The query string itself.
+ * </pre>
+ *
+ * @author Antti Laisi
+ */
 public class QueryEncoder implements Encoder<Query> {
 
     @Override

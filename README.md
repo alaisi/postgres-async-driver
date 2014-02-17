@@ -20,7 +20,15 @@ Pg-async-driver is available on [Maven Central](http://search.maven.org/#search|
 
 ```java
 ConnectionPool pool = ...;
-pool.query("SELECT 'Hello world!' AS message", new ResultHandler() {
+pool.query("select 'Hello world!' as message",
+    result -> System.out.println(result.get(0).getString("message") ),
+    error  -> error.printStackTrace() );
+```
+Or with Java <= 7:
+
+```java
+ConnectionPool pool = ...;
+pool.query("select 'Hello world!' as message", new ResultHandler() {
     @Override
     public void onResult(ResultSet result) {
         System.out.println(result.get(0).getString("message"));
@@ -31,15 +39,6 @@ pool.query("SELECT 'Hello world!' AS message", new ResultHandler() {
         error.printStackTrace();
     }
 });
-```
-
-Or with Java 8:
-
-```java
-ConnectionPool pool = ...;
-pool.query("SELECT 'Hello world!' AS message",
-    (result) -> System.out.println(result.get(0).getString("message")),
-    (error) -> error.printStackTrace() );
 ```
 
 ### Connection pools
@@ -55,15 +54,36 @@ ConnectionPool pool = return new ConnectionPoolBuilder()
     .build();
 ```
 
-Each connection pool will start one IO thread used in communicating with PostgreSQL backend.
+Each connection pool will start one IO thread used in communicating with PostgreSQL backend and executing callbacks.
 
 ### Prepared statements
 
-TODO
+Prepared statements use native PostgreSQL syntax $<index>. Supported parameter types are all primitive types, `String`, temporal types in `java.sql` package and `byte[]`.
+
+```java
+pool.query("insert into message(id, body) values($1, $2)", Arrays.asList(123, "hello"),
+    result -> System.out.printf("Inserted %d rows", result.updatedRows() ),
+    error  -> error.printStackTrace() );
+```
 
 ### Transactions
 
-TODO
+A transactional unit of work is started with `begin()`. Queries issued against connection passed to callback are executed in the same transaction. The transaction must always be committed or rolled back.
+
+```java
+ErrorHandler err = error -> error.printStackTrace();
+pool.begin((connection, transaction) -> {
+    connection.query("select 1 as id",
+        result -> {
+            System.out.println("Result is %d", result.get(0).getLong("id"));
+            transaction.commit(() -> System.out.println("Transaction committed"), err);
+        },
+        error -> {
+            System.out.println("Query failed");
+            transaction.rollback(() -> System.out.println("Transaction rolled back"), err);
+        })
+}, err)
+```
 
 ## References
 * [Scala postgresql-async](https://raw.github.com/mauricio/postgresql-async)

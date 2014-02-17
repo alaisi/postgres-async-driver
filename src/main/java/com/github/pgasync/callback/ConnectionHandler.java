@@ -16,6 +16,11 @@ package com.github.pgasync.callback;
 
 import com.github.pgasync.Connection;
 
+/**
+ * Callback for fetching a connection from pool.
+ *
+ * @author Antti Laisi
+ */
 public interface ConnectionHandler {
 
     void onConnection(Connection connection);

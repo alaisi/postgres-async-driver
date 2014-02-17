@@ -18,6 +18,31 @@ import java.nio.ByteBuffer;
 
 import com.github.pgasync.impl.message.Authentication;
 
+/**
+ * See <a href="www.postgresql.org/docs/9.3/static/protocol-message-formats.html">PostgreSQL message formats</a>
+ * 
+ * <pre>
+ * AuthenticationOk (B)
+ *  Byte1('R')
+ *      Identifies the message as an authentication request.
+ *  Int32(8)
+ *      Length of message contents in bytes, including self.
+ *  Int32(0)
+ *      Specifies that the authentication was successful.
+ *       
+ * AuthenticationMD5Password (B)
+ *  Byte1('R')
+ *      Identifies the message as an authentication request.
+ *  Int32(12)
+ *      Length of message contents in bytes, including self.
+ *  Int32(5)
+ *      Specifies that an MD5-encrypted password is required.
+ *  Byte4
+ *      The salt to use when encrypting the password.
+ * </pre>
+ * 
+ * @author Antti Laisi
+ */
 public class AuthenticationDecoder implements Decoder<Authentication> {
 
     static final int OK = 0;

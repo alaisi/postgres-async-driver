@@ -16,6 +16,9 @@ package com.github.pgasync.impl.message;
 
 import com.github.pgasync.impl.Oid;
 
+/**
+ * @author  Antti Laisi
+ */
 public class RowDescription implements Message {
 
     public static class ColumnDescription {

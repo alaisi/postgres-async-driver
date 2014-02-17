@@ -20,6 +20,9 @@ import static javax.xml.bind.DatatypeConverter.printHexBinary;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
+/**
+ * @author  Antti Laisi
+ */
 public class PasswordMessage implements Message {
 
     final String password;

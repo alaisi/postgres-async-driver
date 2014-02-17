@@ -14,6 +14,9 @@
 
 package com.github.pgasync.impl.message;
 
+/**
+ * @author  Antti Laisi
+ */
 public class CommandComplete implements Message {
 
     final int updatedRows;

@@ -16,6 +16,8 @@ package com.github.pgasync.impl.message;
 
 /**
  * Marker interface for PostgreSQL protocol V3 messages.
+ *
+ * @author Antti Laisi
  */
 public interface Message {
 

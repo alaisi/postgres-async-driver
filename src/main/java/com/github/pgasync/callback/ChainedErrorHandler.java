@@ -14,6 +14,11 @@
 
 package com.github.pgasync.callback;
 
+/**
+ * Delegating error handler
+ *
+ * @author Antti Laisi
+ */
 public class ChainedErrorHandler implements ErrorHandler {
 
     final ErrorHandler onError;
