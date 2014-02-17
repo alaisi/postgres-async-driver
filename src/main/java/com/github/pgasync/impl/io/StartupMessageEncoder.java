@@ -20,7 +20,15 @@ import java.nio.ByteBuffer;
 
 import com.github.pgasync.impl.message.Startup;
 
-public class StartupEncoder implements Encoder<Startup> {
+/**
+ * See <a href="www.postgresql.org/docs/9.3/static/protocol-message-formats.html">PostgreSQL message formats</a>
+ *
+ * <pre>
+ *</pre>
+ *
+ * @author Antti Laisi
+ */
+public class StartupMessageEncoder implements Encoder<Startup> {
 
     @Override
     public Class<Startup> getMessageType() {
