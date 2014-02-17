@@ -212,11 +212,11 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
 
     @Override
     public void onReadyForQuery(ReadyForQuery msg) {
+        ErrorHandler onError = errorHandler;
         if (!connected) {
             onConnected();
             return;
         }
-        ErrorHandler onError = errorHandler;
         if (queryHandler != null) {
             ResultHandler onResult = queryHandler;
             ResultSet result = resultSet;
