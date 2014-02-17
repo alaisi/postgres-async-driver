@@ -58,7 +58,7 @@ Each connection pool will start one IO thread used in communicating with Postgre
 
 ### Prepared statements
 
-Prepared statements use native PostgreSQL syntax $<index>. Supported parameter types are all primitive types, `String`, temporal types in `java.sql` package and `byte[]`.
+Prepared statements use native PostgreSQL syntax `$index`. Supported parameter types are all primitive types, `String`, temporal types in `java.sql` package and `byte[]`.
 
 ```java
 pool.query("insert into message(id, body) values($1, $2)", Arrays.asList(123, "hello"),
