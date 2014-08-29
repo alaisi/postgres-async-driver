@@ -8,7 +8,7 @@
 	</parent>
 
 	<groupId>com.github.alaisi.pgasync</groupId>
-	<artifactId>pg-async-driver</artifactId>
+	<artifactId>postgres-async-driver</artifactId>
 	<version>0.2-SNAPSHOT</version>
 
 	<name>pg-async-driver</name>
