@@ -9,7 +9,7 @@ Pg-async-driver is available on [Maven Central](http://search.maven.org/#search|
 ```xml
 <dependency>
     <groupId>com.github.alaisi.pgasync</groupId>
-    <artifactId>pg-async-driver</artifactId>
+    <artifactId>postgres-async-driver</artifactId>
     <version>0.1</version>
 </dependency>
 ```
@@ -24,29 +24,15 @@ pool.query("select 'Hello world!' as message",
     result -> System.out.println(result.get(0).getString("message") ),
     error  -> error.printStackTrace() );
 ```
-Or with Java <= 7:
-
-```java
-ConnectionPool pool = ...;
-pool.query("select 'Hello world!' as message", new ResultHandler() {
-    @Override
-    public void onResult(ResultSet result) {
-        System.out.println(result.get(0).getString("message"));
-    }
-}, new ErrorHandler() {
-    @Override
-    public void onError(Throwable error) {
-        error.printStackTrace();
-    }
-});
-```
 
 ### Connection pools
 
-Connection pools are created with [`com.github.pgasync.ConnectionPoolBuilder`](https://github.com/alaisi/pg-async-driver/blob/master/src/main/java/com/github/pgasync/ConnectionPoolBuilder.java)
+Connection pools are created with [`com.github.pgasync.ConnectionPoolBuilder`](https://github.com/alaisi/postgres-async-driver/blob/master/src/main/java/com/github/pgasync/ConnectionPoolBuilder.java)
 
 ```java
 ConnectionPool pool = return new ConnectionPoolBuilder()
+    .hostname("localhost")
+    .port(5432)
     .database("db")
     .username("user")
     .password("pass")
@@ -68,20 +54,17 @@ pool.query("insert into message(id, body) values($1, $2)", Arrays.asList(123, "h
 
 ### Transactions
 
-A transactional unit of work is started with `begin()`. Queries issued against connection passed to callback are executed in the same transaction. The transaction must always be committed or rolled back.
+A transactional unit of work is started with `begin()`. Queries issued against connection passed to callback are executed in the same transaction and the transaction is automatically rolled back on query failure.
 
 ```java
-ErrorHandler err = error -> error.printStackTrace();
+ErrorHandler err = 
 pool.begin((connection, transaction) -> {
     connection.query("select 1 as id",
         result -> {
-            System.out.println("Result is %d", result.get(0).getLong("id"));
+            System.out.printf("Result is %d", result.get(0).getLong("id"));
             transaction.commit(() -> System.out.println("Transaction committed"), err);
         },
-        error -> {
-            System.out.println("Query failed");
-            transaction.rollback(() -> System.out.println("Transaction rolled back"), err);
-        })
+        error -> System.out.println("Query failed"))
 }, err)
 ```
 
