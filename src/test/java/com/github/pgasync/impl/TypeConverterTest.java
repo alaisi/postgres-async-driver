@@ -178,7 +178,7 @@ public class TypeConverterTest extends ConnectedTestBase {
                 .getBytes("bytes"));
     }
 
-    long millis(int year, int month, int day, int hour, int minute, int second, int millisecond) {
+    static long millis(int year, int month, int day, int hour, int minute, int second, int millisecond) {
         Calendar cal = Calendar.getInstance();
         cal.clear();
         cal.setTimeZone(TimeZone.getTimeZone("UTC"));

@@ -126,12 +126,7 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
     public void begin(final TransactionHandler handler, final ErrorHandler onError) {
 
         final TransactionCompletedHandler[] onCompletedRef = new TransactionCompletedHandler[1];
-        final ResultHandler queryToComplete = new ResultHandler() {
-            @Override
-            public void onResult(ResultSet rows) {
-                onCompletedRef[0].onComplete();
-            }
-        };
+        final ResultHandler queryToComplete = rows -> onCompletedRef[0].onComplete();
 
         final Transaction transaction = new Transaction() {
             @Override
@@ -147,14 +142,11 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
             }
         };
 
-        query("BEGIN", new ResultHandler() {
-            @Override
-            public void onResult(ResultSet ignored) {
-                try {
-                    handler.onBegin(PgConnection.this, transaction);
-                } catch (Exception e) {
-                    invokeOnError(onError, e);
-                }
+        query("BEGIN", ignored -> {
+            try {
+                handler.onBegin(PgConnection.this, transaction);
+            } catch (Exception e) {
+                invokeOnError(onError, e);
             }
         }, onError);
     }

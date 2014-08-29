@@ -14,6 +14,7 @@
 
 package com.github.pgasync;
 
+import java.util.Collection;
 import java.util.Iterator;
 
 /**
@@ -23,6 +24,11 @@ import java.util.Iterator;
  * @author Antti Laisi
  */
 public interface ResultSet extends Iterable<Row> {
+
+    /**
+     * @return Column names in order.
+     */
+    Collection<String> getColumns();
 
     /**
      * @return Row iterator

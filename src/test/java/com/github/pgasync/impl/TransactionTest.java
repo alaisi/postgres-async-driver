@@ -55,6 +55,7 @@ public class TransactionTest extends ConnectedTestBase {
 
     @BeforeClass
     public static void create() {
+        drop();
         query("CREATE TABLE TX_TEST(ID INT8 PRIMARY KEY)");
     }
 
@@ -67,23 +68,12 @@ public class TransactionTest extends ConnectedTestBase {
     public void shouldCommitSelectInTransaction() throws Exception {
         final CountDownLatch sync = new CountDownLatch(1);
 
-        connection().begin(new TransactionHandler() {
-            @Override
-            public void onBegin(Connection txconn, final Transaction transaction) {
-                txconn.query("SELECT 1", new ResultHandler() {
-                    @Override
-                    public void onResult(ResultSet result) {
-                        assertEquals(1L, result.get(0).getLong(0).longValue());
-                        transaction.commit(new TransactionCompletedHandler() {
-                            @Override
-                            public void onComplete() {
-                                sync.countDown();
-                            }
-                        }, err);
-                    }
-                }, err);
-            }
-        }, err);
+        connection().begin((txconn, transaction) ->
+                txconn.query("SELECT 1", result -> {
+                    assertEquals(1L, result.get(0).getLong(0).longValue());
+                    transaction.commit(sync::countDown, err);
+                }, err),
+            err);
 
         assertTrue(sync.await(5, TimeUnit.SECONDS));
     }
@@ -92,23 +82,12 @@ public class TransactionTest extends ConnectedTestBase {
     public void shouldCommitInsertInTransaction() throws Exception {
         final CountDownLatch sync = new CountDownLatch(1);
 
-        connection().begin(new TransactionHandler() {
-            @Override
-            public void onBegin(Connection txconn, final Transaction transaction) {
-                txconn.query("INSERT INTO TX_TEST(ID) VALUES(10)", new ResultHandler() {
-                    @Override
-                    public void onResult(ResultSet result) {
-                        assertEquals(1, result.updatedRows());
-                        transaction.commit(new TransactionCompletedHandler() {
-                            @Override
-                            public void onComplete() {
-                                sync.countDown();
-                            }
-                        }, err);
-                    }
-                }, err);
-            }
-        }, err);
+        connection().begin((txconn, transaction) ->
+                txconn.query("INSERT INTO TX_TEST(ID) VALUES(10)", result -> {
+                    assertEquals(1, result.updatedRows());
+                    transaction.commit(sync::countDown, err);
+                }, err),
+            err);
 
         assertTrue(sync.await(5, TimeUnit.SECONDS));
         assertEquals(10L, query("SELECT ID FROM TX_TEST WHERE ID = 10").get(0).getLong(0).longValue());
@@ -116,25 +95,14 @@ public class TransactionTest extends ConnectedTestBase {
 
     @Test
     public void shouldRollbackTransaction() throws Exception {
-        final CountDownLatch sync = new CountDownLatch(1);
+        CountDownLatch sync = new CountDownLatch(1);
 
-        connection().begin(new TransactionHandler() {
-            @Override
-            public void onBegin(Connection txconn, final Transaction transaction) {
-                txconn.query("INSERT INTO TX_TEST(ID) VALUES(9)", new ResultHandler() {
-                    @Override
-                    public void onResult(ResultSet result) {
-                        assertEquals(1, result.updatedRows());
-                        transaction.rollback(new TransactionCompletedHandler() {
-                            @Override
-                            public void onComplete() {
-                                sync.countDown();
-                            }
-                        }, err);
-                    }
-                }, err);
-            }
-        }, err);
+        connection().begin((txconn, transaction) ->
+                txconn.query("INSERT INTO TX_TEST(ID) VALUES(9)", result -> {
+                    assertEquals(1, result.updatedRows());
+                    transaction.rollback(sync::countDown, err);
+                }, err),
+            err);
 
         assertTrue(sync.await(5, TimeUnit.SECONDS));
         assertEquals(0L, query("SELECT ID FROM TX_TEST WHERE ID = 9").size());
@@ -142,25 +110,14 @@ public class TransactionTest extends ConnectedTestBase {
 
     @Test
     public void shouldRollbackTransactionOnBackendError() throws Exception {
-        final CountDownLatch sync = new CountDownLatch(1);
+        CountDownLatch sync = new CountDownLatch(1);
 
-        connection().begin(new TransactionHandler() {
-            @Override
-            public void onBegin(final Connection txconn, final Transaction transaction) {
-                txconn.query("INSERT INTO TX_TEST(ID) VALUES(11)", new ResultHandler() {
-                    @Override
-                    public void onResult(ResultSet result) {
-                        assertEquals(1, result.updatedRows());
-                        txconn.query("INSERT INTO TX_TEST(ID) VALUES(11)", fail, new ErrorHandler() {
-                            @Override
-                            public void onError(Throwable t) {
-                                sync.countDown();
-                            }
-                        });
-                    }
-                }, err);
-            }
-        }, err);
+        connection().begin((txconn, transaction) ->
+                txconn.query("INSERT INTO TX_TEST(ID) VALUES(11)", result -> {
+                    assertEquals(1, result.updatedRows());
+                    txconn.query("INSERT INTO TX_TEST(ID) VALUES(11)", fail, t -> sync.countDown());
+                }, err),
+            err);
 
         assertTrue(sync.await(5, TimeUnit.SECONDS));
         assertEquals(0, query("SELECT ID FROM TX_TEST WHERE ID = 11").size());
@@ -168,31 +125,18 @@ public class TransactionTest extends ConnectedTestBase {
     
     @Test
     public void shouldInvalidateTxConnAfterError() throws Exception {
-        final CountDownLatch sync = new CountDownLatch(1);
+        CountDownLatch sync = new CountDownLatch(1);
 
-        connection().begin(new TransactionHandler() {
-            @Override
-            public void onBegin(final Connection txconn, final Transaction transaction) {
-                txconn.query("INSERT INTO TX_TEST(ID) VALUES(22)", new ResultHandler() {
-                    @Override
-                    public void onResult(ResultSet result) {
-                        assertEquals(1, result.updatedRows());
-                        txconn.query("INSERT INTO TX_TEST(ID) VALUES(22)", fail, new ErrorHandler() {
-                            @Override
-                            public void onError(Throwable t) {
-                                txconn.query("SELECT 1", fail, new ErrorHandler() {
-                                    @Override
-                                    public void onError(Throwable t) {
-                                        assertEquals("Transaction is rolled back", t.getMessage());
-                                        sync.countDown();
-                                    }
-                                });
-                            }
-                        });
-                    }
-                }, err);
-            }
-        }, err);
+        connection().begin((txconn, transaction) ->
+                txconn.query("INSERT INTO TX_TEST(ID) VALUES(22)", result -> {
+                    assertEquals(1, result.updatedRows());
+                    txconn.query("INSERT INTO TX_TEST(ID) VALUES(22)", fail, t ->
+                            txconn.query("SELECT 1", fail, t1 -> {
+                                assertEquals("Transaction is rolled back", t1.getMessage());
+                                sync.countDown();
+                            }));
+                }, err),
+            err);
 
         assertTrue(sync.await(5, TimeUnit.SECONDS));
         assertEquals(0, query("SELECT ID FROM TX_TEST WHERE ID = 22").size());

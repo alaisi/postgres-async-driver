@@ -14,12 +14,7 @@
 
 package com.github.pgasync.impl;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import com.github.pgasync.ResultSet;
 import com.github.pgasync.Row;
@@ -45,6 +40,11 @@ public class PgResultSet implements ResultSet {
             columns.put(columnDescriptions[i].getName().toUpperCase(),
                     new PgColumn(i, columnDescriptions[i].getType()));
         }
+    }
+
+    @Override
+    public Collection<String> getColumns() {
+        return columns.keySet();
     }
 
     @Override

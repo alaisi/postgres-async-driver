@@ -104,7 +104,7 @@ public class PreparedStatementTest extends ConnectedTestBase {
 
     @Test
     public void shouldBindTime() throws Exception {
-        Time time = new Time(zoned(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS")).parse("1970-01-01 16:47:59.897")
+        Time time = new Time(dateFormat("yyyy-MM-dd HH:mm:ss.SSS").parse("1970-01-01 16:47:59.897")
                 .getTime());
         query("INSERT INTO PS_TEST(TIME) VALUES ($1)", asList(time));
         assertEquals(time, query("SELECT TIME FROM PS_TEST WHERE TIME = $1", asList(time)).get(0).getTime(0));
@@ -112,7 +112,7 @@ public class PreparedStatementTest extends ConnectedTestBase {
 
     @Test
     public void shouldBindDate() throws Exception {
-        Date date = new Date(zoned(new SimpleDateFormat("yyyy-MM-dd")).parse("2014-01-19").getTime());
+        Date date = new Date(dateFormat("yyyy-MM-dd").parse("2014-01-19").getTime());
         query("INSERT INTO PS_TEST(DATE) VALUES ($1)", asList(date));
         assertEquals(date, query("SELECT DATE FROM PS_TEST WHERE DATE = $1", asList(date)).get(0).getDate(0));
     }
@@ -124,8 +124,8 @@ public class PreparedStatementTest extends ConnectedTestBase {
         assertArrayEquals(b, query("SELECT BYTEA FROM PS_TEST WHERE BYTEA = $1", asList(b)).get(0).getBytes(0));
     }
 
-    SimpleDateFormat zoned(SimpleDateFormat format) {
+    static SimpleDateFormat dateFormat(String pattern) {
+        SimpleDateFormat format = new SimpleDateFormat(pattern);
         format.setTimeZone(TimeZone.getTimeZone("UTC"));
         return format;
-    }
-}
+    }}

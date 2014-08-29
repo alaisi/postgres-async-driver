@@ -35,6 +35,7 @@ public class QueryResultTest extends ConnectedTestBase {
 
     @BeforeClass
     public static void create() {
+        drop();
         query("CREATE TABLE CONN_TEST(ID INT8)");
     }
 
@@ -48,6 +49,7 @@ public class QueryResultTest extends ConnectedTestBase {
         assertEquals(2, query("INSERT INTO CONN_TEST (ID) VALUES (1),(2)").updatedRows());
         ResultSet result = query("SELECT * FROM CONN_TEST WHERE ID <= 2 ORDER BY ID");
         assertEquals(2, result.size());
+        assertEquals("ID", result.getColumns().iterator().next());
 
         Iterator<Row> i = result.iterator();
         assertEquals(1L, i.next().getLong(0).longValue());

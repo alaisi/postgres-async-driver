@@ -36,6 +36,9 @@ import com.github.pgasync.callback.TransactionHandler;
  * Pool for backend connections. Callbacks are queued and executed when pool has an available
  * connection.
  *
+ * TODO: Locking scheme is optimized for small thread pools and doesn't scale all that well
+ * for large ones.
+ *
  * @author Antti Laisi
  */
 public abstract class PgConnectionPool implements ConnectionPool {
@@ -78,30 +81,20 @@ public abstract class PgConnectionPool implements ConnectionPool {
     @Override
     @SuppressWarnings("rawtypes")
     public void query(final String sql, final List params, final ResultHandler onResult, final ErrorHandler onError) {
-        getConnection(new ConnectionHandler() {
-            @Override
-            public void onConnection(Connection connection) {
-                connection.query(sql, params, 
-                        new ReleasingResultHandler(connection, onResult),
-                        new ReleasingErrorHandler(connection, onError));
-            }
-        }, new ChainedErrorHandler(onError));
+        getConnection(connection -> connection.query(sql, params,
+                new ReleasingResultHandler(connection, onResult),
+                new ReleasingErrorHandler(connection, onError)), new ChainedErrorHandler(onError));
     }
 
     @Override
     public void begin(final TransactionHandler onTransaction, final ErrorHandler onError) {
-        getConnection(new ConnectionHandler() {
+        getConnection(connection -> connection.begin(new TransactionHandler() {
             @Override
-            public void onConnection(Connection connection) {
-                connection.begin(new TransactionHandler() {
-                    @Override
-                    public void onBegin(final Connection txconn, Transaction transaction) {
-                        onTransaction.onBegin(new TransactionalConnection(txconn, transaction), 
-                                new ReleasingTransaction(txconn, transaction));
-                    }
-                }, new ReleasingErrorHandler(connection, onError));
+            public void onBegin(final Connection txconn, Transaction transaction) {
+                onTransaction.onBegin(new TransactionalConnection(txconn, transaction),
+                        new ReleasingTransaction(txconn, transaction));
             }
-        }, new ChainedErrorHandler(onError));
+        }, new ReleasingErrorHandler(connection, onError)), new ChainedErrorHandler(onError));
     }
 
     @Override
@@ -125,12 +118,10 @@ public abstract class PgConnectionPool implements ConnectionPool {
         }
 
         Connection connection;
-        boolean create = false;
         synchronized (lock) {
             connection = connections.poll();
             if (connection == null) {
                 if (currentSize < poolSize) {
-                    create = true;
                     currentSize++;
                 } else {
                     waiters.add(new QueuedCallback(onConnection, onError));
@@ -138,10 +129,11 @@ public abstract class PgConnectionPool implements ConnectionPool {
                 }
             }
         }
-        if (connection != null) {
-            onConnection.onConnection(connection);
-        } else if (create) {
+
+        if (connection == null) {
             newConnection(address).connect(username, password, database, onConnection, onError);
+        } else {
+            onConnection.onConnection(connection);
         }
     }
 
@@ -178,7 +170,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
      * Creates a new connection to the backend.
      * 
      * @param address
-     * @return Unconnection connection
+     * @return Unconnected connection
      */
     protected abstract PgConnection newConnection(InetSocketAddress address);
 

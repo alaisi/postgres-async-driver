@@ -14,9 +14,11 @@
 
 package com.github.pgasync.impl;
 
-import static java.util.Arrays.asList;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import com.github.pgasync.ConnectionPool;
+import com.github.pgasync.callback.ErrorHandler;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 
 import java.util.LinkedList;
 import java.util.Queue;
@@ -25,14 +27,9 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-
-import com.github.pgasync.ConnectionPool;
-import com.github.pgasync.ResultSet;
-import com.github.pgasync.callback.ErrorHandler;
-import com.github.pgasync.callback.ResultHandler;
+import static java.util.Arrays.asList;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Tests for connection pool concurrency.
@@ -41,11 +38,8 @@ import com.github.pgasync.callback.ResultHandler;
  */
 public class ConnectionPoolingTest {
 
-    final ErrorHandler err = new ErrorHandler() {
-        @Override
-        public void onError(Throwable t) {
-            throw new AssertionError("failed", t);
-        }
+    final ErrorHandler err = t -> {
+        throw new AssertionError("failed", t);
     };
 
     final ConnectionPool pool = ConnectedTestBase.createPool(10);
@@ -77,21 +71,13 @@ public class ConnectionPoolingTest {
                 public void run() {
                     final Queue<Runnable> queries = new LinkedList<>();
                     for(int j = 0; j < 50; j++) {
-                        queries.add(new Runnable() {
-                            @Override
-                            public void run() {
-                                pool.query("INSERT INTO CP_TEST VALUES($1)", asList(UUID.randomUUID()), new ResultHandler() {
-                                    @Override
-                                    public void onResult(ResultSet result) {
-                                        latch.countDown();
-                                        count.incrementAndGet();
-                                        if(!queries.isEmpty()) {
-                                            queries.poll().run();
-                                        }
-                                    }
-                                }, err);
+                        queries.add(() -> pool.query("INSERT INTO CP_TEST VALUES($1)", asList(UUID.randomUUID()), result -> {
+                            latch.countDown();
+                            count.incrementAndGet();
+                            if(!queries.isEmpty()) {
+                                queries.poll().run();
                             }
-                        });
+                        }, err));
                     }
                     queries.poll().run();
                 }

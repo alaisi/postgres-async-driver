@@ -18,7 +18,9 @@ import com.github.pgasync.callback.ConnectionHandler;
 import com.github.pgasync.callback.ErrorHandler;
 
 /**
- * Pool of backend {@link Connection}s.
+ * Pool of backend {@link Connection}s. Pools implement {@link Connection} so
+ * that queries can be issued directly to the pool if using the same connection
+ * is not required.
  * 
  * @author Antti Laisi
  */
@@ -26,7 +28,8 @@ public interface ConnectionPool extends Connection {
 
     /**
      * Executes a {@link ConnectionHandler} callback when a connection is
-     * available.
+     * available. Connection passed to callback must be freed with
+     * {@link com.github.pgasync.ConnectionPool#release(Connection)}
      * 
      * @param handler Called when a connection is acquired
      * @param onError Called on exception thrown
