@@ -54,15 +54,15 @@ pool.query("insert into message(id, body) values($1, $2)", Arrays.asList(123, "h
 
 ### Transactions
 
-A transactional unit of work is started with `begin()`. Queries issued against connection passed to callback are executed in the same transaction and the transaction is automatically rolled back on query failure.
+A transactional unit of work is started with `begin()`. Queries issued against connection passed to callback are executed in the same transaction and the transaction is automatically rolled back on query a.
 
 ```java
+ErrorHandler err = (error) -> error.printStackTrace();
 pool.begin((connection, transaction) -> {
     connection.query("select 1 as id",
         result -> {
             System.out.printf("Result is %d", result.get(0).getLong("id"));
-            transaction.commit(() -> System.out.println("Transaction committed"),
-                               (error) -> System.err.println("Commit failed" ));
+            transaction.commit(() -> System.out.println("Transaction committed"), err);
         },
         error -> System.out.println("Query failed"))
 }, err)
