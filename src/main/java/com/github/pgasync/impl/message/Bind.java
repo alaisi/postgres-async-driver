@@ -18,6 +18,9 @@ import java.util.List;
 
 import com.github.pgasync.impl.TypeConverter;
 
+/**
+ * @author  Antti Laisi
+ */
 public class Bind implements Message {
 
     final byte[][] params;

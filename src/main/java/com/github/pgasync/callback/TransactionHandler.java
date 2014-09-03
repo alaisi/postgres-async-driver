@@ -27,9 +27,8 @@ public interface TransactionHandler {
     /**
      * Called when the transaction is started.
      *
-     * @param txconn Transactional connection, queries are executed in the same transaction
-     * @param transaction Transaction, must be committed or rolled back
+     * @param transaction Transaction, queries are executed in the same transaction. Must be committed or rolled back
      */
-    void onBegin(Connection txconn, Transaction transaction);
+    void onBegin(Transaction transaction);
 
 }

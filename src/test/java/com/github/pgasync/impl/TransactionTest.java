@@ -25,13 +25,9 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import com.github.pgasync.Connection;
 import com.github.pgasync.ResultSet;
-import com.github.pgasync.Transaction;
 import com.github.pgasync.callback.ErrorHandler;
 import com.github.pgasync.callback.ResultHandler;
-import com.github.pgasync.callback.TransactionCompletedHandler;
-import com.github.pgasync.callback.TransactionHandler;
 
 /**
  * Tests for BEGIN/COMMIT/ROLLBACK.
@@ -66,10 +62,10 @@ public class TransactionTest extends ConnectedTestBase {
 
     @Test
     public void shouldCommitSelectInTransaction() throws Exception {
-        final CountDownLatch sync = new CountDownLatch(1);
+        CountDownLatch sync = new CountDownLatch(1);
 
-        connection().begin((txconn, transaction) ->
-                txconn.query("SELECT 1", result -> {
+        db().begin((transaction) ->
+                transaction.query("SELECT 1", result -> {
                     assertEquals(1L, result.get(0).getLong(0).longValue());
                     transaction.commit(sync::countDown, err);
                 }, err),
@@ -80,10 +76,10 @@ public class TransactionTest extends ConnectedTestBase {
 
     @Test
     public void shouldCommitInsertInTransaction() throws Exception {
-        final CountDownLatch sync = new CountDownLatch(1);
+        CountDownLatch sync = new CountDownLatch(1);
 
-        connection().begin((txconn, transaction) ->
-                txconn.query("INSERT INTO TX_TEST(ID) VALUES(10)", result -> {
+        db().begin((transaction) ->
+                transaction.query("INSERT INTO TX_TEST(ID) VALUES(10)", result -> {
                     assertEquals(1, result.updatedRows());
                     transaction.commit(sync::countDown, err);
                 }, err),
@@ -97,8 +93,8 @@ public class TransactionTest extends ConnectedTestBase {
     public void shouldRollbackTransaction() throws Exception {
         CountDownLatch sync = new CountDownLatch(1);
 
-        connection().begin((txconn, transaction) ->
-                txconn.query("INSERT INTO TX_TEST(ID) VALUES(9)", result -> {
+        db().begin((transaction) ->
+                transaction.query("INSERT INTO TX_TEST(ID) VALUES(9)", result -> {
                     assertEquals(1, result.updatedRows());
                     transaction.rollback(sync::countDown, err);
                 }, err),
@@ -112,10 +108,10 @@ public class TransactionTest extends ConnectedTestBase {
     public void shouldRollbackTransactionOnBackendError() throws Exception {
         CountDownLatch sync = new CountDownLatch(1);
 
-        connection().begin((txconn, transaction) ->
-                txconn.query("INSERT INTO TX_TEST(ID) VALUES(11)", result -> {
+        db().begin((transaction) ->
+                transaction.query("INSERT INTO TX_TEST(ID) VALUES(11)", result -> {
                     assertEquals(1, result.updatedRows());
-                    txconn.query("INSERT INTO TX_TEST(ID) VALUES(11)", fail, t -> sync.countDown());
+                    transaction.query("INSERT INTO TX_TEST(ID) VALUES(11)", fail, t -> sync.countDown());
                 }, err),
             err);
 
@@ -127,11 +123,11 @@ public class TransactionTest extends ConnectedTestBase {
     public void shouldInvalidateTxConnAfterError() throws Exception {
         CountDownLatch sync = new CountDownLatch(1);
 
-        connection().begin((txconn, transaction) ->
-                txconn.query("INSERT INTO TX_TEST(ID) VALUES(22)", result -> {
+        db().begin((transaction) ->
+                transaction.query("INSERT INTO TX_TEST(ID) VALUES(22)", result -> {
                     assertEquals(1, result.updatedRows());
-                    txconn.query("INSERT INTO TX_TEST(ID) VALUES(22)", fail, t ->
-                            txconn.query("SELECT 1", fail, t1 -> {
+                    transaction.query("INSERT INTO TX_TEST(ID) VALUES(22)", fail, t ->
+                            transaction.query("SELECT 1", fail, t1 -> {
                                 assertEquals("Transaction is rolled back", t1.getMessage());
                                 sync.countDown();
                             }));

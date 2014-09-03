@@ -43,25 +43,25 @@ public enum TypeConverter {
         @Override
         protected DateFormat initialValue() {
             return zoned(new SimpleDateFormat("yyyy-MM-dd"));
-        };
+        }
     };
     static final ThreadLocal<DateFormat> TIME_FORMAT = new ThreadLocal<DateFormat>() {
         @Override
         protected DateFormat initialValue() {
             return zoned(new SimpleDateFormat("HH:mm:ss.SSS"));
-        };
+        }
     };
     static final ThreadLocal<DateFormat> TIME_FORMAT_NO_MILLIS = new ThreadLocal<DateFormat>() {
         @Override
         protected DateFormat initialValue() {
             return zoned(new SimpleDateFormat("HH:mm:ss"));
-        };
+        }
     };
     static final ThreadLocal<DateFormat> TIMESTAMP_FORMAT = new ThreadLocal<DateFormat>() {
         @Override
         protected DateFormat initialValue() {
             return zoned(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS"));
-        };
+        }
     };
 
     public static byte[] toParam(Object o) {
@@ -264,8 +264,34 @@ public enum TypeConverter {
         }
     }
 
+    static Object toAny(Oid oid, byte[] value) {
+        if(value == null) {
+            return null;
+        }
+        switch (oid) {
+            case TEXT: // fallthrough
+            case CHAR: // fallthrough
+            case BPCHAR: // fallthrough
+            case VARCHAR: return toString(oid, value);
+            case INT2: return toShort(oid, value);
+            case INT4: return toInteger(oid, value);
+            case INT8: return toLong(oid, value);
+            case FLOAT4: // fallthrough
+            case FLOAT8: return toBigDecimal(oid, value);
+            case DATE: return toDate(oid, value);
+            case TIMETZ: // fallthrough
+            case TIME: return toTime(oid, value);
+            case TIMESTAMP: // fallthrough
+            case TIMESTAMPTZ: return toTimestamp(oid, value);
+            case BYTEA: return toBytes(oid, value);
+            default:
+                throw new SqlException("Unknown column type " + oid.name());
+        }
+    }
+
     private static SimpleDateFormat zoned(SimpleDateFormat format) {
         format.setTimeZone(TimeZone.getTimeZone("UTC"));
         return format;
     }
+
 }

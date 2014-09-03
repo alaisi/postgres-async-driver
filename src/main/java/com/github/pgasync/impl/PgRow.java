@@ -180,6 +180,11 @@ public class PgRow implements Row {
         return TypeConverter.toBytes(pgColumn.type, data.getValue(pgColumn.index));
     }
 
+    public Object get(String column) {
+        PgColumn pgColumn = getColumn(column);
+        return TypeConverter.toAny(pgColumn.type, data.getValue(pgColumn.index));
+    }
+
     PgColumn getColumn(String name) {
         if (name == null) {
             throw new IllegalArgumentException("Column name is required");

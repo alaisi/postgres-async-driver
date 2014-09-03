@@ -44,7 +44,7 @@ public class PgResultSet implements ResultSet {
 
     @Override
     public Collection<String> getColumns() {
-        return columns.keySet();
+        return columns != null ? columns.keySet() : Collections.emptyList();
     }
 
     @Override

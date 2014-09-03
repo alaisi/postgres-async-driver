@@ -16,13 +16,9 @@ package com.github.pgasync.impl;
 
 import java.util.List;
 
+import com.github.pgasync.*;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
-
-import com.github.pgasync.ConnectionPoolBuilder;
-import com.github.pgasync.Connection;
-import com.github.pgasync.ConnectionPool;
-import com.github.pgasync.ResultSet;
 
 /**
  * Base class for tests connected to a PostgreSQL backend.
@@ -50,14 +46,14 @@ public abstract class ConnectedTestBase {
 
     protected static ResultSet query(String sql) {
         ResultHolder result = new ResultHolder();
-        connection().query(sql, result, result);
+        db().query(sql, result, result);
         return result.result();
     }
 
     @SuppressWarnings("rawtypes")
     protected static ResultSet query(String sql, List/* <Object> */params) {
         ResultHolder result = new ResultHolder();
-        connection().query(sql, params, result, result);
+        db().query(sql, params, result, result);
         return result.result();
     }
 
@@ -70,7 +66,7 @@ public abstract class ConnectedTestBase {
             .build();
     }
 
-    protected static Connection connection() {
+    protected static Db db() {
         return pool.get();
     }
 

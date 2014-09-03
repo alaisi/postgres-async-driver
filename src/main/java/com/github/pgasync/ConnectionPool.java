@@ -17,6 +17,8 @@ package com.github.pgasync;
 import com.github.pgasync.callback.ConnectionHandler;
 import com.github.pgasync.callback.ErrorHandler;
 
+import java.io.Closeable;
+
 /**
  * Pool of backend {@link Connection}s. Pools implement {@link Connection} so
  * that queries can be issued directly to the pool if using the same connection
@@ -24,7 +26,7 @@ import com.github.pgasync.callback.ErrorHandler;
  * 
  * @author Antti Laisi
  */
-public interface ConnectionPool extends Connection {
+public interface ConnectionPool extends Db {
 
     /**
      * Executes a {@link ConnectionHandler} callback when a connection is
@@ -42,5 +44,10 @@ public interface ConnectionPool extends Connection {
      * @param connection Connection fetched with getConnection
      */
     void release(Connection connection);
+
+    /**
+     * Closes the pool.
+     */
+    void close();
 
 }

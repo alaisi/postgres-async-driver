@@ -21,10 +21,7 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import com.github.pgasync.Connection;
-import com.github.pgasync.ResultSet;
-import com.github.pgasync.SqlException;
-import com.github.pgasync.Transaction;
+import com.github.pgasync.*;
 import com.github.pgasync.callback.ConnectionHandler;
 import com.github.pgasync.callback.ErrorHandler;
 import com.github.pgasync.callback.ResultHandler;
@@ -128,13 +125,12 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
         final TransactionCompletedHandler[] onCompletedRef = new TransactionCompletedHandler[1];
         final ResultHandler queryToComplete = rows -> onCompletedRef[0].onComplete();
 
-        final Transaction transaction = new Transaction() {
+        final Transaction transaction = new ConnectionTx() {
             @Override
             public void commit(TransactionCompletedHandler onCompleted, ErrorHandler onCommitError) {
                 onCompletedRef[0] = onCompleted;
                 query("COMMIT", queryToComplete, onCommitError);
             }
-
             @Override
             public void rollback(TransactionCompletedHandler onCompleted, ErrorHandler onRollbackError) {
                 onCompletedRef[0] = onCompleted;
@@ -144,7 +140,7 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
 
         query("BEGIN", ignored -> {
             try {
-                handler.onBegin(PgConnection.this, transaction);
+                handler.onBegin(transaction);
             } catch (Exception e) {
                 invokeOnError(onError, e);
             }
@@ -249,4 +245,14 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
         }
     }
 
+    abstract class ConnectionTx implements Transaction {
+        @Override
+        public void query(String sql, ResultHandler onResult, ErrorHandler onError) {
+            PgConnection.this.query(sql, onResult, onError);
+        }
+        @Override
+        public void query(String sql, List params, ResultHandler onResult, ErrorHandler onError) {
+            PgConnection.this.query(sql, params, onResult, onError);
+        }
+    }
 }

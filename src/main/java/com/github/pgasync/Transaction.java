@@ -23,7 +23,7 @@ import com.github.pgasync.callback.TransactionCompletedHandler;
  * 
  * @author Antti Laisi
  */
-public interface Transaction {
+public interface Transaction extends QueryExecutor {
 
     /**
      * Commits a transaction.

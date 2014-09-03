@@ -90,9 +90,8 @@ public abstract class PgConnectionPool implements ConnectionPool {
     public void begin(final TransactionHandler onTransaction, final ErrorHandler onError) {
         getConnection(connection -> connection.begin(new TransactionHandler() {
             @Override
-            public void onBegin(final Connection txconn, Transaction transaction) {
-                onTransaction.onBegin(new TransactionalConnection(txconn, transaction),
-                        new ReleasingTransaction(txconn, transaction));
+            public void onBegin(Transaction transaction) {
+                onTransaction.onBegin(new ReleasingTransaction(connection, transaction));
             }
         }, new ReleasingErrorHandler(connection, onError)), new ChainedErrorHandler(onError));
     }
@@ -214,16 +213,29 @@ public abstract class PgConnectionPool implements ConnectionPool {
     }
 
     /**
-     * {@link Connection} that prevents transaction nesting and rollbacks the transaction
-     * on backend error.
+     * Transaction that rollbacks the tx on backend error and chains releasing the connection after COMMIT/ROLLBACK.
      */
-    class TransactionalConnection implements Connection {
+    class ReleasingTransaction implements Transaction {
         Connection txconn;
         final Transaction transaction;
 
-        TransactionalConnection(Connection txconn, Transaction transaction) {
+        ReleasingTransaction(Connection txconn, Transaction transaction) {
             this.txconn = txconn;
             this.transaction = transaction;
+        }
+
+        @Override
+        public void rollback(final TransactionCompletedHandler onCompleted, ErrorHandler rollbackError) {
+            transaction.rollback(
+                    new ReleasingTransactionCompletedHandler(txconn, onCompleted),
+                    new ReleasingErrorHandler(txconn, rollbackError));
+        }
+
+        @Override
+        public void commit(final TransactionCompletedHandler onCompleted, ErrorHandler commitError) {
+            transaction.commit(
+                    new ReleasingTransactionCompletedHandler(txconn, onCompleted),
+                    new ReleasingErrorHandler(txconn, commitError));
         }
 
         @Override
@@ -251,45 +263,6 @@ public abstract class PgConnectionPool implements ConnectionPool {
         @Override
         public void query(String sql, ResultHandler onResult, final ErrorHandler onError) {
             query(sql, null, onResult, onError);
-        }
-
-        @Override
-        public void begin(TransactionHandler onTransaction, ErrorHandler onError) {
-            onError.onError(new SqlException("Nested transactions are not supported"));
-        }
-
-        @Override
-        public void close() {
-            if(txconn != null) {
-                txconn.close();
-            }
-        }
-    }
-
-    /**
-     * Transaction that chains releasing the connection after COMMIT/ROLLBACK.
-     */
-    class ReleasingTransaction implements Transaction {
-        final Connection txconn;
-        final Transaction transaction;
-
-        ReleasingTransaction(Connection txconn, Transaction transaction) {
-            this.txconn = txconn;
-            this.transaction = transaction;
-        }
-
-        @Override
-        public void rollback(final TransactionCompletedHandler onCompleted, ErrorHandler rollbackError) {
-            transaction.rollback(
-                    new ReleasingTransactionCompletedHandler(txconn, onCompleted),
-                    new ReleasingErrorHandler(txconn, rollbackError));
-        }
-
-        @Override
-        public void commit(final TransactionCompletedHandler onCompleted, ErrorHandler commitError) {
-            transaction.commit(
-                    new ReleasingTransactionCompletedHandler(txconn, onCompleted),
-                    new ReleasingErrorHandler(txconn, commitError));
         }
     }
 
