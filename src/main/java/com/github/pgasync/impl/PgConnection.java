@@ -116,6 +116,7 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
                 new Bind(params), 
                 ExtendedQuery.DESCRIBE, 
                 ExtendedQuery.EXECUTE,
+                ExtendedQuery.CLOSE,
                 ExtendedQuery.SYNC);
     }
 

@@ -67,6 +67,9 @@ public class ExtendedQueryEncoder implements Encoder<ExtendedQuery> {
         case EXECUTE:
             execute(buffer);
             break;
+        case CLOSE:
+            close(buffer);
+            break;
         case SYNC:
             sync(buffer);
             break;
@@ -88,6 +91,14 @@ public class ExtendedQueryEncoder implements Encoder<ExtendedQuery> {
         buffer.putInt(0);
         buffer.put((byte) 0);
         buffer.putInt(0);
+        buffer.putInt(1, buffer.position() - 1);
+    }
+
+    void close(ByteBuffer buffer) {
+        buffer.put((byte) 'C');
+        buffer.putInt(0);
+        buffer.put((byte) 'S');
+        buffer.put((byte) 0);
         buffer.putInt(1, buffer.position() - 1);
     }
 

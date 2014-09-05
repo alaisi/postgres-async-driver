@@ -20,5 +20,5 @@ package com.github.pgasync.impl.message;
  * @author Antti Laisi
  */
 public enum ExtendedQuery implements Message {
-    DESCRIBE, EXECUTE, SYNC;
+    DESCRIBE, EXECUTE, CLOSE, SYNC;
 }
