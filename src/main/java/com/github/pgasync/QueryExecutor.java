@@ -6,6 +6,8 @@ import com.github.pgasync.callback.ResultHandler;
 import java.util.List;
 
 /**
+ * QueryExecutor submits SQL for execution.
+ *
  * @author Antti Laisi
  */
 public interface QueryExecutor {

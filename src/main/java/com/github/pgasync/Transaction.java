@@ -19,7 +19,8 @@ import com.github.pgasync.callback.TransactionCompletedHandler;
 
 /**
  * A unit of work. Transactions must be committed or rolled back, otherwise a
- * connection left is a stale state.
+ * connection left is a stale state. A rollback is automatically performed after
+ * backend error.
  * 
  * @author Antti Laisi
  */

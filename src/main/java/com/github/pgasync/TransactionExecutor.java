@@ -4,6 +4,8 @@ import com.github.pgasync.callback.ErrorHandler;
 import com.github.pgasync.callback.TransactionHandler;
 
 /**
+ * TransactionExecutor begins backend transactions.
+ *
  * @author Antti Laisi
  */
 public interface TransactionExecutor {

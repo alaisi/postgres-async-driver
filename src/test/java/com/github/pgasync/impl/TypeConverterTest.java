@@ -27,6 +27,7 @@ import java.sql.Timestamp;
 import java.util.Calendar;
 import java.util.TimeZone;
 
+import org.junit.ClassRule;
 import org.junit.Test;
 
 /**
@@ -34,147 +35,150 @@ import org.junit.Test;
  * 
  * @author Antti Laisi
  */
-public class TypeConverterTest extends ConnectedTestBase {
+public class TypeConverterTest {
+
+    @ClassRule
+    public static DatabaseRule dbr = new DatabaseRule();
 
     @Test
     public void shouldConvertNullToString() {
-        assertNull(query("select NULL").get(0).getString(0));
+        assertNull(dbr.query("select NULL").get(0).getString(0));
     }
 
     @Test
     public void shouldConvertUnspecifiedToString() {
-        assertEquals("test", query("select 'test'").get(0).getString(0));
+        assertEquals("test", dbr.query("select 'test'").get(0).getString(0));
     }
 
     @Test
     public void shouldConvertTextToString() {
-        assertEquals("test", query("select 'test'::TEXT").get(0).getString(0));
+        assertEquals("test", dbr.query("select 'test'::TEXT").get(0).getString(0));
     }
 
     @Test
     public void shouldConvertVarcharToString() {
-        assertEquals("test", query("select 'test'::VARCHAR").get(0).getString(0));
+        assertEquals("test", dbr.query("select 'test'::VARCHAR").get(0).getString(0));
     }
 
     @Test
     public void shouldConvertCharToString() throws Exception {
-        assertEquals("test ", query("select 'test'::CHAR(5)").get(0).getString(0));
+        assertEquals("test ", dbr.query("select 'test'::CHAR(5)").get(0).getString(0));
     }
 
     @Test
     public void shouldConvertSingleCharToString() {
-        assertEquals("X", query("select 'X'::CHAR AS single").get(0).getString("single"));
+        assertEquals("X", dbr.query("select 'X'::CHAR AS single").get(0).getString("single"));
     }
 
     @Test
     public void shouldConvertNullToLong() throws Exception {
-        assertNull(query("select NULL").get(0).getLong(0));
+        assertNull(dbr.query("select NULL").get(0).getLong(0));
     }
 
     @Test
     public void shouldConvertInt8ToLong() {
-        assertEquals(5000L, query("select 5000::INT8").get(0).getLong(0).longValue());
+        assertEquals(5000L, dbr.query("select 5000::INT8").get(0).getLong(0).longValue());
     }
 
     @Test
     public void shouldConvertInt4ToLong() {
-        assertEquals(4000L, query("select 4000::INT4 AS R").get(0).getLong("R").longValue());
+        assertEquals(4000L, dbr.query("select 4000::INT4 AS R").get(0).getLong("R").longValue());
     }
 
     @Test
     public void shouldConvertInt2ToLong() {
-        assertEquals(4000L, query("select 4000::INT2").get(0).getLong(0).longValue());
+        assertEquals(4000L, dbr.query("select 4000::INT2").get(0).getLong(0).longValue());
     }
 
     @Test
     public void shouldConvertInt4ToInteger() {
-        assertEquals(5000, query("select 5000::INT4 AS I").get(0).getInt("I").intValue());
+        assertEquals(5000, dbr.query("select 5000::INT4 AS I").get(0).getInt("I").intValue());
     }
 
     @Test
     public void shouldConvertInt2ToInteger() {
-        assertEquals(4000, query("select 4000::INT2").get(0).getInt(0).intValue());
+        assertEquals(4000, dbr.query("select 4000::INT2").get(0).getInt(0).intValue());
     }
 
     @Test
     public void shouldConvertInt2ToShort() {
-        assertEquals(3000, query("select 3000::INT2").get(0).getShort(0).shortValue());
+        assertEquals(3000, dbr.query("select 3000::INT2").get(0).getShort(0).shortValue());
     }
 
     @Test
     public void shouldConvertInt2ToShortWithName() {
-        assertEquals(128, query("select 128::INT2 AS S").get(0).getShort("S").shortValue());
+        assertEquals(128, dbr.query("select 128::INT2 AS S").get(0).getShort("S").shortValue());
     }
 
     @Test
     public void shouldConvertCharToByte() {
-        assertEquals(65, query("select 65::INT2").get(0).getByte(0).byteValue());
+        assertEquals(65, dbr.query("select 65::INT2").get(0).getByte(0).byteValue());
     }
 
     @Test
     public void shouldConvertCharToByteWithName() {
-        assertEquals(65, query("select 65::INT2 as C").get(0).getByte("c").byteValue());
+        assertEquals(65, dbr.query("select 65::INT2 as C").get(0).getByte("c").byteValue());
     }
 
     @Test
     public void shouldConvertInt8ToBigInteger() {
-        assertEquals(new BigInteger("9223372036854775807"), query("select 9223372036854775807::INT8").get(0)
+        assertEquals(new BigInteger("9223372036854775807"), dbr.query("select 9223372036854775807::INT8").get(0)
                 .getBigInteger(0));
     }
 
     @Test
     public void shouldConvertInt4ToBigInteger() {
-        assertEquals(new BigInteger("1000"), query("select 1000::INT4 as num").get(0).getBigInteger("num"));
+        assertEquals(new BigInteger("1000"), dbr.query("select 1000::INT4 as num").get(0).getBigInteger("num"));
     }
 
     @Test
     public void shouldConvertFloat8ToBigDecimal() {
-        assertEquals(new BigDecimal("123.56"), query("select 123.56::FLOAT8").get(0).getBigDecimal(0));
+        assertEquals(new BigDecimal("123.56"), dbr.query("select 123.56::FLOAT8").get(0).getBigDecimal(0));
     }
 
     @Test
     public void shouldConvertFloat4ToBigDecimal() {
-        assertEquals(new BigDecimal("789.01"), query("select 789.01::FLOAT4 as sum").get(0).getBigDecimal("sum"));
+        assertEquals(new BigDecimal("789.01"), dbr.query("select 789.01::FLOAT4 as sum").get(0).getBigDecimal("sum"));
     }
 
     @Test
     public void shouldConvertDateToDate() {
         assertEquals(new Date(millis(2014, 1, 31, 0, 0, 0, 0)),
-                query("select '2014-01-31'::DATE").get(0).getDate(0));
+                dbr.query("select '2014-01-31'::DATE").get(0).getDate(0));
     }
 
     @Test
     public void shouldConvertDateToDateWithName() {
-        assertEquals(new Date(millis(2014, 2, 21, 0, 0, 0, 0)), query("select '2014-02-21'::DATE as D").get(0)
+        assertEquals(new Date(millis(2014, 2, 21, 0, 0, 0, 0)), dbr.query("select '2014-02-21'::DATE as D").get(0)
                 .getDate("D"));
     }
 
     @Test
     public void shouldConvertTimeToTime() {
-        assertEquals(new Time(millis(0, 0, 0, 10, 15, 31, 123)), query("select '10:15:31.123'::TIME").get(0)
+        assertEquals(new Time(millis(0, 0, 0, 10, 15, 31, 123)), dbr.query("select '10:15:31.123'::TIME").get(0)
                 .getTime(0));
     }
 
     @Test
     public void shouldConvertZonedTimeToTime() {
-        assertEquals(new Time(millis(0, 0, 0, 23, 59, 59, 999)), query("select '23:59:59.999Z'::TIMETZ as zoned")
+        assertEquals(new Time(millis(0, 0, 0, 23, 59, 59, 999)), dbr.query("select '23:59:59.999Z'::TIMETZ as zoned")
                 .get(0).getTime("zoned"));
     }
 
     @Test
     public void shouldConvertTimestampToTimestamp() {
-        assertEquals(new Timestamp(millis(2014, 2, 21, 23, 59, 59, 999)), query("select '2014-02-21 23:59:59.999'::TIMESTAMP as ts")
+        assertEquals(new Timestamp(millis(2014, 2, 21, 23, 59, 59, 999)), dbr.query("select '2014-02-21 23:59:59.999'::TIMESTAMP as ts")
                 .get(0).getTimestamp("ts"));
     }
 
     @Test
     public void shouldConvertByteAToBytes() {
-        assertArrayEquals(new byte[] { 0x41, 0x41 }, query("select '\\x4141'::BYTEA").get(0).getBytes(0));
+        assertArrayEquals(new byte[] { 0x41, 0x41 }, dbr.query("select '\\x4141'::BYTEA").get(0).getBytes(0));
     }
 
     @Test
     public void shouldConvertByteAToBytesWithName() {
-        assertArrayEquals(new byte[] { 0x41, 0x41 }, query("select $1::BYTEA as bytes", asList("AA")).get(0)
+        assertArrayEquals(new byte[] { 0x41, 0x41 }, dbr.query("select $1::BYTEA as bytes", asList("AA")).get(0)
                 .getBytes("bytes"));
     }
 

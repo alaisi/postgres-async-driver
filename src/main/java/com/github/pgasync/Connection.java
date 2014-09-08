@@ -15,7 +15,7 @@
 package com.github.pgasync;
 
 /**
- * Main interface to a PostgreSQL backend.
+ * A single physical connection to PostgreSQL backend.
  * 
  * @author Antti Laisi
  */

@@ -38,11 +38,8 @@ import static org.junit.Assert.assertTrue;
  */
 public class ConnectionPoolingTest {
 
-    final ErrorHandler err = t -> {
-        throw new AssertionError("failed", t);
-    };
-
-    final ConnectionPool pool = ConnectedTestBase.createPool(10);
+    final ErrorHandler err = t -> { throw new AssertionError("failed", t); };
+    final ConnectionPool pool = DatabaseRule.createPool(10);
 
     @Before
     public void create() {

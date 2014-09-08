@@ -20,8 +20,8 @@ import com.github.pgasync.callback.ErrorHandler;
 import java.io.Closeable;
 
 /**
- * Pool of backend {@link Connection}s. Pools implement {@link Connection} so
- * that queries can be issued directly to the pool if using the same connection
+ * Pool of backend {@link Connection}s. Pools implement {@link Db} so
+ * queries can be issued directly to the pool if using the same connection
  * is not required.
  * 
  * @author Antti Laisi
