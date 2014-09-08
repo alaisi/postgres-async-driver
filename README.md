@@ -18,10 +18,12 @@ Pg-async-driver is available on [Maven Central](http://search.maven.org/#search|
 
 ### Hello world
 
+Queries are submitted to a `Db` with success and failure callbacks.
+
 ```java
-ConnectionPool pool = ...;
-pool.query("select 'Hello world!' as message",
-    result -> System.out.println(result.get(0).getString("message") ),
+Db db = ...;
+db.query("select 'Hello world!' as message",
+    result -> out.println(result.get(0).getString("message") ),
     error  -> error.printStackTrace() );
 ```
 
@@ -30,7 +32,7 @@ pool.query("select 'Hello world!' as message",
 Connection pools are created with [`com.github.pgasync.ConnectionPoolBuilder`](https://github.com/alaisi/postgres-async-driver/blob/master/src/main/java/com/github/pgasync/ConnectionPoolBuilder.java)
 
 ```java
-ConnectionPool pool = return new ConnectionPoolBuilder()
+Db db = return new ConnectionPoolBuilder()
     .hostname("localhost")
     .port(5432)
     .database("db")
@@ -47,26 +49,30 @@ Each connection pool will start one IO thread used in communicating with Postgre
 Prepared statements use native PostgreSQL syntax `$index`. Supported parameter types are all primitive types, `String`, `BigDecimal`, `BigInteger`, temporal types in `java.sql` package and `byte[]`.
 
 ```java
-pool.query("insert into message(id, body) values($1, $2)", Arrays.asList(123, "hello"),
-    result -> System.out.printf("Inserted %d rows", result.updatedRows() ),
+db.query("insert into message(id, body) values($1, $2)", Arrays.asList(123, "hello"),
+    result -> out.printf("Inserted %d rows", result.updatedRows() ),
     error  -> error.printStackTrace() );
 ```
 
 ### Transactions
 
-A transactional unit of work is started with `begin()`. Queries issued against connection passed to callback are executed in the same transaction and the transaction is automatically rolled back on query a.
+A transactional unit of work is started with `begin()`. Queries issued to transaction passed to callback are executed in the same transaction and the tx is automatically rolled back on query failure.
 
 ```java
 ErrorHandler err = (error) -> error.printStackTrace();
-pool.begin((connection, transaction) -> {
-    connection.query("select 1 as id",
+db.begin((transaction) -> {
+    transaction.query("select 1 as id",
         result -> {
-            System.out.printf("Result is %d", result.get(0).getLong("id"));
+            out.printf("Result is %d", result.get(0).getLong("id"));
             transaction.commit(() -> System.out.println("Transaction committed"), err);
         },
-        error -> System.out.println("Query failed"))
+        error -> err.println("Query failed, tx is rolled back"))
 }, err)
 ```
+
+## Used in
+
+* [clj-postgres-async for Clojure](https://github.com/alaisi/clj-postgres-async)
 
 ## References
 * [Scala postgresql-async](https://raw.github.com/mauricio/postgresql-async)
