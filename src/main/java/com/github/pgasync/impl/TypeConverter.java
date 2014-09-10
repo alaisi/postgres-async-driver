@@ -13,9 +13,8 @@
  */
 package com.github.pgasync.impl;
 
-import static com.github.pgasync.impl.io.IO.bytes;
-import static javax.xml.bind.DatatypeConverter.parseHexBinary;
-import static javax.xml.bind.DatatypeConverter.printHexBinary;
+import com.github.pgasync.SqlException;
+import com.github.pgasync.impl.io.IO;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -30,8 +29,9 @@ import java.util.List;
 import java.util.TimeZone;
 import java.util.UUID;
 
-import com.github.pgasync.SqlException;
-import com.github.pgasync.impl.io.IO;
+import static com.github.pgasync.impl.io.IO.bytes;
+import static javax.xml.bind.DatatypeConverter.parseHexBinary;
+import static javax.xml.bind.DatatypeConverter.printHexBinary;
 
 /**
  * Static utility methods for converting between Java and OID types.

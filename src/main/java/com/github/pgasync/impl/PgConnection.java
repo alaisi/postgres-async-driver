@@ -14,31 +14,19 @@
 
 package com.github.pgasync.impl;
 
-import static com.github.pgasync.impl.message.ErrorResponse.Level.FATAL;
+import com.github.pgasync.Connection;
+import com.github.pgasync.ResultSet;
+import com.github.pgasync.SqlException;
+import com.github.pgasync.Transaction;
+import com.github.pgasync.impl.message.*;
 
 import java.nio.channels.ClosedChannelException;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import com.github.pgasync.*;
-import com.github.pgasync.callback.ConnectionHandler;
-import com.github.pgasync.callback.ErrorHandler;
-import com.github.pgasync.callback.ResultHandler;
-import com.github.pgasync.callback.TransactionCompletedHandler;
-import com.github.pgasync.callback.TransactionHandler;
-import com.github.pgasync.impl.message.Authentication;
-import com.github.pgasync.impl.message.Bind;
-import com.github.pgasync.impl.message.CommandComplete;
-import com.github.pgasync.impl.message.DataRow;
-import com.github.pgasync.impl.message.ErrorResponse;
-import com.github.pgasync.impl.message.ExtendedQuery;
-import com.github.pgasync.impl.message.Parse;
-import com.github.pgasync.impl.message.PasswordMessage;
-import com.github.pgasync.impl.message.Query;
-import com.github.pgasync.impl.message.ReadyForQuery;
-import com.github.pgasync.impl.message.RowDescription;
-import com.github.pgasync.impl.message.StartupMessage;
+import static com.github.pgasync.impl.message.ErrorResponse.Level.FATAL;
 
 /**
  * A connection to PostgreSQL backed. The postmaster forks a backend process for
@@ -55,9 +43,9 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
     String password;
 
     // errorHandler must be read before and be written after queryHandler/connectedHandler (memory barrier)
-    volatile ErrorHandler errorHandler;
-    ConnectionHandler connectedHandler;
-    ResultHandler queryHandler; 
+    volatile Consumer<Throwable> errorHandler;
+    Consumer<Connection> connectedHandler;
+    Consumer<ResultSet> queryHandler;
 
     volatile boolean connected;
 
@@ -68,8 +56,8 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
         this.converterRegistry = converterRegistry;
     }
 
-    public void connect(String username, String password, String database, 
-            ConnectionHandler onConnected, ErrorHandler onError) {
+    public void connect(String username, String password, String database,
+                        Consumer<Connection> onConnected, Consumer<Throwable> onError) {
         this.username = username;
         this.password = password;
         this.connectedHandler = onConnected;
@@ -90,9 +78,9 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
     // Connection
 
     @Override
-    public void query(String sql, ResultHandler onQuery, ErrorHandler onError) {
+    public void query(String sql, Consumer<ResultSet> onQuery, Consumer<Throwable> onError) {
         if (queryHandler != null) {
-            onError.onError(new IllegalStateException("Query already in progress"));
+            onError.accept(new IllegalStateException("Query already in progress"));
             return;
         }
         queryHandler = onQuery;
@@ -102,13 +90,13 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
 
     @Override
     @SuppressWarnings({ "unchecked", "rawtypes" })
-    public void query(String sql, List params, ResultHandler onQuery, ErrorHandler onError) {
+    public void query(String sql, List params, Consumer<ResultSet> onQuery, Consumer<Throwable> onError) {
         if (params == null || params.isEmpty()) {
             query(sql, onQuery, onError);
             return;
         }
         if (queryHandler != null) {
-            onError.onError(new IllegalStateException("Query already in progress"));
+            onError.accept(new IllegalStateException("Query already in progress"));
             return;
         }
         queryHandler = onQuery;
@@ -123,27 +111,27 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
     }
 
     @Override
-    public void begin(final TransactionHandler handler, final ErrorHandler onError) {
+    public void begin(Consumer<Transaction> handler, Consumer<Throwable> onError) {
 
-        final TransactionCompletedHandler[] onCompletedRef = new TransactionCompletedHandler[1];
-        final ResultHandler queryToComplete = rows -> onCompletedRef[0].onComplete();
+        Runnable[] onCompletedRef = new Runnable[1];
+        Consumer<ResultSet> queryToComplete = rows -> onCompletedRef[0].run();
 
         final Transaction transaction = new ConnectionTx() {
             @Override
-            public void commit(TransactionCompletedHandler onCompleted, ErrorHandler onCommitError) {
+            public void commit(Runnable onCompleted, Consumer<Throwable> onCommitError) {
                 onCompletedRef[0] = onCompleted;
                 query("COMMIT", queryToComplete, onCommitError);
             }
             @Override
-            public void rollback(TransactionCompletedHandler onCompleted, ErrorHandler onRollbackError) {
+            public void rollback(Runnable onCompleted, Consumer<Throwable> onRollbackError) {
                 onCompletedRef[0] = onCompleted;
                 query("ROLLBACK", queryToComplete, onRollbackError);
             }
         };
 
-        query("BEGIN", ignored -> {
+        query("BEGIN", beginRs -> {
             try {
-                handler.onBegin(transaction);
+                handler.accept(transaction);
             } catch (Exception e) {
                 invokeOnError(onError, e);
             }
@@ -154,7 +142,7 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
 
     @Override
     public void onThrowable(Throwable t) {
-        ErrorHandler err = errorHandler;
+        Consumer<Throwable> err = errorHandler;
 
         queryHandler = null;
         resultSet = null;
@@ -203,13 +191,13 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
 
     @Override
     public void onReadyForQuery(ReadyForQuery msg) {
-        ErrorHandler onError = errorHandler;
+        Consumer<Throwable> onError = errorHandler;
         if (!connected) {
             onConnected();
             return;
         }
         if (queryHandler != null) {
-            ResultHandler onResult = queryHandler;
+            Consumer<ResultSet> onResult = queryHandler;
             ResultSet result = resultSet;
 
             queryHandler = null;
@@ -217,7 +205,7 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
             errorHandler = null;
 
             try {
-                onResult.onResult(result);
+                onResult.accept(result);
             } catch (Exception e) {
                 invokeOnError(onError, e);
             }
@@ -227,17 +215,17 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
     void onConnected() {
         connected = true;
         try {
-            connectedHandler.onConnection(this);
+            connectedHandler.accept(this);
         } catch (Exception e) {
             invokeOnError(errorHandler, e);
         }
         connectedHandler = null;
     }
 
-    void invokeOnError(ErrorHandler err, Throwable t) {
+    void invokeOnError(Consumer<Throwable> err, Throwable t) {
         if (err != null) {
             try {
-                err.onError(t);
+                err.accept(t);
             } catch (Exception e) {
                 Logger.getLogger(getClass().getName()).log(Level.SEVERE,
                         "ErrorHandler " + err + " failed with exception", e);
@@ -250,11 +238,11 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
 
     abstract class ConnectionTx implements Transaction {
         @Override
-        public void query(String sql, ResultHandler onResult, ErrorHandler onError) {
+        public void query(String sql, Consumer<ResultSet> onResult, Consumer<Throwable> onError) {
             PgConnection.this.query(sql, onResult, onError);
         }
         @Override
-        public void query(String sql, List params, ResultHandler onResult, ErrorHandler onError) {
+        public void query(String sql, List params, Consumer<ResultSet> onResult, Consumer<Throwable> onError) {
             PgConnection.this.query(sql, params, onResult, onError);
         }
     }

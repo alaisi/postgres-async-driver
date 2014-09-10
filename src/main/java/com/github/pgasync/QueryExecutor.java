@@ -1,9 +1,7 @@
 package com.github.pgasync;
 
-import com.github.pgasync.callback.ErrorHandler;
-import com.github.pgasync.callback.ResultHandler;
-
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * QueryExecutor submits SQL for execution.
@@ -19,7 +17,7 @@ public interface QueryExecutor {
      * @param onResult Called when query is completed
      * @param onError Called on exception thrown
      */
-    void query(String sql, ResultHandler onResult, ErrorHandler onError);
+    void query(String sql, Consumer<ResultSet> onResult, Consumer<Throwable> onError);
 
     /**
      * Executes an anonymous prepared statement. Uses native PostgreSQL syntax with $arg instead of ?
@@ -31,6 +29,6 @@ public interface QueryExecutor {
      * @param onResult Called when query is completed
      * @param onError Called on exception thrown
      */
-    void query(String sql, List/*<Object>*/ params, ResultHandler onResult, ErrorHandler onError);
+    void query(String sql, List/*<Object>*/ params, Consumer<ResultSet> onResult, Consumer<Throwable> onError);
 
 }

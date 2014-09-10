@@ -1,10 +1,11 @@
 package com.github.pgasync.impl;
 
-import com.github.pgasync.*;
+import com.github.pgasync.ConnectionPool;
+import com.github.pgasync.ConnectionPoolBuilder;
+import com.github.pgasync.Db;
+import com.github.pgasync.ResultSet;
 import org.junit.rules.ExternalResource;
 
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -39,14 +40,14 @@ class DatabaseRule extends ExternalResource {
 
     ResultSet query(String sql) {
         ResultHolder result = new ResultHolder();
-        db().query(sql, result, result);
+        db().query(sql, result, result.errorHandler());
         return result.result();
     }
 
     @SuppressWarnings("rawtypes")
     ResultSet query(String sql, List/*<Object>*/ params) {
         ResultHolder result = new ResultHolder();
-        db().query(sql, params, result, result);
+        db().query(sql, params, result, result.errorHandler());
         return result.result();
     }
 

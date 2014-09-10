@@ -14,8 +14,7 @@
 
 package com.github.pgasync;
 
-import com.github.pgasync.callback.ErrorHandler;
-import com.github.pgasync.callback.TransactionCompletedHandler;
+import java.util.function.Consumer;
 
 /**
  * A unit of work. Transactions must be committed or rolled back, otherwise a
@@ -32,7 +31,7 @@ public interface Transaction extends QueryExecutor {
      * @param onCompleted Called when commit completes
      * @param onError Called on exception thrown
      */
-    void commit(TransactionCompletedHandler onCompleted, ErrorHandler onError);
+    void commit(Runnable onCompleted, Consumer<Throwable> onError);
 
     /**
      * Rollbacks a transaction.
@@ -40,6 +39,6 @@ public interface Transaction extends QueryExecutor {
      * @param onCompleted Called when rollback completes
      * @param onError Called on exception thrown
      */
-    void rollback(TransactionCompletedHandler onCompleted, ErrorHandler onError);
+    void rollback(Runnable onCompleted, Consumer<Throwable> onError);
 
 }

@@ -14,10 +14,6 @@
 
 package com.github.pgasync.impl.message;
 
-import java.util.List;
-
-import com.github.pgasync.impl.TypeConverter;
-
 /**
  * @author  Antti Laisi
  */

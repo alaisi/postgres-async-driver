@@ -14,11 +14,11 @@
 
 package com.github.pgasync.impl.message;
 
-import static com.github.pgasync.impl.io.IO.bytes;
-import static javax.xml.bind.DatatypeConverter.printHexBinary;
-
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+
+import static com.github.pgasync.impl.io.IO.bytes;
+import static javax.xml.bind.DatatypeConverter.printHexBinary;
 
 /**
  * @author  Antti Laisi

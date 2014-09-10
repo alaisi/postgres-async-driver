@@ -14,29 +14,16 @@
 
 package com.github.pgasync.impl.netty;
 
+import com.github.pgasync.impl.PgProtocolCallbacks;
+import com.github.pgasync.impl.PgProtocolStream;
+import com.github.pgasync.impl.message.*;
 import io.netty.bootstrap.Bootstrap;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.EventLoopGroup;
+import io.netty.channel.*;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 
 import java.net.SocketAddress;
 import java.nio.channels.ClosedChannelException;
-
-import com.github.pgasync.impl.PgProtocolCallbacks;
-import com.github.pgasync.impl.PgProtocolStream;
-import com.github.pgasync.impl.message.Authentication;
-import com.github.pgasync.impl.message.CommandComplete;
-import com.github.pgasync.impl.message.DataRow;
-import com.github.pgasync.impl.message.ErrorResponse;
-import com.github.pgasync.impl.message.Message;
-import com.github.pgasync.impl.message.ReadyForQuery;
-import com.github.pgasync.impl.message.RowDescription;
-import com.github.pgasync.impl.message.StartupMessage;
 
 /**
  * Netty connection to PostgreSQL backend. Passes received messages to

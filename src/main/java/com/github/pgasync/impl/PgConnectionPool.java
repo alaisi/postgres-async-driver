@@ -14,23 +14,14 @@
 
 package com.github.pgasync.impl;
 
+import com.github.pgasync.*;
+import com.github.pgasync.ConnectionPoolBuilder.PoolProperties;
+
 import java.net.InetSocketAddress;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
-
-import com.github.pgasync.Connection;
-import com.github.pgasync.ConnectionPool;
-import com.github.pgasync.ConnectionPoolBuilder.PoolProperties;
-import com.github.pgasync.ResultSet;
-import com.github.pgasync.SqlException;
-import com.github.pgasync.Transaction;
-import com.github.pgasync.callback.ChainedErrorHandler;
-import com.github.pgasync.callback.ConnectionHandler;
-import com.github.pgasync.callback.ErrorHandler;
-import com.github.pgasync.callback.ResultHandler;
-import com.github.pgasync.callback.TransactionCompletedHandler;
-import com.github.pgasync.callback.TransactionHandler;
+import java.util.function.Consumer;
 
 /**
  * Pool for backend connections. Callbacks are queued and executed when pool has an available
@@ -44,9 +35,9 @@ import com.github.pgasync.callback.TransactionHandler;
 public abstract class PgConnectionPool implements ConnectionPool {
 
     static class QueuedCallback {
-        final ConnectionHandler connectionHandler;
-        final ErrorHandler errorHandler;
-        QueuedCallback(ConnectionHandler connectionHandler, ErrorHandler errorHandler) {
+        final Consumer<Connection> connectionHandler;
+        final Consumer<Throwable> errorHandler;
+        QueuedCallback(Consumer<Connection> connectionHandler, Consumer<Throwable> errorHandler) {
             this.connectionHandler = connectionHandler;
             this.errorHandler = errorHandler;
         }
@@ -76,26 +67,38 @@ public abstract class PgConnectionPool implements ConnectionPool {
     }
 
     @Override
-    public void query(final String sql, final ResultHandler onResult, final ErrorHandler onError) {
+    public void query(String sql, Consumer<ResultSet> onResult, Consumer<Throwable> onError) {
         query(sql, null, onResult, onError);
     }
 
     @Override
     @SuppressWarnings("rawtypes")
-    public void query(final String sql, final List params, final ResultHandler onResult, final ErrorHandler onError) {
-        getConnection(connection -> connection.query(sql, params,
-                new ReleasingResultHandler(connection, onResult),
-                new ReleasingErrorHandler(connection, onError)), new ChainedErrorHandler(onError));
+    public void query(String sql, List params, Consumer<ResultSet> onResult, Consumer<Throwable> onError) {
+        getConnection(connection ->
+                        connection.query(sql, params,
+                                result -> {
+                                    release(connection);
+                                    onResult.accept(result);
+                                },
+                                exception -> {
+                                    release(connection);
+                                    onError.accept(exception);
+                                }),
+                onError);
     }
 
     @Override
-    public void begin(final TransactionHandler onTransaction, final ErrorHandler onError) {
-        getConnection(connection -> connection.begin(new TransactionHandler() {
-            @Override
-            public void onBegin(Transaction transaction) {
-                onTransaction.onBegin(new ReleasingTransaction(connection, transaction));
-            }
-        }, new ReleasingErrorHandler(connection, onError)), new ChainedErrorHandler(onError));
+    public void begin(Consumer<Transaction> onTransaction, Consumer<Throwable> onError) {
+        getConnection(connection ->
+                        connection.begin(
+                                transaction ->
+                                        onTransaction.accept(new ReleasingTransaction(connection, transaction)),
+                                exception -> {
+                                    release(connection);
+                                    onError.accept(exception);
+                                }),
+                    onError);
+
     }
 
     @Override
@@ -106,15 +109,15 @@ public abstract class PgConnectionPool implements ConnectionPool {
                 conn.close();
             }
             for(QueuedCallback waiter = waiters.poll(); waiter != null; waiter = waiters.poll()) {
-                waiter.errorHandler.onError(new SqlException("Connection pool is closed"));
+                waiter.errorHandler.accept(new SqlException("Connection pool is closed"));
             }
         }
     }
 
     @Override
-    public void getConnection(final ConnectionHandler onConnection, final ErrorHandler onError) {
+    public void getConnection(final Consumer<Connection> onConnection, final Consumer<Throwable> onError) {
         if(closed) {
-            onError.onError(new SqlException("Connection pool is closed"));
+            onError.accept(new SqlException("Connection pool is closed"));
             return;
         }
 
@@ -134,7 +137,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
         if (connection == null) {
             newConnection(address).connect(username, password, database, onConnection, onError);
         } else {
-            onConnection.onConnection(connection);
+            onConnection.accept(connection);
         }
     }
 
@@ -162,7 +165,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
             if(failed) {
                 getConnection(next.connectionHandler, next.errorHandler);
             } else {
-                next.connectionHandler.onConnection(connection);
+                next.connectionHandler.accept(connection);
             }
         }
     }
@@ -179,45 +182,6 @@ public abstract class PgConnectionPool implements ConnectionPool {
      */
     protected abstract PgConnection newConnection(InetSocketAddress address);
 
-
-    /**
-     * {@link ResultHandler} that releases the connection before calling callback.
-     */
-    class ReleasingResultHandler implements ResultHandler {
-        final Connection conn;
-        final ResultHandler onResult;
-
-        ReleasingResultHandler(Connection conn, ResultHandler onResult) {
-            this.conn = conn;
-            this.onResult = onResult;
-        }
-
-        @Override
-        public void onResult(ResultSet result) {
-            release(conn);
-            onResult.onResult(result);
-        }
-    }
-
-    /**
-     * {@link ErrorHandler} that releases the connection before calling callback.
-     */
-    class ReleasingErrorHandler implements ErrorHandler {
-        final Connection conn;
-        final ErrorHandler onError;
-
-        ReleasingErrorHandler(Connection conn, ErrorHandler onError) {
-            this.conn = conn;
-            this.onError = onError;
-        }
-
-        @Override
-        public void onError(Throwable t) {
-            release(conn);
-            onError.onError(t);
-        }
-    }
-
     /**
      * Transaction that rollbacks the tx on backend error and chains releasing the connection after COMMIT/ROLLBACK.
      */
@@ -231,63 +195,60 @@ public abstract class PgConnectionPool implements ConnectionPool {
         }
 
         @Override
-        public void rollback(final TransactionCompletedHandler onCompleted, ErrorHandler rollbackError) {
+        public void rollback(Runnable onCompleted, Consumer<Throwable> onRollbackError) {
             transaction.rollback(
-                    new ReleasingTransactionCompletedHandler(txconn, onCompleted),
-                    new ReleasingErrorHandler(txconn, rollbackError));
+                    () -> {
+                        release(txconn);
+                        txconn = null;
+                        onCompleted.run();
+                    },
+                    exception -> {
+                        release(txconn); // TODO: remove broken connection from pool
+                        txconn = null;
+                        onRollbackError.accept(exception);
+                    });
         }
 
         @Override
-        public void commit(final TransactionCompletedHandler onCompleted, ErrorHandler commitError) {
+        public void commit(Runnable onCompleted, Consumer<Throwable> onCommitError) {
             transaction.commit(
-                    new ReleasingTransactionCompletedHandler(txconn, onCompleted),
-                    new ReleasingErrorHandler(txconn, commitError));
+                    () -> {
+                        release(txconn);
+                        txconn = null;
+                        onCompleted.run();
+                    },
+                    exception -> {
+                        release(txconn); // TODO: remove broken connection from pool
+                        txconn = null;
+                        onCommitError.accept(exception);
+                    });
         }
 
         @Override
         @SuppressWarnings("rawtypes")
-        public void query(String sql, List params, ResultHandler onResult, final ErrorHandler onError) {
+        public void query(String sql, List params, Consumer<ResultSet> onResult, Consumer<Throwable> onError) {
             if(txconn == null) {
-                onError.onError(new SqlException("Transaction is rolled back"));
+                onError.accept(new SqlException("Transaction is rolled back"));
                 return;
             }
-            txconn.query(sql, params, onResult, new ErrorHandler() {
-                @Override
-                public void onError(final Throwable t) {
-                    transaction.rollback(new TransactionCompletedHandler() {
-                        @Override
-                        public void onComplete() {
-                            release(txconn);
-                            txconn = null;
-                            onError.onError(t);
-                        }
-                    }, new ReleasingErrorHandler(txconn, onError));
-                }
-            });
+            txconn.query(sql, params, onResult,
+                    exception ->
+                            transaction.rollback(() -> {
+                                release(txconn);
+                                txconn = null;
+                                onError.accept(exception);
+                            },
+                            rollbackException -> {
+                                release(txconn); // TODO: remove broken connection from pool
+                                txconn = null;
+                                onError.accept(rollbackException);
+                            }));
         }
 
         @Override
-        public void query(String sql, ResultHandler onResult, final ErrorHandler onError) {
+        public void query(String sql, Consumer<ResultSet> onResult, Consumer<Throwable> onError) {
             query(sql, null, onResult, onError);
         }
     }
 
-    /**
-     * {@link TransactionCompletedHandler} that releases the connection before calling callback.
-     */
-    class ReleasingTransactionCompletedHandler implements TransactionCompletedHandler {
-        final Connection conn;
-        final TransactionCompletedHandler onComplete;
-
-        ReleasingTransactionCompletedHandler(Connection conn, TransactionCompletedHandler onComplete) {
-            this.conn = conn;
-            this.onComplete = onComplete;
-        }
-
-        @Override
-        public void onComplete() {
-            release(conn);
-            onComplete.onComplete();
-        }
-    }
 }

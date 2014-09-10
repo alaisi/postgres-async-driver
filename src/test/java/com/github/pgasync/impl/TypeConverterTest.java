@@ -14,10 +14,8 @@
 
 package com.github.pgasync.impl;
 
-import static java.util.Arrays.asList;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import org.junit.ClassRule;
+import org.junit.Test;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -27,8 +25,8 @@ import java.sql.Timestamp;
 import java.util.Calendar;
 import java.util.TimeZone;
 
-import org.junit.ClassRule;
-import org.junit.Test;
+import static java.util.Arrays.asList;
+import static org.junit.Assert.*;
 
 /**
  * Conversion tests from/to SQL types.

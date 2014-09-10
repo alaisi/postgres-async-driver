@@ -14,34 +14,34 @@
 
 package com.github.pgasync.impl;
 
+import com.github.pgasync.ResultSet;
+
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-
-import com.github.pgasync.ResultSet;
-import com.github.pgasync.callback.ErrorHandler;
-import com.github.pgasync.callback.ResultHandler;
+import java.util.function.Consumer;
 
 /**
  * Helper for waiting query completion.
  * 
  * @author Antti Laisi
  */
-class ResultHolder implements ResultHandler, ErrorHandler {
+class ResultHolder implements Consumer<ResultSet> {
 
     CountDownLatch latch = new CountDownLatch(1);
     ResultSet resultSet;
     Throwable error;
 
     @Override
-    public void onResult(ResultSet result) {
-        resultSet = result;
+    public void accept(ResultSet rows) {
+        resultSet = rows;
         latch.countDown();
     }
 
-    @Override
-    public void onError(Throwable t) {
-        error = t;
-        latch.countDown();
+    public Consumer<Throwable> errorHandler() {
+        return (exception) -> {
+            error = exception;
+            latch.countDown();
+        };
     }
 
     public ResultSet result() {
@@ -58,4 +58,5 @@ class ResultHolder implements ResultHandler, ErrorHandler {
         }
         return resultSet;
     }
+
 }

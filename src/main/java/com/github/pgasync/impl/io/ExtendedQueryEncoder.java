@@ -14,9 +14,9 @@
 
 package com.github.pgasync.impl.io;
 
-import java.nio.ByteBuffer;
-
 import com.github.pgasync.impl.message.ExtendedQuery;
+
+import java.nio.ByteBuffer;
 
 /**
  * See <a href="www.postgresql.org/docs/9.3/static/protocol-message-formats.html">PostgreSQL message formats</a>

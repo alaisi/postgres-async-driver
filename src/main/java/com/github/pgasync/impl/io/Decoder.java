@@ -14,9 +14,9 @@
 
 package com.github.pgasync.impl.io;
 
-import java.nio.ByteBuffer;
-
 import com.github.pgasync.impl.message.Message;
+
+import java.nio.ByteBuffer;
 
 /**
  * Decoder reads messages from byte buffer.

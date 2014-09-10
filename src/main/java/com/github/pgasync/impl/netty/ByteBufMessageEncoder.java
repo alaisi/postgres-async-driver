@@ -14,6 +14,8 @@
 
 package com.github.pgasync.impl.netty;
 
+import com.github.pgasync.impl.io.*;
+import com.github.pgasync.impl.message.Message;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.MessageToByteEncoder;
@@ -22,15 +24,6 @@ import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
-
-import com.github.pgasync.impl.io.BindEncoder;
-import com.github.pgasync.impl.io.Encoder;
-import com.github.pgasync.impl.io.ExtendedQueryEncoder;
-import com.github.pgasync.impl.io.ParseEncoder;
-import com.github.pgasync.impl.io.PasswordMessageEncoder;
-import com.github.pgasync.impl.io.QueryEncoder;
-import com.github.pgasync.impl.io.StartupMessageEncoder;
-import com.github.pgasync.impl.message.Message;
 
 /**
  * Encodes PostgreSQL protocol V3 messages to bytes.

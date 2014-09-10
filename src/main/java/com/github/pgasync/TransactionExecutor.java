@@ -1,7 +1,6 @@
 package com.github.pgasync;
 
-import com.github.pgasync.callback.ErrorHandler;
-import com.github.pgasync.callback.TransactionHandler;
+import java.util.function.Consumer;
 
 /**
  * TransactionExecutor begins backend transactions.
@@ -16,6 +15,6 @@ public interface TransactionExecutor {
      * @param onTransaction Called when transaction is successfully started.
      * @param onError Called on exception thrown
      */
-    void begin(TransactionHandler onTransaction, ErrorHandler onError);
+    void begin(Consumer<Transaction> onTransaction, Consumer<Throwable> onError);
 
 }

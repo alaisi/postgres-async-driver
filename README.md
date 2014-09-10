@@ -59,15 +59,15 @@ db.query("insert into message(id, body) values($1, $2)", Arrays.asList(123, "hel
 A transactional unit of work is started with `begin()`. Queries issued to transaction passed to callback are executed in the same transaction and the tx is automatically rolled back on query failure.
 
 ```java
-ErrorHandler err = error -> error.printStackTrace();
+Consumer<Throwable> onError = error -> error.printStackTrace();
 db.begin(transaction -> {
     transaction.query("select 1 as id",
         result -> {
             out.printf("Result is %d", result.get(0).getLong("id"));
-            transaction.commit(() -> out.println("Transaction committed"), err);
+            transaction.commit(() -> out.println("Transaction committed"), onError);
         },
         error -> err.println("Query failed, tx is rolled back"))
-}, err)
+}, onError)
 ```
 
 ## Used in

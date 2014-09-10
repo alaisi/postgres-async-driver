@@ -14,14 +14,13 @@
 
 package com.github.pgasync.impl.netty;
 
+import com.github.pgasync.ConnectionPoolBuilder.PoolProperties;
+import com.github.pgasync.impl.PgConnection;
+import com.github.pgasync.impl.PgConnectionPool;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 
 import java.net.InetSocketAddress;
-
-import com.github.pgasync.ConnectionPoolBuilder.PoolProperties;
-import com.github.pgasync.impl.PgConnection;
-import com.github.pgasync.impl.PgConnectionPool;
 
 /**
  * {@link PgConnectionPool} that uses {@link NettyPgProtocolStream}. Each pool

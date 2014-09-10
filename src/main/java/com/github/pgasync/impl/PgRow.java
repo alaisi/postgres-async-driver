@@ -14,6 +14,10 @@
 
 package com.github.pgasync.impl;
 
+import com.github.pgasync.Row;
+import com.github.pgasync.SqlException;
+import com.github.pgasync.impl.message.DataRow;
+
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Date;
@@ -21,10 +25,6 @@ import java.sql.Time;
 import java.sql.Timestamp;
 import java.util.Collection;
 import java.util.Map;
-
-import com.github.pgasync.Row;
-import com.github.pgasync.SqlException;
-import com.github.pgasync.impl.message.DataRow;
 
 /**
  * Result row, uses {@link TypeConverter} for all conversions.

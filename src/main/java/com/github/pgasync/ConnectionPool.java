@@ -15,9 +15,8 @@
 package com.github.pgasync;
 
 import com.github.pgasync.callback.ConnectionHandler;
-import com.github.pgasync.callback.ErrorHandler;
 
-import java.io.Closeable;
+import java.util.function.Consumer;
 
 /**
  * Pool of backend {@link Connection}s. Pools implement {@link Db} so
@@ -36,7 +35,7 @@ public interface ConnectionPool extends Db {
      * @param handler Called when a connection is acquired
      * @param onError Called on exception thrown
      */
-    void getConnection(ConnectionHandler handler, ErrorHandler onError);
+    void getConnection(Consumer<Connection> handler, Consumer<Throwable> onError);
 
     /**
      * Releases a connection back to the pool.

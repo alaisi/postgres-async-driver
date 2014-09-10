@@ -14,21 +14,17 @@
 
 package com.github.pgasync.impl;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-
+import com.github.pgasync.ResultSet;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
 
-import com.github.pgasync.ResultSet;
-import com.github.pgasync.callback.ErrorHandler;
-import com.github.pgasync.callback.ResultHandler;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
+
+import static org.junit.Assert.*;
 
 /**
  * Tests for BEGIN/COMMIT/ROLLBACK.
@@ -37,8 +33,8 @@ import com.github.pgasync.callback.ResultHandler;
  */
 public class TransactionTest {
 
-    final ErrorHandler err = t -> { throw new AssertionError("failed", t); };
-    final ResultHandler fail = result -> fail();
+    final Consumer<Throwable> err = t -> { throw new AssertionError("failed", t); };
+    final Consumer<ResultSet> fail = result -> fail();
 
     @ClassRule
     public static DatabaseRule dbr = new DatabaseRule();

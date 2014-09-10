@@ -14,11 +14,11 @@
 
 package com.github.pgasync.impl.io;
 
-import static com.github.pgasync.impl.io.IO.putCString;
+import com.github.pgasync.impl.message.StartupMessage;
 
 import java.nio.ByteBuffer;
 
-import com.github.pgasync.impl.message.StartupMessage;
+import static com.github.pgasync.impl.io.IO.putCString;
 
 /**
  * See <a href="www.postgresql.org/docs/9.3/static/protocol-message-formats.html">PostgreSQL message formats</a>

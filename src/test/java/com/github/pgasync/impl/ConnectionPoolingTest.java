@@ -15,7 +15,6 @@
 package com.github.pgasync.impl;
 
 import com.github.pgasync.ConnectionPool;
-import com.github.pgasync.callback.ErrorHandler;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -26,6 +25,7 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
@@ -38,20 +38,21 @@ import static org.junit.Assert.assertTrue;
  */
 public class ConnectionPoolingTest {
 
-    final ErrorHandler err = t -> { throw new AssertionError("failed", t); };
+    final Consumer<Throwable> err = t -> { throw new AssertionError("failed", t); };
     final ConnectionPool pool = DatabaseRule.createPool(10);
 
     @Before
     public void create() {
         ResultHolder result = new ResultHolder();
-        pool.query("DROP TABLE IF EXISTS CP_TEST; CREATE TABLE CP_TEST (ID VARCHAR(255) PRIMARY KEY)", result, result);
+        pool.query("DROP TABLE IF EXISTS CP_TEST; CREATE TABLE CP_TEST (ID VARCHAR(255) PRIMARY KEY)",
+                result, result.errorHandler());
         result.result();
     }
 
     @After
     public void drop() {
         ResultHolder result = new ResultHolder();
-        pool.query("DROP TABLE CP_TEST", result, result);
+        pool.query("DROP TABLE CP_TEST", result, result.errorHandler());
         result.result();
         pool.close();
     }
@@ -84,7 +85,7 @@ public class ConnectionPoolingTest {
         assertEquals(1000, count.get());
 
         ResultHolder result = new ResultHolder();
-        pool.query("SELECT COUNT(*) FROM CP_TEST", result, result);
+        pool.query("SELECT COUNT(*) FROM CP_TEST", result, result.errorHandler());
         assertEquals(count.get(), result.result().get(0).getLong(0).longValue());
     }
 }

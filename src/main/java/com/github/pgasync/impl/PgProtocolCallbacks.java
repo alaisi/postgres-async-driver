@@ -14,12 +14,7 @@
 
 package com.github.pgasync.impl;
 
-import com.github.pgasync.impl.message.Authentication;
-import com.github.pgasync.impl.message.CommandComplete;
-import com.github.pgasync.impl.message.DataRow;
-import com.github.pgasync.impl.message.ErrorResponse;
-import com.github.pgasync.impl.message.ReadyForQuery;
-import com.github.pgasync.impl.message.RowDescription;
+import com.github.pgasync.impl.message.*;
 
 /**
  * Callback interface for handling messages sent by backend.
