@@ -76,4 +76,7 @@ public interface Row {
 
     byte[] getBytes(String column);
 
+    <T> T get(int index, Class<T> type);
+
+    <T> T get(String column, Class<T> type);
 }

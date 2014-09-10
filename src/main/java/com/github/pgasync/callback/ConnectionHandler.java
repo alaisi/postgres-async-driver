@@ -21,7 +21,7 @@ import com.github.pgasync.Connection;
  *
  * @author Antti Laisi
  */
-public interface ConnectionHandler {
+public interface ConnectionHandler  {
 
     void onConnection(Connection connection);
 

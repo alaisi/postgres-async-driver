@@ -26,7 +26,9 @@ import java.sql.Timestamp;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.List;
 import java.util.TimeZone;
+import java.util.UUID;
 
 import com.github.pgasync.SqlException;
 import com.github.pgasync.impl.io.IO;
@@ -63,22 +65,6 @@ public enum TypeConverter {
             return zoned(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS"));
         }
     };
-
-    public static byte[] toParam(Object o) {
-        if (o == null) {
-            return null;
-        }
-        if (o instanceof Time) {
-            return bytes(TIME_FORMAT.get().format((Time) o));
-        }
-        if (o instanceof Date) {
-            return bytes(DATE_FORMAT.get().format((Date) o));
-        }
-        if (o instanceof byte[]) {
-            return bytes("\\x" + printHexBinary((byte[]) o));
-        }
-        return bytes(o.toString());
-    }
 
     static String toString(Oid oid, byte[] value) {
         if (value == null) {
@@ -287,6 +273,34 @@ public enum TypeConverter {
             default:
                 throw new SqlException("Unknown column type " + oid.name());
         }
+    }
+
+    static byte[][] toBackendParams(List parameters, ConverterRegistry converterRegistry) {
+        byte[][] params = new byte[parameters.size()][];
+        int i = 0;
+        for (Object param : parameters) {
+            params[i++] = toParam(param, converterRegistry);
+        }
+        return params;
+    }
+
+    static private byte[] toParam(Object o, ConverterRegistry converterRegistry) {
+        if (o == null) {
+            return null;
+        }
+        if (o instanceof Time) {
+            return bytes(TIME_FORMAT.get().format((Time) o));
+        }
+        if (o instanceof Date) {
+            return bytes(DATE_FORMAT.get().format((Date) o));
+        }
+        if (o instanceof byte[]) {
+            return bytes("\\x" + printHexBinary((byte[]) o));
+        }
+        if(o instanceof String || o instanceof Number || o instanceof Character || o instanceof UUID) {
+            return bytes(o.toString());
+        }
+        return converterRegistry.toBytes(o);
     }
 
     private static SimpleDateFormat zoned(SimpleDateFormat format) {

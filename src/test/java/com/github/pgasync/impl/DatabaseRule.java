@@ -1,23 +1,33 @@
 package com.github.pgasync.impl;
 
-import com.github.pgasync.ConnectionPool;
-import com.github.pgasync.ConnectionPoolBuilder;
-import com.github.pgasync.Db;
-import com.github.pgasync.ResultSet;
+import com.github.pgasync.*;
 import org.junit.rules.ExternalResource;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
  * @author Antti Laisi
  */
-public class DatabaseRule extends ExternalResource {
+class DatabaseRule extends ExternalResource {
 
+    final ConnectionPoolBuilder builder;
     ConnectionPool pool;
 
+    DatabaseRule() {
+        this(createPoolBuilder(1));
+    }
+
+    DatabaseRule(ConnectionPoolBuilder builder) {
+        this.builder = builder;
+    }
+
     @Override
-    protected void before() throws Throwable {
-        pool = createPool(1);
+    protected void before() {
+        if(pool == null) {
+            pool = builder.build();
+        }
     }
 
     @Override
@@ -41,17 +51,21 @@ public class DatabaseRule extends ExternalResource {
     }
 
     Db db() {
+        before();
         return pool;
     }
 
     static ConnectionPool createPool(int size) {
+        return createPoolBuilder(size).build();
+    }
+    static ConnectionPoolBuilder createPoolBuilder(int size) {
         return new ConnectionPoolBuilder()
                 .database(envOrDefault("PG_DATABASE", "postgres"))
                 .username(envOrDefault("PG_USERNAME", "postgres"))
                 .password(envOrDefault("PG_PASSWORD", "postgres"))
-                .poolSize(size)
-                .build();
+                .poolSize(size);
     }
+
 
     static String envOrDefault(String var, String def) {
         String value = System.getenv(var);

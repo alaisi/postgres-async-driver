@@ -74,7 +74,12 @@ public enum Oid {
     XML(142),
     XML_ARRAY(143),
     POINT(600),
-    BOX(603);
+    BOX(603),
+    // Added
+    JSON(114),
+    JSONB(3802),
+    HSTORE(33670)
+    ;
 
     final int id;
 

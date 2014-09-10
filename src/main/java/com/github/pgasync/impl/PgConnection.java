@@ -49,6 +49,7 @@ import com.github.pgasync.impl.message.StartupMessage;
 public class PgConnection implements Connection, PgProtocolCallbacks {
 
     final PgProtocolStream stream;
+    final ConverterRegistry converterRegistry;
 
     String username;
     String password;
@@ -62,8 +63,9 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
 
     PgResultSet resultSet;
 
-    public PgConnection(PgProtocolStream stream) {
+    public PgConnection(PgProtocolStream stream, ConverterRegistry converterRegistry) {
         this.stream = stream;
+        this.converterRegistry = converterRegistry;
     }
 
     public void connect(String username, String password, String database, 
@@ -113,7 +115,7 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
         errorHandler = onError;
         stream.send(
                 new Parse(sql), 
-                new Bind(params), 
+                new Bind(TypeConverter.toBackendParams(params, converterRegistry)),
                 ExtendedQuery.DESCRIBE, 
                 ExtendedQuery.EXECUTE,
                 ExtendedQuery.CLOSE,
@@ -196,7 +198,7 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
 
     @Override
     public void onDataRow(DataRow msg) {
-        resultSet.add(new PgRow(msg));
+        resultSet.add(new PgRow(msg, converterRegistry));
     }
 
     @Override

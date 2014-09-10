@@ -25,12 +25,8 @@ public class Bind implements Message {
 
     final byte[][] params;
 
-    public Bind(List<Object> parameters) {
-        this.params = new byte[parameters.size()][];
-        int i = 0;
-        for (Object param : parameters) {
-            params[i++] = TypeConverter.toParam(param);
-        }
+    public Bind(byte[][] params) {
+        this.params = params;
     }
 
     public byte[][] getParams() {

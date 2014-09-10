@@ -44,7 +44,7 @@ public class ConnectionPoolingTest {
     @Before
     public void create() {
         ResultHolder result = new ResultHolder();
-        pool.query("CREATE TABLE CP_TEST (ID VARCHAR(255) PRIMARY KEY)", result, result);
+        pool.query("DROP TABLE IF EXISTS CP_TEST; CREATE TABLE CP_TEST (ID VARCHAR(255) PRIMARY KEY)", result, result);
         result.result();
     }
 

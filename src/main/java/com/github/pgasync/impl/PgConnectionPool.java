@@ -60,6 +60,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
     final String username;
     final String password;
     final String database;
+    final ConverterRegistry converterRegistry;
 
     final int poolSize;
     int currentSize;
@@ -71,6 +72,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
         this.password = properties.getPassword();
         this.database = properties.getDatabase();
         this.poolSize = properties.getPoolSize();
+        this.converterRegistry = new ConverterRegistry(properties.getConverters());
     }
 
     @Override
@@ -163,6 +165,10 @@ public abstract class PgConnectionPool implements ConnectionPool {
                 next.connectionHandler.onConnection(connection);
             }
         }
+    }
+
+    protected ConverterRegistry converterRegistry() {
+        return converterRegistry;
     }
 
     /**

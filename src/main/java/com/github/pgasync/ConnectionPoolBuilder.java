@@ -16,6 +16,10 @@ package com.github.pgasync;
 
 import com.github.pgasync.impl.netty.NettyPgConnectionPool;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 /**
  * Builder for creating {@link ConnectionPool} instances.
  * 
@@ -33,32 +37,37 @@ public class ConnectionPoolBuilder {
     }
 
     public ConnectionPoolBuilder hostname(String hostname) {
-        properties.setHostname(hostname);
+        properties.hostname = hostname;
         return this;
     }
 
     public ConnectionPoolBuilder port(int port) {
-        properties.setPort(port);
+        properties.port = port;
         return this;
     }
 
     public ConnectionPoolBuilder username(String username) {
-        properties.setUsername(username);
+        properties.username = username;
         return this;
     }
 
     public ConnectionPoolBuilder password(String password) {
-        properties.setPassword(password);
+        properties.password = password;
         return this;
     }
 
     public ConnectionPoolBuilder database(String database) {
-        properties.setDatabase(database);
+        properties.database = database;
         return this;
     }
 
     public ConnectionPoolBuilder poolSize(int poolSize) {
-        properties.setPoolSize(poolSize);
+        properties.poolSize = poolSize;
+        return this;
+    }
+
+    public ConnectionPoolBuilder converters(Converter<?>... converters) {
+        Collections.addAll(properties.converters, converters);
         return this;
     }
 
@@ -73,42 +82,28 @@ public class ConnectionPoolBuilder {
         String password;
         String database;
         int poolSize = 20;
+        List<Converter<?>> converters = new ArrayList<>();
 
         public String getHostname() {
             return hostname;
         }
-        public void setHostname(String hostname) {
-            this.hostname = hostname;
-        }
         public int getPort() {
             return port;
-        }
-        public void setPort(int port) {
-            this.port = port;
         }
         public String getUsername() {
             return username;
         }
-        public void setUsername(String username) {
-            this.username = username;
-        }
         public String getPassword() {
             return password;
-        }
-        public void setPassword(String password) {
-            this.password = password;
         }
         public String getDatabase() {
             return database;
         }
-        public void setDatabase(String database) {
-            this.database = database;
-        }
         public int getPoolSize() {
             return poolSize;
         }
-        public void setPoolSize(int poolSize) {
-            this.poolSize = poolSize;
+        public List<Converter<?>> getConverters() {
+            return converters;
         }
     }
 }

@@ -34,12 +34,14 @@ import com.github.pgasync.impl.message.DataRow;
 public class PgRow implements Row {
 
     final DataRow data;
+    final ConverterRegistry converterRegistry;
 
     Map<String,PgColumn> columns;
     PgColumn[] pgColumns;
 
-    public PgRow(DataRow data) {
+    public PgRow(DataRow data, ConverterRegistry converterRegistry) {
         this.data = data;
+        this.converterRegistry = converterRegistry;
     }
 
     public void setColumns(Map<String,PgColumn> columns) {
@@ -178,6 +180,17 @@ public class PgRow implements Row {
     public byte[] getBytes(String column) {
         PgColumn pgColumn = getColumn(column);
         return TypeConverter.toBytes(pgColumn.type, data.getValue(pgColumn.index));
+    }
+
+    @Override
+    public <T> T get(int index, Class<T> type) {
+        return converterRegistry.toType(type, pgColumns[index].type, data.getValue(index));
+    }
+
+    @Override
+    public <T> T get(String column, Class<T> type) {
+        PgColumn pgColumn = getColumn(column);
+        return converterRegistry.toType(type, pgColumn.type, data.getValue(pgColumn.index));
     }
 
     public Object get(String column) {

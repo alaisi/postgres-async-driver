@@ -41,6 +41,7 @@ public class PreparedStatementTest {
 
     @BeforeClass
     public static void create() {
+        drop();
         dbr.query("CREATE TABLE PS_TEST("
                 + "LONG INT8,INT INT4,SHORT INT2, BYTE INT2,"
                 + "CHAR CHAR(1), STRING VARCHAR(255), CLOB TEXT,"
@@ -132,4 +133,5 @@ public class PreparedStatementTest {
         SimpleDateFormat format = new SimpleDateFormat(pattern);
         format.setTimeZone(TimeZone.getTimeZone("UTC"));
         return format;
-    }}
+    }
+}
