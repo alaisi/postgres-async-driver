@@ -16,6 +16,7 @@ package com.github.pgasync.impl;
 
 import com.github.pgasync.*;
 import com.github.pgasync.ConnectionPoolBuilder.PoolProperties;
+import com.github.pgasync.impl.conversion.DataConverter;
 
 import java.net.InetSocketAddress;
 import java.util.LinkedList;
@@ -51,7 +52,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
     final String username;
     final String password;
     final String database;
-    final ConverterRegistry converterRegistry;
+    final DataConverter dataConverter;
 
     final int poolSize;
     int currentSize;
@@ -63,7 +64,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
         this.password = properties.getPassword();
         this.database = properties.getDatabase();
         this.poolSize = properties.getPoolSize();
-        this.converterRegistry = new ConverterRegistry(properties.getConverters());
+        this.dataConverter = properties.getDataConverter();
     }
 
     @Override
@@ -170,8 +171,8 @@ public abstract class PgConnectionPool implements ConnectionPool {
         }
     }
 
-    protected ConverterRegistry converterRegistry() {
-        return converterRegistry;
+    protected DataConverter dataConverter() {
+        return dataConverter;
     }
 
     /**

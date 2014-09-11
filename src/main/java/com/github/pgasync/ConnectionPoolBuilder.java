@@ -14,6 +14,7 @@
 
 package com.github.pgasync;
 
+import com.github.pgasync.impl.conversion.DataConverter;
 import com.github.pgasync.impl.netty.NettyPgConnectionPool;
 
 import java.util.ArrayList;
@@ -71,6 +72,11 @@ public class ConnectionPoolBuilder {
         return this;
     }
 
+    public ConnectionPoolBuilder dataConverter(DataConverter dataConverter) {
+        properties.dataConverter = dataConverter;
+        return this;
+    }
+
     /**
      * Configuration for a pool.
      */
@@ -82,6 +88,7 @@ public class ConnectionPoolBuilder {
         String password;
         String database;
         int poolSize = 20;
+        DataConverter dataConverter = null;
         List<Converter<?>> converters = new ArrayList<>();
 
         public String getHostname() {
@@ -102,8 +109,8 @@ public class ConnectionPoolBuilder {
         public int getPoolSize() {
             return poolSize;
         }
-        public List<Converter<?>> getConverters() {
-            return converters;
-        }
+        public DataConverter getDataConverter() {
+            return dataConverter != null ? dataConverter : new DataConverter(converters);
+        };
     }
 }

@@ -18,6 +18,7 @@ import com.github.pgasync.Connection;
 import com.github.pgasync.ResultSet;
 import com.github.pgasync.SqlException;
 import com.github.pgasync.Transaction;
+import com.github.pgasync.impl.conversion.DataConverter;
 import com.github.pgasync.impl.message.*;
 
 import java.nio.channels.ClosedChannelException;
@@ -37,7 +38,7 @@ import static com.github.pgasync.impl.message.ErrorResponse.Level.FATAL;
 public class PgConnection implements Connection, PgProtocolCallbacks {
 
     final PgProtocolStream stream;
-    final ConverterRegistry converterRegistry;
+    final DataConverter dataConverter;
 
     String username;
     String password;
@@ -51,9 +52,9 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
 
     PgResultSet resultSet;
 
-    public PgConnection(PgProtocolStream stream, ConverterRegistry converterRegistry) {
+    public PgConnection(PgProtocolStream stream, DataConverter dataConverter) {
         this.stream = stream;
-        this.converterRegistry = converterRegistry;
+        this.dataConverter = dataConverter;
     }
 
     public void connect(String username, String password, String database,
@@ -80,7 +81,7 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
     @Override
     public void query(String sql, Consumer<ResultSet> onQuery, Consumer<Throwable> onError) {
         if (queryHandler != null) {
-            onError.accept(new IllegalStateException("Query already in progress"));
+            invokeOnError(onError, new IllegalStateException("Query already in progress"));
             return;
         }
         queryHandler = onQuery;
@@ -96,14 +97,14 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
             return;
         }
         if (queryHandler != null) {
-            onError.accept(new IllegalStateException("Query already in progress"));
+            invokeOnError(onError, new IllegalStateException("Query already in progress"));
             return;
         }
         queryHandler = onQuery;
         errorHandler = onError;
         stream.send(
                 new Parse(sql), 
-                new Bind(TypeConverter.toBackendParams(params, converterRegistry)),
+                new Bind(dataConverter.fromParameters(params)),
                 ExtendedQuery.DESCRIBE, 
                 ExtendedQuery.EXECUTE,
                 ExtendedQuery.CLOSE,
@@ -113,19 +114,14 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
     @Override
     public void begin(Consumer<Transaction> handler, Consumer<Throwable> onError) {
 
-        Runnable[] onCompletedRef = new Runnable[1];
-        Consumer<ResultSet> queryToComplete = rows -> onCompletedRef[0].run();
-
-        final Transaction transaction = new ConnectionTx() {
+        Transaction transaction = new ConnectionTx() {
             @Override
             public void commit(Runnable onCompleted, Consumer<Throwable> onCommitError) {
-                onCompletedRef[0] = onCompleted;
-                query("COMMIT", queryToComplete, onCommitError);
+                query("COMMIT", (rs) -> onCompleted.run(), onCommitError);
             }
             @Override
             public void rollback(Runnable onCompleted, Consumer<Throwable> onRollbackError) {
-                onCompletedRef[0] = onCompleted;
-                query("ROLLBACK", queryToComplete, onRollbackError);
+                query("ROLLBACK", (rs) -> onCompleted.run(), onRollbackError);
             }
         };
 
@@ -160,7 +156,7 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
         if(msg.getLevel() == FATAL) {
             close();
         }
-        onThrowable(new SqlException(msg.getLevel().toString(), msg.getCode(), msg.getMessage()));
+        onThrowable(new SqlException(msg.getLevel().name(), msg.getCode(), msg.getMessage()));
     }
 
     @Override
@@ -186,7 +182,7 @@ public class PgConnection implements Connection, PgProtocolCallbacks {
 
     @Override
     public void onDataRow(DataRow msg) {
-        resultSet.add(new PgRow(msg, converterRegistry));
+        resultSet.add(new PgRow(msg, dataConverter));
     }
 
     @Override

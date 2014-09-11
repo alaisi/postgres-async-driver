@@ -7,18 +7,10 @@ import com.github.pgasync.impl.Oid;
  */
 public interface Converter<T> {
 
-    Class<T> getType();
+    Class<T> type();
 
-    byte[] toBackend(T o);
+    byte[] from(T o);
 
-    T toClient(ColumnData columnData);
+    T to(Oid oid, byte[] value);
 
-    public static class ColumnData {
-        public final Oid oid;
-        public final byte[] data;
-        public ColumnData(Oid oid, byte[] data) {
-            this.oid = oid;
-            this.data = data;
-        }
-    }
 }

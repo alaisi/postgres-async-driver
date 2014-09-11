@@ -38,7 +38,7 @@ public class NettyPgConnectionPool extends PgConnectionPool {
 
     @Override
     protected PgConnection newConnection(InetSocketAddress address) {
-        return new PgConnection(new NettyPgProtocolStream(address, group), super.converterRegistry());
+        return new PgConnection(new NettyPgProtocolStream(address, group), super.dataConverter());
     }
 
     @Override

@@ -23,16 +23,16 @@ public class CustomConverterTest {
     }
     static class JsonConverter implements Converter<Json> {
         @Override
-        public Class<Json> getType() {
+        public Class<Json> type() {
             return Json.class;
         }
         @Override
-        public byte[] toBackend(Json o) {
+        public byte[] from(Json o) {
             return o.json.getBytes(UTF_8);
         }
         @Override
-        public Json toClient(ColumnData columnData) {
-            return new Json(new String(columnData.data, UTF_8));
+        public Json to(Oid oid, byte[] value) {
+            return new Json(new String(value, UTF_8));
         }
     }
 
