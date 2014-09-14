@@ -16,18 +16,22 @@ package com.github.pgasync.impl.netty;
 
 import com.github.pgasync.impl.PgProtocolCallbacks;
 import com.github.pgasync.impl.PgProtocolStream;
-import com.github.pgasync.impl.message.*;
+import com.github.pgasync.impl.message.Authentication;
+import com.github.pgasync.impl.message.Message;
+import com.github.pgasync.impl.message.ReadyForQuery;
+import com.github.pgasync.impl.message.StartupMessage;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.*;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 
 import java.net.SocketAddress;
-import java.nio.channels.ClosedChannelException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
 
 /**
- * Netty connection to PostgreSQL backend. Passes received messages to
- * {@link PgProtocolCallbacks}.
+ * Netty connection to PostgreSQL backend.
  * 
  * @author Antti Laisi
  */
@@ -36,8 +40,8 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     final SocketAddress address;
     final EventLoopGroup group;
 
-    PgProtocolCallbacks callbacks;
     ChannelHandlerContext ctx;
+    volatile Consumer<Message> onReceive;
 
     public NettyPgProtocolStream(SocketAddress address, EventLoopGroup group) {
         this.address = address;
@@ -45,12 +49,12 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     }
 
     @Override
-    public void connect(final StartupMessage startup, PgProtocolCallbacks callbacks) {
-        this.callbacks = callbacks;
-
-        final ChannelHandler writeStartup = new ChannelInboundHandlerAdapter() {
+    public void connect(StartupMessage startup, Consumer<List<Message>> replyTo) {
+        ChannelHandler onActive = new ChannelInboundHandlerAdapter() {
             @Override
             public void channelActive(ChannelHandlerContext context) throws Exception {
+                ctx = context;
+                onReceive = newReplyHandler(replyTo);
                 context.writeAndFlush(startup);
             }
         };
@@ -60,18 +64,33 @@ public class NettyPgProtocolStream implements PgProtocolStream {
                 channel.pipeline().addLast("frame-decoder", new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 1, 4, -4, 0, true));
                 channel.pipeline().addLast("message-decoder", new ByteBufMessageDecoder());
                 channel.pipeline().addLast("message-encoder", new ByteBufMessageEncoder());
-                channel.pipeline().addLast("handler", new PgProtocolHandler());
-                channel.pipeline().addLast("startup", writeStartup);
+                channel.pipeline().addLast("message-handler", new ChannelInboundHandlerAdapter() {
+                    @Override
+                    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+                        onReceive.accept((Message) msg);
+                    }
+                });
+                channel.pipeline().addLast(onActive);
             }
         }).connect(address);
     }
 
     @Override
-    public void send(Message... messages) {
-        for (Message message : messages) {
-            ctx.write(message);
-        }
+    public void send(Message message, Consumer<List<Message>> replyTo) {
+        onReceive = newReplyHandler(replyTo);
+        ctx.writeAndFlush(message);
+    }
+
+    @Override
+    public void send(List<Message> messages, Consumer<List<Message>> replyTo) {
+        onReceive = newReplyHandler(replyTo);
+        messages.forEach(ctx::write);
         ctx.flush();
+    }
+
+    @Override
+    public boolean isConnected() {
+        return ctx.channel().isOpen();
     }
 
     @Override
@@ -79,42 +98,16 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         ctx.close();
     }
 
-    /**
-     * Protocol message handler, methods are called from Netty IO thread.
-     */
-    class PgProtocolHandler extends ChannelInboundHandlerAdapter {
-
-        @Override
-        public void handlerAdded(ChannelHandlerContext context) {
-            ctx = context;
-        }
-
-        @Override
-        public void exceptionCaught(ChannelHandlerContext context, Throwable cause) {
-            callbacks.onThrowable(cause);
-        }
-        
-        @Override
-        public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-            callbacks.onThrowable(new ClosedChannelException());
-        }
-
-        @Override
-        public void channelRead(ChannelHandlerContext context, Object msg) {
-            if (msg instanceof ErrorResponse) {
-                callbacks.onErrorResponse((ErrorResponse) msg);
-            } else if (msg instanceof Authentication) {
-                callbacks.onAuthentication((Authentication) msg);
-            } else if (msg instanceof RowDescription) {
-                callbacks.onRowDescription((RowDescription) msg);
-            } else if (msg instanceof DataRow) {
-                callbacks.onDataRow((DataRow) msg);
-            } else if (msg instanceof CommandComplete) {
-                callbacks.onCommandComplete((CommandComplete) msg);
-            } else if (msg instanceof ReadyForQuery) {
-                callbacks.onReadyForQuery((ReadyForQuery) msg);
+    Consumer<Message> newReplyHandler(Consumer<List<Message>> consumer) {
+        List<Message> messages = new ArrayList<>();
+        return msg -> {
+            messages.add(msg);
+            if(msg instanceof ReadyForQuery
+                    || (msg instanceof Authentication && !((Authentication) msg).isAuthenticationOk())) {
+                onReceive = null;
+                consumer.accept(messages);
             }
-        }
+        };
     }
 
 }

@@ -178,7 +178,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
     /**
      * Creates a new connection to the backend.
      * 
-     * @param address
+     * @param address Server address
      * @return Unconnected connection
      */
     protected abstract PgConnection newConnection(InetSocketAddress address);
@@ -204,7 +204,8 @@ public abstract class PgConnectionPool implements ConnectionPool {
                         onCompleted.run();
                     },
                     exception -> {
-                        release(txconn); // TODO: remove broken connection from pool
+                        txconn.close();
+                        release(txconn);
                         txconn = null;
                         onRollbackError.accept(exception);
                     });
@@ -219,7 +220,8 @@ public abstract class PgConnectionPool implements ConnectionPool {
                         onCompleted.run();
                     },
                     exception -> {
-                        release(txconn); // TODO: remove broken connection from pool
+                        txconn.close();
+                        release(txconn);
                         txconn = null;
                         onCommitError.accept(exception);
                     });
@@ -240,12 +242,12 @@ public abstract class PgConnectionPool implements ConnectionPool {
                                 onError.accept(exception);
                             },
                             rollbackException -> {
-                                release(txconn); // TODO: remove broken connection from pool
+                                txconn.close();
+                                release(txconn);
                                 txconn = null;
                                 onError.accept(rollbackException);
                             }));
         }
-
         @Override
         public void query(String sql, Consumer<ResultSet> onResult, Consumer<Throwable> onError) {
             query(sql, null, onResult, onError);

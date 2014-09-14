@@ -17,6 +17,9 @@ package com.github.pgasync.impl;
 import com.github.pgasync.impl.message.Message;
 import com.github.pgasync.impl.message.StartupMessage;
 
+import java.util.List;
+import java.util.function.Consumer;
+
 /**
  * Stream of messages from/to backend server.
  * 
@@ -24,9 +27,18 @@ import com.github.pgasync.impl.message.StartupMessage;
  */
 public interface PgProtocolStream {
 
+    /*
     void connect(StartupMessage startup, PgProtocolCallbacks callbacks);
 
     void send(Message... messages);
+    */
+    void connect(StartupMessage startup, Consumer<List<Message>> replyTo);
+
+    void send(Message message, Consumer<List<Message>> replyTo);
+
+    void send(List<Message> message, Consumer<List<Message>> replyTo);
+
+    boolean isConnected();
 
     void close();
 

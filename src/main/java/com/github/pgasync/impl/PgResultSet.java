@@ -42,6 +42,12 @@ public class PgResultSet implements ResultSet {
         }
     }
 
+    public PgResultSet(Map<String, PgColumn> columns, List<Row> rows, int updatedRows) {
+        this.columns = columns;
+        this.rows = rows;
+        this.updatedRows = updatedRows;
+    }
+
     @Override
     public Collection<String> getColumns() {
         return columns != null ? columns.keySet() : Collections.emptyList();

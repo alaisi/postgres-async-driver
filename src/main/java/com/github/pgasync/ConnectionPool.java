@@ -14,8 +14,6 @@
 
 package com.github.pgasync;
 
-import com.github.pgasync.callback.ConnectionHandler;
-
 import java.util.function.Consumer;
 
 /**
@@ -28,7 +26,7 @@ import java.util.function.Consumer;
 public interface ConnectionPool extends Db {
 
     /**
-     * Executes a {@link ConnectionHandler} callback when a connection is
+     * Executes a {@link java.util.function.Consumer} callback when a connection is
      * available. Connection passed to callback must be freed with
      * {@link com.github.pgasync.ConnectionPool#release(Connection)}
      * 

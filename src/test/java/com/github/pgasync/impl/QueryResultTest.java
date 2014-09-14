@@ -38,6 +38,7 @@ public class QueryResultTest {
     
     @BeforeClass
     public static void create() {
+        drop();
         dbr.query("CREATE TABLE CONN_TEST(ID INT8)");
     }
 

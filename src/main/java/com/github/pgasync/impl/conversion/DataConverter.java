@@ -1,7 +1,6 @@
 package com.github.pgasync.impl.conversion;
 
 import com.github.pgasync.Converter;
-import com.github.pgasync.SqlException;
 import com.github.pgasync.impl.Oid;
 
 import java.math.BigDecimal;
@@ -125,20 +124,17 @@ public class DataConverter {
             case FLOAT4: // fallthrough
             case FLOAT8: return toBigDecimal(oid, value);
             case BYTEA: return toBytes(oid, value);
-            default:
-                return toComplexObject(oid, value);
-        }
-    }
-
-    protected Object toComplexObject(Oid oid, byte[] value) {
-        switch (oid) {
             case DATE: return toDate(oid, value);
             case TIMETZ: // fallthrough
             case TIME: return toTime(oid, value);
             case TIMESTAMP: // fallthrough
             case TIMESTAMPTZ: return toTimestamp(oid, value);
             default:
-                return toComplexObject(oid, value);
+                return toConvertable(oid, value);
         }
+    }
+
+    protected Object toConvertable(Oid oid, byte[] value) {
+        throw new IllegalStateException("Unknown conversion source: " + oid);
     }
 }

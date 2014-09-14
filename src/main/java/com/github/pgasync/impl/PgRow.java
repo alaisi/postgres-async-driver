@@ -45,6 +45,12 @@ public class PgRow implements Row {
         this.dataConverter = dataConverter;
     }
 
+    public PgRow(DataRow data, Map<String,PgColumn> columns, DataConverter dataConverter) {
+        this.data = data;
+        this.dataConverter = dataConverter;
+        setColumns(columns);
+    }
+
     public void setColumns(Map<String,PgColumn> columns) {
         this.columns = columns;
         Collection<PgColumn> values = columns.values();
