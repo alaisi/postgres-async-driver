@@ -32,15 +32,23 @@ enum Functions {
         }
     }
 
-    static <T> void applyConsumer(Consumer<T> err, T value) {
-        if (err != null) {
+    static <T> void applyConsumer(Consumer<T> consumer, T value) {
+        if (consumer != null) {
             try {
-                err.accept(value);
+                consumer.accept(value);
             } catch (Exception e) {
-                LOG.log(Level.SEVERE, "Consumer " + err + " failed with exception", e);
+                LOG.log(Level.SEVERE, "Consumer " + consumer + " failed with exception", e);
             }
         } else {
             LOG.log(Level.SEVERE, "No consumer to handle value: " + value);
+        }
+    }
+
+    static void applyRunnable(Runnable runnable, Consumer<Throwable> onError) {
+        try {
+            runnable.run();
+        } catch (Throwable t) {
+            applyConsumer(onError, t);
         }
     }
 

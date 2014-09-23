@@ -28,6 +28,7 @@ import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import static com.github.pgasync.impl.Functions.applyConsumer;
+import static com.github.pgasync.impl.Functions.applyRunnable;
 import static com.github.pgasync.impl.Functions.reduce;
 import static com.github.pgasync.impl.message.RowDescription.ColumnDescription;
 import static java.util.Arrays.asList;
@@ -48,7 +49,7 @@ public class PgConnection implements Connection {
         this.dataConverter = dataConverter;
     }
 
-    public void connect(String username, String password, String database,
+    void connect(String username, String password, String database,
                         Consumer<Connection> onConnected, Consumer<Throwable> onError) {
 
         stream.connect(new StartupMessage(username, database), messages -> {
@@ -65,16 +66,9 @@ public class PgConnection implements Connection {
         });
     }
 
-    public boolean isConnected() {
+    boolean isConnected() {
         return stream.isConnected();
     }
-
-    @Override
-    public void close() {
-        stream.close();
-    }
-
-    // Connection
 
     @Override
     public void query(String sql, Consumer<ResultSet> onQuery, Consumer<Throwable> onError) {
@@ -108,28 +102,26 @@ public class PgConnection implements Connection {
 
     @Override
     public void begin(Consumer<Transaction> handler, Consumer<Throwable> onError) {
-
-        Transaction transaction = new ConnectionTx() {
-            @Override
-            public void commit(Runnable onCompleted, Consumer<Throwable> onCommitError) {
-                query("COMMIT", (rs) -> onCompleted.run(), onCommitError);
-            }
-            @Override
-            public void rollback(Runnable onCompleted, Consumer<Throwable> onRollbackError) {
-                query("ROLLBACK", (rs) -> onCompleted.run(), onRollbackError);
-            }
-        };
-
-        query("BEGIN", beginRs -> applyConsumer(handler, transaction, onError), onError);
+        query("BEGIN", beginRs -> applyConsumer(handler, new ConnectionTx(), onError), onError);
     }
 
-    private boolean fireErrorHandler(Stream<Message> messages, Consumer<Throwable> onError) {
-        ErrorResponse err = (ErrorResponse) messages
-                .filter(m -> m instanceof ErrorResponse)
+    @Override
+    public void close() {
+        stream.close();
+    }
+
+    boolean fireErrorHandler(Stream<Message> messages, Consumer<Throwable> onError) {
+        Message failure = messages
+                .filter(m -> m instanceof ErrorResponse || m instanceof Throwable)
                 .findFirst().orElse(null);
 
-        if(err != null) {
+        if(failure != null && failure instanceof ErrorResponse) {
+            ErrorResponse err = (ErrorResponse) failure;
             applyConsumer(onError, new SqlException(err.getLevel().name(), err.getCode(), err.getMessage()));
+            return true;
+        }
+        if(failure != null) {
+            applyConsumer(onError, (Throwable) failure);
             return true;
         }
         return false;
@@ -179,14 +171,22 @@ public class PgConnection implements Connection {
 
         @Override
         public AuthenticationResponseReader apply(Message message) {
-            if(message instanceof Authentication) {
+            if(md5salt == null && message instanceof Authentication) {
                 md5salt = ((Authentication) message).getMd5Salt();
             }
             return this;
         }
     }
 
-    abstract class ConnectionTx implements Transaction {
+    class ConnectionTx implements Transaction {
+        @Override
+        public void commit(Runnable onCompleted, Consumer<Throwable> onCommitError) {
+            PgConnection.this.query("COMMIT", (rs) -> applyRunnable(onCompleted, onCommitError), onCommitError);
+        }
+        @Override
+        public void rollback(Runnable onCompleted, Consumer<Throwable> onRollbackError) {
+            PgConnection.this.query("ROLLBACK", (rs) -> applyRunnable(onCompleted, onRollbackError), onRollbackError);
+        }
         @Override
         public void query(String sql, Consumer<ResultSet> onResult, Consumer<Throwable> onError) {
             PgConnection.this.query(sql, onResult, onError);

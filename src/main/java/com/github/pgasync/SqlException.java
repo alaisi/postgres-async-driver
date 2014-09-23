@@ -30,9 +30,12 @@ public class SqlException extends RuntimeException {
         super(level + ": SQLSTATE=" + code + ", MESSAGE=" + message);
         this.code = code;
     }
-
     public SqlException(String message) {
         super(message);
+        this.code = null;
+    }
+    public SqlException(Throwable cause) {
+        super(cause);
         this.code = null;
     }
 

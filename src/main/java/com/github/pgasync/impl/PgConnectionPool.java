@@ -19,9 +19,7 @@ import com.github.pgasync.ConnectionPoolBuilder.PoolProperties;
 import com.github.pgasync.impl.conversion.DataConverter;
 
 import java.net.InetSocketAddress;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Queue;
+import java.util.*;
 import java.util.function.Consumer;
 
 /**
@@ -204,9 +202,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
                         onCompleted.run();
                     },
                     exception -> {
-                        txconn.close();
-                        release(txconn);
-                        txconn = null;
+                        closeAndRelease();
                         onRollbackError.accept(exception);
                     });
         }
@@ -220,9 +216,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
                         onCompleted.run();
                     },
                     exception -> {
-                        txconn.close();
-                        release(txconn);
-                        txconn = null;
+                        closeAndRelease();
                         onCommitError.accept(exception);
                     });
         }
@@ -230,28 +224,41 @@ public abstract class PgConnectionPool implements ConnectionPool {
         @Override
         @SuppressWarnings("rawtypes")
         public void query(String sql, List params, Consumer<ResultSet> onResult, Consumer<Throwable> onError) {
-            if(txconn == null) {
+            if (txconn == null) {
                 onError.accept(new SqlException("Transaction is rolled back"));
                 return;
             }
-            txconn.query(sql, params, onResult,
-                    exception ->
-                            transaction.rollback(() -> {
-                                release(txconn);
-                                txconn = null;
-                                onError.accept(exception);
-                            },
-                            rollbackException -> {
-                                txconn.close();
-                                release(txconn);
-                                txconn = null;
-                                onError.accept(rollbackException);
-                            }));
+            txconn.query(sql, params, onResult, exception -> doRollback(exception, onError));
         }
+
         @Override
         public void query(String sql, Consumer<ResultSet> onResult, Consumer<Throwable> onError) {
             query(sql, null, onResult, onError);
         }
-    }
 
+        void closeAndRelease() {
+            txconn.close();
+            release(txconn);
+            txconn = null;
+        }
+
+        void doRollback(Throwable exception, Consumer<Throwable> onError) {
+            if (!((PgConnection) txconn).isConnected()) {
+                release(txconn);
+                txconn = null;
+                onError.accept(exception);
+                return;
+            }
+
+            transaction.rollback(() -> {
+                        release(txconn);
+                        txconn = null;
+                        onError.accept(exception);
+                    },
+                    rollbackException -> {
+                        closeAndRelease();
+                        onError.accept(rollbackException);
+                    });
+        }
+    }
 }

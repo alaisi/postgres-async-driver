@@ -14,7 +14,7 @@
 
 package com.github.pgasync.impl.netty;
 
-import com.github.pgasync.impl.PgProtocolCallbacks;
+import com.github.pgasync.SqlException;
 import com.github.pgasync.impl.PgProtocolStream;
 import com.github.pgasync.impl.message.Authentication;
 import com.github.pgasync.impl.message.Message;
@@ -29,6 +29,8 @@ import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+
+import static java.util.Arrays.asList;
 
 /**
  * Netty connection to PostgreSQL backend.
@@ -52,37 +54,37 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     public void connect(StartupMessage startup, Consumer<List<Message>> replyTo) {
         ChannelHandler onActive = new ChannelInboundHandlerAdapter() {
             @Override
-            public void channelActive(ChannelHandlerContext context) throws Exception {
+            public void channelActive(ChannelHandlerContext context) {
                 ctx = context;
                 onReceive = newReplyHandler(replyTo);
                 context.writeAndFlush(startup);
             }
         };
-        new Bootstrap().group(group).channel(NioSocketChannel.class).handler(new ChannelInitializer<Channel>() {
-            @Override
-            protected void initChannel(Channel channel) throws Exception {
-                channel.pipeline().addLast("frame-decoder", new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 1, 4, -4, 0, true));
-                channel.pipeline().addLast("message-decoder", new ByteBufMessageDecoder());
-                channel.pipeline().addLast("message-encoder", new ByteBufMessageEncoder());
-                channel.pipeline().addLast("message-handler", new ChannelInboundHandlerAdapter() {
-                    @Override
-                    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-                        onReceive.accept((Message) msg);
-                    }
-                });
-                channel.pipeline().addLast(onActive);
-            }
-        }).connect(address);
+        new Bootstrap()
+                .group(group)
+                .channel(NioSocketChannel.class)
+                .handler(newProtocolInitializer(onActive))
+                .connect(address)
+                .addListener((future) -> {
+                    if(!future.isSuccess()) {
+                        replyTo.accept(asList(new ChannelError(future.cause())));
+                }});
     }
 
     @Override
     public void send(Message message, Consumer<List<Message>> replyTo) {
+        if(!isConnected()) {
+            throw new IllegalStateException("Channel is closed");
+        }
         onReceive = newReplyHandler(replyTo);
         ctx.writeAndFlush(message);
     }
 
     @Override
     public void send(List<Message> messages, Consumer<List<Message>> replyTo) {
+        if(!isConnected()) {
+            throw new IllegalStateException("Channel is closed");
+        }
         onReceive = newReplyHandler(replyTo);
         messages.forEach(ctx::write);
         ctx.flush();
@@ -103,11 +105,55 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         return msg -> {
             messages.add(msg);
             if(msg instanceof ReadyForQuery
+                    || msg instanceof ChannelError
                     || (msg instanceof Authentication && !((Authentication) msg).isAuthenticationOk())) {
                 onReceive = null;
                 consumer.accept(messages);
             }
         };
+    }
+
+    ChannelInitializer<Channel> newProtocolInitializer(ChannelHandler onActive) {
+        return new ChannelInitializer<Channel>() {
+            @Override
+            protected void initChannel(Channel channel) throws Exception {
+                channel.pipeline().addLast("frame-decoder", new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 1, 4, -4, 0, true));
+                channel.pipeline().addLast("message-decoder", new ByteBufMessageDecoder());
+                channel.pipeline().addLast("message-encoder", new ByteBufMessageEncoder());
+                channel.pipeline().addLast("message-handler", newProtocolHandler());
+                channel.pipeline().addLast(onActive);
+            }
+        };
+    }
+
+    ChannelHandler newProtocolHandler() {
+        return new ChannelInboundHandlerAdapter() {
+            @Override
+            public void channelRead(ChannelHandlerContext context, Object msg) throws Exception {
+                onReceive.accept((Message) msg);
+            }
+            @Override
+            public void channelInactive(ChannelHandlerContext context) throws Exception {
+                if(onReceive != null) {
+                    onReceive.accept(new ChannelError("Channel state changed to inactive"));
+                }
+            }
+            @Override
+            public void exceptionCaught(ChannelHandlerContext context, Throwable cause) throws Exception {
+                if(onReceive != null) {
+                    onReceive.accept(new ChannelError(cause));
+                }
+            }
+        };
+    }
+
+    static class ChannelError extends SqlException implements Message {
+        ChannelError(String message) {
+            super(message);
+        }
+        public ChannelError(Throwable cause) {
+            super(cause);
+        }
     }
 
 }
