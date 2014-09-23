@@ -23,31 +23,23 @@ public class ErrorResponse implements Message {
         ERROR, FATAL, PANIC, WARNING, NOTICE, DEBUG, INFO, LOG;
     }
 
-    Level level;
-    String code;
-    String message;
+    final Level level;
+    final String code;
+    final String message;
 
-    public void setLevel(Level level) {
-        this.level = level;
+    public ErrorResponse(String levelName, String code, String message) {
+        this.level = Level.valueOf(levelName);
+        this.code = code;
+        this.message = message;
     }
 
     public Level getLevel() {
         return level;
     }
-
     public String getCode() {
         return code;
     }
-
-    public void setCode(String code) {
-        this.code = code;
-    }
-
     public String getMessage() {
         return message;
-    }
-
-    public void setMessage(String message) {
-        this.message = message;
     }
 }

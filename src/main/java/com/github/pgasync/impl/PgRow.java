@@ -28,7 +28,7 @@ import java.util.Collection;
 import java.util.Map;
 
 /**
- * Result row, uses {@link TypeConverter} for all conversions.
+ * Result row, uses {@link DataConverter} for all conversions.
  * 
  * @author Antti Laisi
  */
@@ -36,22 +36,12 @@ public class PgRow implements Row {
 
     final DataRow data;
     final DataConverter dataConverter;
-
-    Map<String,PgColumn> columns;
-    PgColumn[] pgColumns;
-
-    public PgRow(DataRow data, DataConverter dataConverter) {
-        this.data = data;
-        this.dataConverter = dataConverter;
-    }
+    final Map<String,PgColumn> columns;
+    final PgColumn[] pgColumns;
 
     public PgRow(DataRow data, Map<String,PgColumn> columns, DataConverter dataConverter) {
         this.data = data;
         this.dataConverter = dataConverter;
-        setColumns(columns);
-    }
-
-    public void setColumns(Map<String,PgColumn> columns) {
         this.columns = columns;
         Collection<PgColumn> values = columns.values();
         this.pgColumns = values.toArray(new PgColumn[values.size()]);

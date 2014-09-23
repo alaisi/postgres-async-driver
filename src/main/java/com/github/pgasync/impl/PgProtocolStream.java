@@ -27,11 +27,6 @@ import java.util.function.Consumer;
  */
 public interface PgProtocolStream {
 
-    /*
-    void connect(StartupMessage startup, PgProtocolCallbacks callbacks);
-
-    void send(Message... messages);
-    */
     void connect(StartupMessage startup, Consumer<List<Message>> replyTo);
 
     void send(Message message, Consumer<List<Message>> replyTo);

@@ -42,7 +42,7 @@ public class PasswordMessage implements Message {
     }
 
     static byte[] md5(String username, String password, byte[] md5salt) {
-        MessageDigest md5 = digest();
+        MessageDigest md5 = md5();
         md5.update(bytes(password));
         md5.update(bytes(username));
         byte[] hash = bytes(printHexBinary(md5.digest()).toLowerCase());
@@ -59,7 +59,7 @@ public class PasswordMessage implements Message {
         return prefixed;
     }
 
-    static MessageDigest digest() {
+    static MessageDigest md5() {
         try {
             return MessageDigest.getInstance("MD5");
         } catch (NoSuchAlgorithmException e) {

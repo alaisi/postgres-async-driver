@@ -55,15 +55,17 @@ public class AuthenticationDecoder implements Decoder<Authentication> {
 
     @Override
     public Authentication read(ByteBuffer buffer) {
-        Authentication msg = new Authentication();
         int type = buffer.getInt();
-        if (type == OK) {
-            msg.setAuthenticationOk();
-        } else if (type == PASSWORD_MD5_CHALLENGE) {
-            msg.setMd5Salt(new byte[4]);
-            buffer.get(msg.getMd5Salt());
+        switch (type) {
+            case OK:
+                return new Authentication(true, null);
+            case PASSWORD_MD5_CHALLENGE:
+                byte[] salt = new byte[4];
+                buffer.get(salt);
+                return new Authentication(false, salt);
+            default:
+                throw new UnsupportedOperationException("Unsupported authentication type: " + type);
         }
-        return msg;
     }
 
 }

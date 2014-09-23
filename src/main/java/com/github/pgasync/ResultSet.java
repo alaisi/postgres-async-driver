@@ -39,7 +39,7 @@ public interface ResultSet extends Iterable<Row> {
      * @param index Row index starting from 0
      * @return Row, never null
      */
-    Row get(int index);
+    Row row(int index);
 
     /**
      * @return Amount of result rows.

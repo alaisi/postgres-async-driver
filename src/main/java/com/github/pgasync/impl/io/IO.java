@@ -16,6 +16,9 @@ package com.github.pgasync.impl.io;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * Static utility methods for input/output.
@@ -25,10 +28,8 @@ import java.nio.charset.Charset;
 public enum IO {
     ;
 
-    public static final Charset UTF8 = Charset.forName("UTF-8");
-
     public static byte[] bytes(String s) {
-        return s.getBytes(UTF8);
+        return s.getBytes(UTF_8);
     }
 
     public static String getCString(ByteBuffer buffer, byte[] store) {
@@ -36,7 +37,7 @@ public enum IO {
         for (byte c = buffer.get(); c != 0; c = buffer.get()) {
             store[i++] = c;
         }
-        return new String(store, 0, i, UTF8);
+        return new String(store, 0, i, UTF_8);
     }
 
     public static void putCString(ByteBuffer buffer, String string) {

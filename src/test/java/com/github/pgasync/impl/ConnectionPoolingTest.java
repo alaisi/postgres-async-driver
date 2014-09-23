@@ -86,6 +86,6 @@ public class ConnectionPoolingTest {
 
         ResultHolder result = new ResultHolder();
         pool.query("SELECT COUNT(*) FROM CP_TEST", result, result.errorHandler());
-        assertEquals(count.get(), result.result().get(0).getLong(0).longValue());
+        assertEquals(count.get(), result.result().row(0).getLong(0).longValue());
     }
 }

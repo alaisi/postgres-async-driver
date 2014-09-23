@@ -27,20 +27,9 @@ import java.util.*;
  */
 public class PgResultSet implements ResultSet {
 
-    List<Row> rows;
-    Map<String, PgColumn> columns;
-    int updatedRows;
-
-    public PgResultSet() {
-    }
-
-    public PgResultSet(ColumnDescription[] columnDescriptions) {
-        columns = new LinkedHashMap<>();
-        for (int i = 0; i < columnDescriptions.length; i++) {
-            columns.put(columnDescriptions[i].getName().toUpperCase(),
-                    new PgColumn(i, columnDescriptions[i].getType()));
-        }
-    }
+    final List<Row> rows;
+    final Map<String, PgColumn> columns;
+    final int updatedRows;
 
     public PgResultSet(Map<String, PgColumn> columns, List<Row> rows, int updatedRows) {
         this.columns = columns;
@@ -59,7 +48,7 @@ public class PgResultSet implements ResultSet {
     }
 
     @Override
-    public Row get(int index) {
+    public Row row(int index) {
         if (rows == null) {
             throw new IndexOutOfBoundsException();
         }
@@ -74,18 +63,6 @@ public class PgResultSet implements ResultSet {
     @Override
     public int updatedRows() {
         return updatedRows;
-    }
-
-    void setUpdatedRows(int updatedRows) {
-        this.updatedRows = updatedRows;
-    }
-
-    void add(PgRow row) {
-        if (rows == null) {
-            rows = new ArrayList<>();
-        }
-        row.setColumns(columns);
-        rows.add(row);
     }
 
 }

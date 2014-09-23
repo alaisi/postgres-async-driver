@@ -56,7 +56,7 @@ public class TransactionTest {
 
         dbr.db().begin((transaction) ->
                 transaction.query("SELECT 1", result -> {
-                    assertEquals(1L, result.get(0).getLong(0).longValue());
+                    assertEquals(1L, result.row(0).getLong(0).longValue());
                     transaction.commit(sync::countDown, err);
                 }, err),
             err);
@@ -76,7 +76,7 @@ public class TransactionTest {
             err);
 
         assertTrue(sync.await(5, TimeUnit.SECONDS));
-        assertEquals(10L, dbr.query("SELECT ID FROM TX_TEST WHERE ID = 10").get(0).getLong(0).longValue());
+        assertEquals(10L, dbr.query("SELECT ID FROM TX_TEST WHERE ID = 10").row(0).getLong(0).longValue());
     }
 
     @Test

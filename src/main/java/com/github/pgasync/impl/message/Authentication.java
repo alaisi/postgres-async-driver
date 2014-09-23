@@ -19,14 +19,11 @@ package com.github.pgasync.impl.message;
  */
 public class Authentication implements Message {
 
-    byte[] md5salt;
-    boolean success;
+    final boolean success;
+    final byte[] md5salt;
 
-    public void setAuthenticationOk() {
-        success = true;
-    }
-
-    public void setMd5Salt(byte[] md5salt) {
+    public Authentication(boolean success, byte[] md5salt) {
+        this.success = success;
         this.md5salt = md5salt;
     }
 

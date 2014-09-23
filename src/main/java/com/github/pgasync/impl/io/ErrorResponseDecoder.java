@@ -48,19 +48,24 @@ public class ErrorResponseDecoder implements Decoder<ErrorResponse> {
 
     @Override
     public ErrorResponse read(ByteBuffer buffer) {
-        ErrorResponse error = new ErrorResponse();
+
+        String level = null;
+        String code = null;
+        String message = null;
+
         byte[] field = new byte[255];
         for (byte type = buffer.get(); type != 0; type = buffer.get()) {
             String value = getCString(buffer, field);
             if (type == (byte) 'S') {
-                error.setLevel(Level.valueOf(value));
+                level = value;
             } else if (type == 'C') {
-                error.setCode(value);
+                code = value;
             } else if (type == 'M') {
-                error.setMessage(value);
+                message = value;
             }
         }
-        return error;
+
+        return new ErrorResponse(level, code, message);
     }
 
 }
