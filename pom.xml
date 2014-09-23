@@ -9,7 +9,7 @@
 
 	<groupId>com.github.alaisi.pgasync</groupId>
 	<artifactId>postgres-async-driver</artifactId>
-	<version>0.2</version>
+	<version>0.3-SNAPSHOT</version>
 
 	<name>pg-async-driver</name>
 	<description>Asynchronous PostgreSQL Java driver</description>
