@@ -14,7 +14,7 @@
 	<name>pg-async-driver</name>
 	<description>Asynchronous PostgreSQL Java driver</description>
 
-	<url>https://github.com/alaisi/pg-async-driver</url>
+	<url>https://github.com/alaisi/postgres-async-driver</url>
 	<inceptionYear>2014</inceptionYear>
 	<developers>
 		<developer>
@@ -30,13 +30,13 @@
 	</licenses>
 
 	<scm>
-		<connection>scm:git:git@github.com:alaisi/pg-async-driver.git</connection>
-		<developerConnection>scm:git:git@github.com:alaisi/pg-async-driver.git</developerConnection>
-		<url>git@github.com:alaisi/pg-async-driver.git</url>
+		<connection>scm:git:git@github.com:alaisi/postgres-async-driver.git</connection>
+		<developerConnection>scm:git:git@github.com:alaisi/postgres-async-driver.git</developerConnection>
+		<url>git@github.com:alaisi/postgres-async-driver.git</url>
 	</scm>
 	<issueManagement>
 		<system>github</system>
-		<url>https://github.com/alaisi/pg-async-driver/issues</url>
+		<url>https://github.com/alaisi/postgres-async-driver/issues</url>
 	</issueManagement>
 
 	<build>
