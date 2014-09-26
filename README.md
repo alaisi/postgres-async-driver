@@ -32,7 +32,7 @@ db.query("select 'Hello world!' as message",
 Db is usually a connection pool that is created with [`com.github.pgasync.ConnectionPoolBuilder`](https://github.com/alaisi/postgres-async-driver/blob/master/src/main/java/com/github/pgasync/ConnectionPoolBuilder.java)
 
 ```java
-Db db = return new ConnectionPoolBuilder()
+Db db = new ConnectionPoolBuilder()
     .hostname("localhost")
     .port(5432)
     .database("db")
