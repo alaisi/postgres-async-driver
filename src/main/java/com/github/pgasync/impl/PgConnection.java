@@ -56,6 +56,10 @@ public class PgConnection implements Connection {
             if (fireErrorHandler(messages.stream(), onError)) {
                 return;
             }
+            if(messages.stream().anyMatch(m -> m instanceof ReadyForQuery)) {
+                applyConsumer(onConnected, this, onError);
+                return;
+            }
             byte[] md5salt = reduce(new AuthenticationResponseReader(), messages.stream()).get();
             stream.send(new PasswordMessage(username, password, md5salt), pwMessages -> {
                 if (fireErrorHandler(pwMessages.stream(), onError)) {
