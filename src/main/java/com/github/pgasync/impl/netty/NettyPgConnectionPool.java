@@ -15,8 +15,8 @@
 package com.github.pgasync.impl.netty;
 
 import com.github.pgasync.ConnectionPoolBuilder.PoolProperties;
-import com.github.pgasync.impl.PgConnection;
 import com.github.pgasync.impl.PgConnectionPool;
+import com.github.pgasync.impl.PgProtocolStream;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 
@@ -31,14 +31,16 @@ import java.net.InetSocketAddress;
 public class NettyPgConnectionPool extends PgConnectionPool {
 
     final EventLoopGroup group = new NioEventLoopGroup(1);
+    final boolean useSsl;
 
     public NettyPgConnectionPool(PoolProperties properties) {
         super(properties);
+        useSsl = properties.getUseSsl();
     }
 
     @Override
-    protected PgConnection newConnection(InetSocketAddress address) {
-        return new PgConnection(new NettyPgProtocolStream(address, group), super.dataConverter());
+    protected PgProtocolStream openStream(InetSocketAddress address) {
+        return new NettyPgProtocolStream(group, address, useSsl);
     }
 
     @Override

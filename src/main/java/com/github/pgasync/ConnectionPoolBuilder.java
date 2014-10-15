@@ -90,6 +90,7 @@ public class ConnectionPoolBuilder {
         int poolSize = 20;
         DataConverter dataConverter = null;
         List<Converter<?>> converters = new ArrayList<>();
+        boolean useSsl;
 
         public String getHostname() {
             return hostname;
@@ -109,8 +110,11 @@ public class ConnectionPoolBuilder {
         public int getPoolSize() {
             return poolSize;
         }
+        public boolean getUseSsl() {
+            return useSsl;
+        }
         public DataConverter getDataConverter() {
             return dataConverter != null ? dataConverter : new DataConverter(converters);
-        };
+        }
     }
 }

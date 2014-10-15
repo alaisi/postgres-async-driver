@@ -134,7 +134,8 @@ public abstract class PgConnectionPool implements ConnectionPool {
         }
 
         if (connection == null) {
-            newConnection(address).connect(username, password, database, onConnection, onError);
+            new PgConnection(openStream(address), dataConverter)
+                    .connect(username, password, database, onConnection, onError);
         } else {
             onConnection.accept(connection);
         }
@@ -169,17 +170,13 @@ public abstract class PgConnectionPool implements ConnectionPool {
         }
     }
 
-    protected DataConverter dataConverter() {
-        return dataConverter;
-    }
-
     /**
-     * Creates a new connection to the backend.
-     * 
+     * Creates a new socket stream to the backend.
+     *
      * @param address Server address
-     * @return Unconnected connection
+     * @return Stream with no pending messages
      */
-    protected abstract PgConnection newConnection(InetSocketAddress address);
+    protected abstract PgProtocolStream openStream(InetSocketAddress address);
 
     /**
      * Transaction that rollbacks the tx on backend error and chains releasing the connection after COMMIT/ROLLBACK.

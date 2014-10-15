@@ -39,13 +39,14 @@ import static java.util.Arrays.asList;
  */
 public class NettyPgProtocolStream implements PgProtocolStream {
 
-    final SocketAddress address;
     final EventLoopGroup group;
+    final SocketAddress address;
+    final boolean useSsl;
 
     ChannelHandlerContext ctx;
     volatile Consumer<Message> onReceive;
 
-    public NettyPgProtocolStream(SocketAddress address, EventLoopGroup group) {
+    public NettyPgProtocolStream(EventLoopGroup group, SocketAddress address, boolean useSsl) {
         this.address = address;
         this.group = group;
     }
