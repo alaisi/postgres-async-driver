@@ -16,14 +16,16 @@ package com.github.pgasync.impl.netty;
 
 import com.github.pgasync.SqlException;
 import com.github.pgasync.impl.PgProtocolStream;
-import com.github.pgasync.impl.message.Authentication;
-import com.github.pgasync.impl.message.Message;
-import com.github.pgasync.impl.message.ReadyForQuery;
-import com.github.pgasync.impl.message.StartupMessage;
+import com.github.pgasync.impl.message.*;
 import io.netty.bootstrap.Bootstrap;
+import io.netty.buffer.ByteBuf;
 import io.netty.channel.*;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.codec.ByteToMessageDecoder;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslHandshakeCompletionEvent;
+import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 
 import java.net.SocketAddress;
 import java.util.ArrayList;
@@ -47,29 +49,23 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     volatile Consumer<Message> onReceive;
 
     public NettyPgProtocolStream(EventLoopGroup group, SocketAddress address, boolean useSsl) {
-        this.address = address;
         this.group = group;
+        this.address = address;
+        this.useSsl = useSsl; // TODO: refactor into SSLConfig with trust parameters
     }
 
     @Override
     public void connect(StartupMessage startup, Consumer<List<Message>> replyTo) {
-        ChannelHandler onActive = new ChannelInboundHandlerAdapter() {
-            @Override
-            public void channelActive(ChannelHandlerContext context) {
-                ctx = context;
-                onReceive = newReplyHandler(replyTo);
-                context.writeAndFlush(startup);
-            }
-        };
         new Bootstrap()
                 .group(group)
                 .channel(NioSocketChannel.class)
-                .handler(newProtocolInitializer(onActive))
+                .handler(newProtocolInitializer(newStartupHandler(startup, replyTo)))
                 .connect(address)
-                .addListener((future) -> {
-                    if(!future.isSuccess()) {
+                .addListener(future -> {
+                    if (!future.isSuccess()) {
                         replyTo.accept(asList(new ChannelError(future.cause())));
-                }});
+                    }
+                });
     }
 
     @Override
@@ -114,15 +110,63 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         };
     }
 
+    ChannelInboundHandlerAdapter newStartupHandler(StartupMessage startup, Consumer<List<Message>> replyTo) {
+        return new ChannelInboundHandlerAdapter() {
+            @Override
+            public void userEventTriggered(ChannelHandlerContext context, Object evt) throws Exception {
+                if (evt instanceof SslHandshakeCompletionEvent && ((SslHandshakeCompletionEvent) evt).isSuccess()) {
+                    startup(context);
+                }
+            }
+            @Override
+            public void channelActive(ChannelHandlerContext context) {
+                if(useSsl) {
+                    context.writeAndFlush(SSLHandshake.INSTANCE);
+                } else {
+                    startup(context);
+                }
+            }
+            void startup(ChannelHandlerContext context) {
+                ctx = context;
+                onReceive = newReplyHandler(replyTo);
+                context.writeAndFlush(startup);
+                context.pipeline().remove(this);
+            }
+        };
+    }
+
     ChannelInitializer<Channel> newProtocolInitializer(ChannelHandler onActive) {
         return new ChannelInitializer<Channel>() {
             @Override
             protected void initChannel(Channel channel) throws Exception {
-                channel.pipeline().addLast("frame-decoder", new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 1, 4, -4, 0, true));
-                channel.pipeline().addLast("message-decoder", new ByteBufMessageDecoder());
-                channel.pipeline().addLast("message-encoder", new ByteBufMessageEncoder());
-                channel.pipeline().addLast("message-handler", newProtocolHandler());
+                if(useSsl) {
+                    channel.pipeline().addLast(newSslInitiator());
+                }
+                channel.pipeline().addLast(new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 1, 4, -4, 0, true));
+                channel.pipeline().addLast(new ByteBufMessageDecoder());
+                channel.pipeline().addLast(new ByteBufMessageEncoder());
+                channel.pipeline().addLast(newProtocolHandler());
                 channel.pipeline().addLast(onActive);
+            }
+        };
+    }
+
+    ChannelHandler newSslInitiator() {
+        return new ByteToMessageDecoder() {
+            @Override
+            protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
+                if(in.readableBytes() < 1) {
+                    return;
+                }
+                if('S' != in.readByte()) {
+                    ctx.fireExceptionCaught(new IllegalStateException("SSL required but not supported by backend server"));
+                    return;
+                }
+                ctx.pipeline().remove(this);
+                ctx.pipeline().addFirst(
+                        SslContext.newClientContext(InsecureTrustManagerFactory.INSTANCE)
+                                .newHandler(ctx.alloc()));
+
             }
         };
     }

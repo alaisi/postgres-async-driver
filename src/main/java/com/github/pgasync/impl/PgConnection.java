@@ -27,9 +27,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
-import static com.github.pgasync.impl.Functions.applyConsumer;
-import static com.github.pgasync.impl.Functions.applyRunnable;
-import static com.github.pgasync.impl.Functions.reduce;
+import static com.github.pgasync.impl.Functions.*;
 import static com.github.pgasync.impl.message.RowDescription.ColumnDescription;
 import static java.util.Arrays.asList;
 

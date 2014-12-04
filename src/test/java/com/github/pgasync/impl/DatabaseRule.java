@@ -64,6 +64,7 @@ class DatabaseRule extends ExternalResource {
                 .database(envOrDefault("PG_DATABASE", "postgres"))
                 .username(envOrDefault("PG_USERNAME", "postgres"))
                 .password(envOrDefault("PG_PASSWORD", "postgres"))
+                .ssl(true)
                 .poolSize(size);
     }
 

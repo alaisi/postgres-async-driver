@@ -34,7 +34,8 @@ public class ByteBufMessageEncoder extends MessageToByteEncoder<Message> {
 
     static final Map<Class<?>,Encoder<?>> ENCODERS = new HashMap<>();
     static {
-        for (Encoder<?> encoder : new Encoder<?>[] { 
+        for (Encoder<?> encoder : new Encoder<?>[] {
+                new SSLHandshakeEncoder(),
                 new StartupMessageEncoder(),
                 new PasswordMessageEncoder(),
                 new QueryEncoder(), 

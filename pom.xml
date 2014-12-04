@@ -56,8 +56,8 @@
 	<dependencies>
 		<dependency>
 			<groupId>io.netty</groupId>
-			<artifactId>netty-codec</artifactId>
-			<version>4.0.15.Final</version>
+			<artifactId>netty-handler</artifactId>
+			<version>4.0.24.Final</version>
 		</dependency>
 
 		<dependency>

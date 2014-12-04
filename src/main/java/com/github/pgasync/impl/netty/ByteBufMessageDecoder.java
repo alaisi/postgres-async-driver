@@ -53,11 +53,10 @@ class ByteBufMessageDecoder extends ByteToMessageDecoder {
         byte id = in.readByte();
         int length = in.readInt();
 
-        ByteBuffer buffer = in.nioBuffer();
         Decoder<?> decoder = DECODERS.get(id);
-
         try {
             if (decoder != null) {
+                ByteBuffer buffer = in.nioBuffer();
                 out.add(decoder.read(buffer));
                 in.skipBytes(buffer.position());
             } else {

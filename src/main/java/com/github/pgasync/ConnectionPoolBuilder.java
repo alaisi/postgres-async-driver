@@ -77,6 +77,11 @@ public class ConnectionPoolBuilder {
         return this;
     }
 
+    public ConnectionPoolBuilder ssl(boolean ssl) {
+        properties.useSsl = ssl;
+        return this;
+    }
+
     /**
      * Configuration for a pool.
      */
