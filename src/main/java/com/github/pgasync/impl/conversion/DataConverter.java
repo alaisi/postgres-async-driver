@@ -167,6 +167,8 @@ public class DataConverter {
             case INT2_ARRAY:
             case INT4_ARRAY:
             case INT8_ARRAY:
+            case FLOAT4_ARRAY:
+            case FLOAT8_ARRAY:
             case TEXT_ARRAY:
             case CHAR_ARRAY:
             case BPCHAR_ARRAY:
