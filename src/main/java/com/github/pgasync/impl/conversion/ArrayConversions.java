@@ -1,93 +1,76 @@
-package com.github.pgasync.impl;
+package com.github.pgasync.impl.conversion;
 
-import com.github.pgasync.impl.conversion.DataConverter;
+import com.github.pgasync.impl.Oid;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
-public class PgArray {
-    protected final String string;
-    protected final Object[] array;
-    protected final Oid oid;
-    protected final DataConverter converter;
+import static java.nio.charset.StandardCharsets.UTF_8;
 
+enum ArrayConversions  {
+    ;
 
-    /* In the case where this object is being used to insert something into the database,
-       this guy and toString/arrayToString are the only relevant methods
-      */
-    public PgArray(final Object[] array) {
-        this(null, arrayToString(array), array, null);
-    }
-
-    public PgArray(final Oid oid, final String s, final DataConverter converter) {
-        this(oid, s, null, converter);
-    }
-
-    public PgArray(final Oid oid, final String string, final Object[] array, final DataConverter converter) {
-        this.oid = oid;
-        this.string = string;
-        this.array = array;
-        this.converter = converter;
-    }
-
-    public String toString() {
-        return string;
-    }
-
-    public Object[] getArray() {
-        PgArrayList arrayList = buildArrayList();
-        return buildArray(arrayList, 0, arrayList.size());
-    }
-
-    public static String arrayToString(final Object[] elements) {
-        StringBuffer sb = new StringBuffer();
-        appendArray(sb, elements);
-        return sb.toString();
-    }
-
-    protected static void appendArray(final StringBuffer sb, final Object elements) {
-        sb.append('{');
-
-        int nElements = java.lang.reflect.Array.getLength(elements);
-        for (int i = 0; i < nElements; i++) {
-            if (i > 0) {
-                sb.append(',');
-            }
-
-            Object o = java.lang.reflect.Array.get(elements, i);
-            if (o == null) {
-                sb.append("NULL");
-            } else if (o.getClass().isArray()) {
-                appendArray(sb, o);
-            } else {
-                String s = o.toString();
-                escapeArrayElement(sb, s);
-            }
+    protected static Oid getElementOid(final Oid oid) {
+        try {
+            return Oid.valueOf(oid.name().replaceFirst("_ARRAY", ""));
+        } catch (IllegalArgumentException e) {
+            return Oid.UNSPECIFIED;
         }
-        sb.append('}');
     }
 
-
-    protected static void escapeArrayElement(final StringBuffer b, final String s) {
-        b.append('"');
-        for (int j = 0; j < s.length(); j++) {
-            char c = s.charAt(j);
-            if (c == '"' || c == '\\') {
-                b.append('\\');
-            }
-
-            b.append(c);
+    protected static Class getElementType(Class arrayType) {
+        while(arrayType.getComponentType() != null) {
+            arrayType = arrayType.getComponentType();
         }
-        b.append('"');
+        return arrayType;
     }
 
-    protected PgArrayList buildArrayList() {
+    @SuppressWarnings("unchecked")
+    public static <TArray> TArray toArray(
+        Class<TArray> arrayType, Oid oid, byte[] value, BiFunction<Oid, byte[], Object> parse) {
+
+        Oid elementOid = getElementOid(oid);
+        return (TArray)buildArray(
+            getElementType(arrayType), buildArrayList(value), 0, -1, (s) -> parse.apply(elementOid, s));
+    }
+
+    protected static Object[] buildArray(
+        Class elementType, PgArrayList input, int index, int count, Function<byte[], Object> parse) {
+
+        if (count < 0)
+            count = input.size();
+
+        int dimensionCount = input.dimensionsCount;
+        int[] dimensions = new int[dimensionCount];
+        for (int i = 0; i < dimensionCount; i++) {
+            dimensions[i] = (i == 0 ? count : 0);
+        }
+
+        Object[] ret = (Object[])java.lang.reflect.Array.newInstance(elementType, dimensions);
+
+        for (int length = 0; length < count; length++) {
+            Object o = input.get(index++);
+            if (o != null) {
+                if (1 < dimensionCount) {
+                    o = buildArray(elementType, (PgArrayList) o, 0, -1,  parse);
+                } else {
+                    o = parse.apply(((String) o).getBytes());
+                }
+            }
+            ret[length] = o;
+        }
+        return ret;
+    }
+
+    protected static PgArrayList buildArrayList(byte[] byteValue) {
         PgArrayList arrayList = new PgArrayList();
 
         char delim = ',';
 
-        if (string != null) {
-            char[] chars = string.toCharArray();
+        if (byteValue != null) {
+            char[] chars = new String(byteValue).toCharArray();
             StringBuffer buffer = null;
             boolean insideString = false;
             boolean wasInsideString = false; // needed for checking if NULL
@@ -191,52 +174,45 @@ public class PgArray {
         return arrayList;
     }
 
-
-    protected Object[] buildArray(PgArrayList input, int index, int count) {
-        if (count < 0)
-            count = input.size();
-
-        Object[] ret;
-
-        int dims = input.dimensionsCount;
-
-        // dimensions length array (to be used with java.lang.reflect.Array.newInstance(Class<?>, int[]))
-        int[] dimsLength = 1 < dims ? new int[dims] : null;
-        if (1 < dims) {
-            for (int i = 0; i < dims; i++) {
-                dimsLength[i] = (i == 0 ? count : 0);
-            }
-        }
-        int length = 0;
-
-        if (1 < dims) {
-            ret = (Object[]) java.lang.reflect.Array.newInstance(Object.class, dimsLength);
-        } else {
-            ret = new Object[count];
-        }
-
-        final Oid elementType = getElementType(oid);
-
-        for (; 0 < count; count--) {
-            Object o = input.get(index++);
-            if (o == null) {
-                o = null;
-            } else if (1 < dims) {
-                o = buildArray((PgArrayList) o, 0, -1);
-            } else {
-                o = converter.toObject(elementType, ((String) o).getBytes());
-            }
-            ret[length++] = o;
-        }
-        return ret;
+    public static byte[] fromArray(final Object[] elements) {
+        StringBuffer sb = new StringBuffer();
+        appendArray(sb, elements);
+        return sb.toString().getBytes(UTF_8);
     }
 
-    protected static Oid getElementType(final Oid oid) {
-        try {
-            return Oid.valueOf(oid.name().replaceFirst("_ARRAY", ""));
-        } catch (IllegalArgumentException _) {
-            return Oid.UNSPECIFIED;
+    protected static void appendArray(final StringBuffer sb, final Object elements) {
+        sb.append('{');
+
+        int nElements = java.lang.reflect.Array.getLength(elements);
+        for (int i = 0; i < nElements; i++) {
+            if (i > 0) {
+                sb.append(',');
+            }
+
+            Object o = java.lang.reflect.Array.get(elements, i);
+            if (o == null) {
+                sb.append("NULL");
+            } else if (o.getClass().isArray()) {
+                appendArray(sb, o);
+            } else {
+                String s = o.toString();
+                escapeArrayElement(sb, s);
+            }
         }
+        sb.append('}');
+    }
+
+    protected static void escapeArrayElement(final StringBuffer b, final String s) {
+        b.append('"');
+        for (int j = 0; j < s.length(); j++) {
+            char c = s.charAt(j);
+            if (c == '"' || c == '\\') {
+                b.append('\\');
+            }
+
+            b.append(c);
+        }
+        b.append('"');
     }
 
     private static class PgArrayList extends ArrayList {
