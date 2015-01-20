@@ -56,7 +56,7 @@ enum ArrayConversions  {
                 if (1 < dimensionCount) {
                     o = buildArray(elementType, (PgArrayList) o, 0, -1,  parse);
                 } else {
-                    o = parse.apply(((String) o).getBytes());
+                    o = parse.apply(((String) o).getBytes(UTF_8));
                 }
             }
             ret[length] = o;

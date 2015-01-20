@@ -139,6 +139,17 @@ public class ArrayConversionsTest {
     }
 
     @Test
+    public void roundtripUTF8() {
+        String[] a = new String[]{"U&\"d\\0061t\\+000061\"", "d\u0061t\u0061\u2301" };
+        dbr.query("INSERT INTO CA_TEST (TEXTA) VALUES ($1)", Arrays.asList(new Object[]{a}));
+        assertArrayEquals(
+            a,
+            dbr.query(
+                "SELECT TEXTA FROM CA_TEST WHERE TEXTA = $1",
+                Arrays.asList(new Object[]{a})).row(0).getArray("TEXTA", String[].class));
+    }
+
+    @Test
     public void insertUnboxed() {
         short[][] a = new short[][]{new short[]{0, 1}, new short[]{1, 0}};
         dbr.query("INSERT INTO CA_TEST (INTA) VALUES ($1)", Arrays.asList(new Object[]{a}));
