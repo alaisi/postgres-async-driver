@@ -11,7 +11,6 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
 public class ArrayConversionsTest {
-
     @ClassRule
     public static DatabaseRule dbr = new DatabaseRule();
 
@@ -20,7 +19,7 @@ public class ArrayConversionsTest {
     public static void create() {
         drop();
         dbr.query("CREATE TABLE CA_TEST (" +
-            "TEXTA TEXT[], INTA INT4[], FLOATA FLOAT4[], TIMESTAMPA TIMESTAMP[], BYTEAA BYTEA[])");
+            "TEXTA TEXT[], SHORTA INT2[], INTA INT4[], LONGA INT8[], FLOATA FLOAT4[], TIMESTAMPA TIMESTAMP[])");
     }
 
     @AfterClass
@@ -38,12 +37,30 @@ public class ArrayConversionsTest {
     }
 
     @Test
+    public void selectShorts() {
+        dbr.query("INSERT INTO CA_TEST (SHORTA) VALUES ('{0, 1, 2, null, 4}')");
+
+        assertArrayEquals(
+            new Short[]{0, 1, 2, null, 4},
+            getRow().getArray("SHORTA", Short[].class));
+    }
+
+    @Test
     public void selectInts() {
         dbr.query("INSERT INTO CA_TEST (INTA) VALUES ('{0, null, 2, 3}')");
 
         assertArrayEquals(
-            new Long[]{0L, null, 2L, 3L},
-            getRow().getArray("INTA", Long[].class));
+            new Integer[]{0, null, 2, 3},
+            getRow().getArray("INTA", Integer[].class));
+    }
+
+    @Test
+    public void selectLongs() {
+        dbr.query("INSERT INTO CA_TEST (LONGA) VALUES ('{-1, null, 1, 2, 3}')");
+
+        assertArrayEquals(
+            new Long[]{-1l, null, 1l, 2l, 3l},
+            getRow().getArray("LONGA", Long[].class));
     }
 
     @Test
@@ -51,10 +68,10 @@ public class ArrayConversionsTest {
         dbr.query("INSERT INTO CA_TEST (INTA) VALUES ('{{{0}, {1}}, {{2}, {3}}}')");
 
         assertArrayEquals(
-            new Long[][][]{
-                new Long[][]{new Long[]{0L}, new Long[]{1L}},
-                new Long[][]{new Long[]{2L}, new Long[]{3L}}},
-            getRow().getArray("INTA", Long[][].class));
+            new Integer[][][]{
+                new Integer[][]{new Integer[]{0}, new Integer[]{1}},
+                new Integer[][]{new Integer[]{2}, new Integer[]{3}}},
+            getRow().getArray("INTA", Integer[][].class));
     }
 
     @Test
@@ -108,17 +125,17 @@ public class ArrayConversionsTest {
     }
 
     @Test
-    public void roundtripLong() {
-        Long[][] a = new Long[][]{
-            new Long[]{1L, 2L, 3L},
-            new Long[]{4L, 5L, 6L}
+    public void roundtripInt() {
+        Integer[][] a = new Integer[][]{
+            new Integer[]{1, 2, 3},
+            new Integer[]{4, 5, 6}
         };
         dbr.query("INSERT INTO CA_TEST (INTA) VALUES ($1)", Arrays.asList(new Object[]{a}));
         assertArrayEquals(
             a,
             dbr.query(
                 "SELECT INTA FROM CA_TEST WHERE INTA = $1",
-                Arrays.asList(new Object[]{a})).row(0).getArray("INTA", Long[].class));
+                Arrays.asList(new Object[]{a})).row(0).getArray("INTA", Integer[].class));
     }
 
     @Test
@@ -136,6 +153,6 @@ public class ArrayConversionsTest {
     public void implicitGet() {
         dbr.query("INSERT INTO CA_TEST (INTA) VALUES ('{1, 2, 3}')");
         PgRow row = (PgRow)dbr.query("SELECT * FROM CA_TEST").row(0);
-        assertArrayEquals(new Long[]{1L, 2L, 3L}, (Object[])row.get("INTA"));
+        assertArrayEquals(new Integer[]{1, 2, 3}, (Object[])row.get("INTA"));
     }
 }

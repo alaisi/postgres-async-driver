@@ -66,7 +66,9 @@ public class DataConverter {
     public <TArray> TArray toArray(Class<TArray> arrayType, Oid oid, byte[] value) {
         switch(oid) {
             case INT2_ARRAY:
+                return ArrayConversions.toArray(arrayType, oid, value, NumericConversions::toShort);
             case INT4_ARRAY:
+                return ArrayConversions.toArray(arrayType, oid, value, NumericConversions::toInteger);
             case INT8_ARRAY:
                 return ArrayConversions.toArray(arrayType, oid, value, NumericConversions::toLong);
 
