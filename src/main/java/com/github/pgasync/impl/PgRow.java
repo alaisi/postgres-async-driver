@@ -180,6 +180,17 @@ public class PgRow implements Row {
     }
 
     @Override
+    public <TArray> TArray getArray(String column, Class<TArray> arrayType) {
+        PgColumn pgColumn = getColumn(column);
+        return dataConverter.toArray(arrayType, pgColumn.type, data.getValue(pgColumn.index));
+    }
+
+    @Override
+    public <TArray> TArray getArray(int index, Class<TArray> arrayType) {
+        return dataConverter.toArray(arrayType, pgColumns[index].type, data.getValue(index));
+    }
+
+    @Override
     public <T> T get(int index, Class<T> type) {
         return dataConverter.toObject(type, pgColumns[index].type, data.getValue(index));
     }

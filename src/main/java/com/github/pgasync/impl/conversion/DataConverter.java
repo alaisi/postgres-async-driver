@@ -63,6 +63,39 @@ public class DataConverter {
         return value == null ? null : BlobConversions.toBytes(oid, value);
     }
 
+    public <TArray> TArray toArray(Class<TArray> arrayType, Oid oid, byte[] value) {
+        switch(oid) {
+            case INT2_ARRAY:
+                return ArrayConversions.toArray(arrayType, oid, value, NumericConversions::toShort);
+            case INT4_ARRAY:
+                return ArrayConversions.toArray(arrayType, oid, value, NumericConversions::toInteger);
+            case INT8_ARRAY:
+                return ArrayConversions.toArray(arrayType, oid, value, NumericConversions::toLong);
+
+            case TEXT_ARRAY:
+            case CHAR_ARRAY:
+            case BPCHAR_ARRAY:
+            case VARCHAR_ARRAY:
+                return ArrayConversions.toArray(arrayType, oid, value, StringConversions::toString);
+
+            case FLOAT4_ARRAY:
+            case FLOAT8_ARRAY:
+                return ArrayConversions.toArray(arrayType, oid, value, NumericConversions::toBigDecimal);
+
+            case TIMESTAMP_ARRAY:
+            case TIMESTAMPTZ_ARRAY:
+                return ArrayConversions.toArray(arrayType, oid, value, TemporalConversions::toTimestamp);
+
+            case TIMETZ_ARRAY:
+            case TIME_ARRAY:
+                return ArrayConversions.toArray(arrayType, oid, value, TemporalConversions::toTime);
+
+            case DATE_ARRAY:
+                return ArrayConversions.toArray(arrayType, oid, value, TemporalConversions::toDate);
+        }
+        return null;
+    }
+
     @SuppressWarnings("unchecked")
     public <T> T toObject(Class<T> type, Oid oid, byte[] value) {
         Converter converter = typeToConverter.get(type);
@@ -84,6 +117,9 @@ public class DataConverter {
         }
         if (o instanceof byte[]) {
             return BlobConversions.fromBytes((byte[]) o);
+        }
+        if (o.getClass().isArray()) {
+            return ArrayConversions.fromArray((Object[]) o);
         }
         if(o instanceof String || o instanceof Number || o instanceof Character || o instanceof UUID) {
             return o.toString().getBytes(UTF_8);
@@ -129,6 +165,21 @@ public class DataConverter {
             case TIME: return toTime(oid, value);
             case TIMESTAMP: // fallthrough
             case TIMESTAMPTZ: return toTimestamp(oid, value);
+
+            case INT2_ARRAY:
+            case INT4_ARRAY:
+            case INT8_ARRAY:
+            case FLOAT4_ARRAY:
+            case FLOAT8_ARRAY:
+            case TEXT_ARRAY:
+            case CHAR_ARRAY:
+            case BPCHAR_ARRAY:
+            case VARCHAR_ARRAY:
+            case TIMESTAMP_ARRAY:
+            case TIMESTAMPTZ_ARRAY:
+            case TIMETZ_ARRAY:
+            case TIME_ARRAY:
+                return toArray(Object[].class, oid, value);
             default:
                 return toConvertable(oid, value);
         }

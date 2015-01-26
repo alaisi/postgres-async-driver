@@ -79,4 +79,8 @@ public interface Row {
     <T> T get(int index, Class<T> type);
 
     <T> T get(String column, Class<T> type);
+
+    <TArray> TArray getArray(String column, Class<TArray> arrayType);
+
+    <TArray> TArray getArray(int index, Class<TArray> arrayType);
 }
