@@ -64,6 +64,8 @@ enum ArrayConversions  {
         return ret;
     }
 
+    // TODO: split and simplify
+    @SuppressWarnings("unchecked")
     protected static PgArrayList buildArrayList(byte[] byteValue) {
         PgArrayList arrayList = new PgArrayList();
 
