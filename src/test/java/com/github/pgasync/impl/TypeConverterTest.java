@@ -176,8 +176,16 @@ public class TypeConverterTest {
 
     @Test
     public void shouldConvertByteAToBytesWithName() {
-        assertArrayEquals(new byte[] { 0x41, 0x41 }, dbr.query("select $1::BYTEA as bytes", asList("AA")).row(0)
+        assertArrayEquals(new byte[]{0x41, 0x41}, dbr.query("select $1::BYTEA as bytes", asList("AA")).row(0)
                 .getBytes("bytes"));
+    }
+
+    @Test
+    public void shouldConvertBoolean() {
+        assertTrue(dbr.query("select $1::BOOL as b", asList(true)).row(0).getBoolean("b"));
+        assertFalse(dbr.query("select $1::BOOL as b", asList(false)).row(0).getBoolean(0));
+        assertNull(dbr.query("select $1::BOOL as b", asList(new Object[]{null})).row(0).getBoolean("b"));
+        assertArrayEquals(new Boolean[]{ true, false}, dbr.query("select '{true,false}'::BOOL[]").row(0).getArray(0, Boolean[].class));
     }
 
     static long millis(int year, int month, int day, int hour, int minute, int second, int millisecond) {

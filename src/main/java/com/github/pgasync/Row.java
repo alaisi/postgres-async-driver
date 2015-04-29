@@ -76,6 +76,10 @@ public interface Row {
 
     byte[] getBytes(String column);
 
+    Boolean getBoolean(int index);
+
+    Boolean getBoolean(String b);
+
     <T> T get(int index, Class<T> type);
 
     <T> T get(String column, Class<T> type);
@@ -83,4 +87,5 @@ public interface Row {
     <TArray> TArray getArray(String column, Class<TArray> arrayType);
 
     <TArray> TArray getArray(int index, Class<TArray> arrayType);
+
 }

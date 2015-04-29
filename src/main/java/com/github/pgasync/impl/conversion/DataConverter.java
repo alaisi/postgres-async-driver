@@ -62,6 +62,9 @@ public class DataConverter {
     public byte[] toBytes(Oid oid, byte[] value) {
         return value == null ? null : BlobConversions.toBytes(oid, value);
     }
+    public Boolean toBoolean(Oid oid, byte[] value) {
+        return value == null ? null : BooleanConversions.toBoolean(oid, value);
+    }
 
     public <TArray> TArray toArray(Class<TArray> arrayType, Oid oid, byte[] value) {
         switch(oid) {
@@ -92,8 +95,12 @@ public class DataConverter {
 
             case DATE_ARRAY:
                 return ArrayConversions.toArray(arrayType, oid, value, TemporalConversions::toDate);
+
+            case BOOL_ARRAY:
+                return ArrayConversions.toArray(arrayType, oid, value, BooleanConversions::toBoolean);
+            default:
+                throw new IllegalStateException("Unsupported array type: " + oid);
         }
-        return null;
     }
 
     @SuppressWarnings("unchecked")
@@ -117,6 +124,9 @@ public class DataConverter {
         }
         if (o instanceof byte[]) {
             return BlobConversions.fromBytes((byte[]) o);
+        }
+        if(o instanceof Boolean) {
+            return BooleanConversions.fromBoolean((boolean) o);
         }
         if (o.getClass().isArray()) {
             return ArrayConversions.fromArray((Object[]) o);
@@ -188,4 +198,5 @@ public class DataConverter {
     protected Object toConvertable(Oid oid, byte[] value) {
         throw new IllegalStateException("Unknown conversion source: " + oid);
     }
+
 }

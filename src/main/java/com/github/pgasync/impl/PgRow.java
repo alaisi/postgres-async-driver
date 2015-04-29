@@ -180,6 +180,17 @@ public class PgRow implements Row {
     }
 
     @Override
+    public Boolean getBoolean(int index) {
+        return dataConverter.toBoolean(pgColumns[index].type, data.getValue(index));
+    }
+
+    @Override
+    public Boolean getBoolean(String column) {
+        PgColumn pgColumn = getColumn(column);
+        return dataConverter.toBoolean(pgColumn.type, data.getValue(pgColumn.index));
+    }
+
+    @Override
     public <TArray> TArray getArray(String column, Class<TArray> arrayType) {
         PgColumn pgColumn = getColumn(column);
         return dataConverter.toArray(arrayType, pgColumn.type, data.getValue(pgColumn.index));
