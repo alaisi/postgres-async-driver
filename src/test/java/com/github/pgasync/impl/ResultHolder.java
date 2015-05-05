@@ -27,7 +27,7 @@ import java.util.function.Consumer;
  */
 class ResultHolder implements Consumer<ResultSet> {
 
-    CountDownLatch latch = new CountDownLatch(1);
+    final CountDownLatch latch = new CountDownLatch(1);
     ResultSet resultSet;
     Throwable error;
 
@@ -46,13 +46,12 @@ class ResultHolder implements Consumer<ResultSet> {
 
     public ResultSet result() {
         try {
-            if (!latch.await(500, TimeUnit.SECONDS)) {
+            if (!latch.await(30, TimeUnit.SECONDS)) {
                 throw new IllegalStateException("Timed out waiting for result");
             }
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
-        latch = new CountDownLatch(1);
         if (error != null) {
             throw error instanceof RuntimeException ? (RuntimeException) error : new RuntimeException(error);
         }

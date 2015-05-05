@@ -102,9 +102,12 @@ enum TemporalConversions {
         return DATE_FORMAT.get().format(date).getBytes(UTF_8);
     }
 
+    static byte[] fromTimestamp(Timestamp ts) {
+        return TIMESTAMP_FORMAT.get().format(ts).getBytes(UTF_8);
+    }
+
     private static SimpleDateFormat zoned(SimpleDateFormat format) {
         format.setTimeZone(TimeZone.getTimeZone("UTC"));
         return format;
     }
-
 }

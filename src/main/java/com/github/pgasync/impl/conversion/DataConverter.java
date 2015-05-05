@@ -119,6 +119,9 @@ public class DataConverter {
         if (o instanceof Time) {
             return TemporalConversions.fromTime((Time) o);
         }
+        if (o instanceof Timestamp) {
+            return TemporalConversions.fromTimestamp((Timestamp) o);
+        }
         if (o instanceof Date) {
             return TemporalConversions.fromDate((Date) o);
         }
@@ -129,7 +132,7 @@ public class DataConverter {
             return BooleanConversions.fromBoolean((boolean) o);
         }
         if (o.getClass().isArray()) {
-            return ArrayConversions.fromArray((Object[]) o);
+            return ArrayConversions.fromArray((Object[]) o, this::fromObject);
         }
         if(o instanceof String || o instanceof Number || o instanceof Character || o instanceof UUID) {
             return o.toString().getBytes(UTF_8);

@@ -136,8 +136,14 @@ public abstract class PgConnectionPool implements ConnectionPool {
         if (connection == null) {
             new PgConnection(openStream(address), dataConverter)
                     .connect(username, password, database, onConnection, onError);
-        } else {
+            return;
+        }
+
+        try {
             onConnection.accept(connection);
+        } catch (Throwable t) {
+            release(connection);
+            onError.accept(t);
         }
     }
 

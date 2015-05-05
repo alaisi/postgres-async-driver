@@ -5,7 +5,9 @@ import org.junit.*;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -166,4 +168,13 @@ public class ArrayConversionsTest {
         PgRow row = (PgRow)dbr.query("SELECT * FROM CA_TEST").row(0);
         assertArrayEquals(new Integer[]{1, 2, 3}, (Object[])row.get("INTA"));
     }
+
+    @Test
+    public void shouldRoundTripTimestamp() {
+        List<Timestamp[]> params = new ArrayList<>(1);
+        params.add(new Timestamp[]{ new Timestamp(12345679), new Timestamp(12345678) });
+        dbr.query("INSERT INTO CA_TEST (TIMESTAMPA) VALUES ($1)", params);
+        Row row = dbr.query("SELECT TIMESTAMPA FROM CA_TEST WHERE TIMESTAMPA = $1", params).row(0);
+        assertArrayEquals(params.get(0), row.getArray(0, Timestamp[].class));
+}
 }
