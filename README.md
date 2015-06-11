@@ -10,7 +10,7 @@ Postgres-async-driver is available on [Maven Central](http://search.maven.org/#s
 <dependency>
     <groupId>com.github.alaisi.pgasync</groupId>
     <artifactId>postgres-async-driver</artifactId>
-    <version>0.4</version>
+    <version>0.6</version>
 </dependency>
 ```
 
@@ -46,7 +46,7 @@ Each connection *pool* will start only one IO thread used in communicating with 
 
 ### Prepared statements
 
-Prepared statements use native PostgreSQL syntax `$index`. Supported parameter types are all primitive types, `String`, `BigDecimal`, `BigInteger`, temporal types in `java.sql` package and `byte[]`.
+Prepared statements use native PostgreSQL syntax `$index`. Supported parameter types are all primitive types, `String`, `BigDecimal`, `BigInteger`, `UUID`, temporal types in `java.sql` package and `byte[]`.
 
 ```java
 db.query("insert into message(id, body) values($1, $2)", Arrays.asList(123, "hello"),
