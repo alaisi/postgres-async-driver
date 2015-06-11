@@ -24,8 +24,10 @@ import java.sql.Time;
 import java.sql.Timestamp;
 import java.util.Calendar;
 import java.util.TimeZone;
+import java.util.UUID;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
 import static org.junit.Assert.*;
 
 /**
@@ -171,7 +173,7 @@ public class TypeConverterTest {
 
     @Test
     public void shouldConvertByteAToBytes() {
-        assertArrayEquals(new byte[] { 0x41, 0x41 }, dbr.query("select '\\x4141'::BYTEA").row(0).getBytes(0));
+        assertArrayEquals(new byte[]{0x41, 0x41}, dbr.query("select '\\x4141'::BYTEA").row(0).getBytes(0));
     }
 
     @Test
@@ -186,6 +188,13 @@ public class TypeConverterTest {
         assertFalse(dbr.query("select $1::BOOL as b", asList(false)).row(0).getBoolean(0));
         assertNull(dbr.query("select $1::BOOL as b", asList(new Object[]{null})).row(0).getBoolean("b"));
         assertArrayEquals(new Boolean[]{ true, false}, dbr.query("select '{true,false}'::BOOL[]").row(0).getArray(0, Boolean[].class));
+    }
+
+    @Test
+    public void shouldConvertUUID() {
+        UUID uuid = UUID.randomUUID();
+        PgRow row = (PgRow) dbr.query("select $1::UUID as uuid", singletonList(uuid)).row(0);
+        assertEquals(uuid, row.get("uuid"));
     }
 
     static long millis(int year, int month, int day, int hour, int minute, int second, int millisecond) {

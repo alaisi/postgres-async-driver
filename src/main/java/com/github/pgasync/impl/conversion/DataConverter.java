@@ -178,6 +178,7 @@ public class DataConverter {
             case TIME: return toTime(oid, value);
             case TIMESTAMP: // fallthrough
             case TIMESTAMPTZ: return toTimestamp(oid, value);
+            case UUID: return UUID.fromString(toString(oid, value));
 
             case INT2_ARRAY:
             case INT4_ARRAY:

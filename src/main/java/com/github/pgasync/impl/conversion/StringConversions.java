@@ -19,6 +19,7 @@ enum StringConversions {
             case TEXT: // fallthrough
             case CHAR: // fallthrough
             case BPCHAR: // fallthrough
+            case UUID: // fallthrough
             case VARCHAR:
                 return new String(value, UTF_8);
             default:
