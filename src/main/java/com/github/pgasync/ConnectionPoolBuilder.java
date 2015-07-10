@@ -14,6 +14,7 @@
 
 package com.github.pgasync;
 
+import com.github.pgasync.impl.ConnectionValidator;
 import com.github.pgasync.impl.conversion.DataConverter;
 import com.github.pgasync.impl.netty.NettyPgConnectionPool;
 
@@ -82,6 +83,11 @@ public class ConnectionPoolBuilder {
         return this;
     }
 
+    public ConnectionPoolBuilder validationQuery(String validationQuery) {
+        properties.validationQuery = validationQuery;
+        return this;
+    }
+
     /**
      * Configuration for a pool.
      */
@@ -96,6 +102,7 @@ public class ConnectionPoolBuilder {
         DataConverter dataConverter = null;
         List<Converter<?>> converters = new ArrayList<>();
         boolean useSsl;
+        String validationQuery = "SELECT 1";
 
         public String getHostname() {
             return hostname;
@@ -120,6 +127,9 @@ public class ConnectionPoolBuilder {
         }
         public DataConverter getDataConverter() {
             return dataConverter != null ? dataConverter : new DataConverter(converters);
+        }
+        public ConnectionValidator getValidator() {
+            return new ConnectionValidator(validationQuery);
         }
     }
 }

@@ -51,6 +51,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
     final String password;
     final String database;
     final DataConverter dataConverter;
+    final ConnectionValidator validator;
 
     final int poolSize;
     int currentSize;
@@ -63,6 +64,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
         this.database = properties.getDatabase();
         this.poolSize = properties.getPoolSize();
         this.dataConverter = properties.getDataConverter();
+        this.validator = properties.getValidator();
     }
 
     @Override
@@ -115,6 +117,10 @@ public abstract class PgConnectionPool implements ConnectionPool {
 
     @Override
     public void getConnection(final Consumer<Connection> onConnection, final Consumer<Throwable> onError) {
+        getConnection(onConnection, onError, 0);
+    }
+
+    void getConnection(final Consumer<Connection> onConnection, final Consumer<Throwable> onError, final int attempt) {
         if(closed) {
             onError.accept(new SqlException("Connection pool is closed"));
             return;
@@ -133,18 +139,14 @@ public abstract class PgConnectionPool implements ConnectionPool {
             }
         }
 
-        if (connection == null) {
-            new PgConnection(openStream(address), dataConverter)
-                    .connect(username, password, database, onConnection, onError);
+        if (connection != null) {
+            validateAndApply(connection, onConnection, onError, attempt);
             return;
         }
 
-        try {
-            onConnection.accept(connection);
-        } catch (Throwable t) {
-            release(connection);
-            onError.accept(t);
-        }
+        new PgConnection(openStream(address), dataConverter)
+                .connect(username, password, database, onConnection, onError);
+
     }
 
     @Override
@@ -171,7 +173,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
             if(failed) {
                 getConnection(next.connectionHandler, next.errorHandler);
             } else {
-                next.connectionHandler.accept(connection);
+                validateAndApply(connection, next.connectionHandler, next.errorHandler, 0);
             }
         }
     }
@@ -183,6 +185,32 @@ public abstract class PgConnectionPool implements ConnectionPool {
      * @return Stream with no pending messages
      */
     protected abstract PgProtocolStream openStream(InetSocketAddress address);
+
+    void validateAndApply(Connection connection, Consumer<Connection> onConnection, Consumer<Throwable> onError, int attempt) {
+
+        Runnable onValid = () -> {
+            try {
+                onConnection.accept(connection);
+            } catch (Throwable t) {
+                release(connection);
+                onError.accept(t);
+            }
+        };
+
+        Consumer<Throwable> onValidationFailed = err -> {
+            if(attempt > poolSize) {
+                onError.accept(err);
+                return;
+            }
+            try {
+                connection.close();
+            } catch (Throwable t) { /* ignored */ }
+            release(connection);
+            getConnection(onConnection, onError, attempt + 1);
+        };
+
+        validator.validate(connection, onValid, onValidationFailed);
+    }
 
     /**
      * Transaction that rollbacks the tx on backend error and chains releasing the connection after COMMIT/ROLLBACK.
