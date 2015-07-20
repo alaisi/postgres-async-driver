@@ -101,6 +101,6 @@ Db db = return new ConnectionPoolBuilder()
 * [postgres.async for Clojure](https://github.com/alaisi/postgres.async)
 
 ## References
-* [Scala postgresql-async](https://raw.github.com/mauricio/postgresql-async)
+* [Scala postgresql-async](https://github.com/mauricio/postgresql-async)
 * [PostgreSQL JDBC Driver](http://jdbc.postgresql.org/about/about.html)
 
