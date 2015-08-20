@@ -176,5 +176,11 @@ public class ArrayConversionsTest {
         dbr.query("INSERT INTO CA_TEST (TIMESTAMPA) VALUES ($1)", params);
         Row row = dbr.query("SELECT TIMESTAMPA FROM CA_TEST WHERE TIMESTAMPA = $1", params).row(0);
         assertArrayEquals(params.get(0), row.getArray(0, Timestamp[].class));
-}
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldNotAllowPrimitiveArrays() {
+        dbr.query("INSERT INTO CA_TEST (LONGA) VALUES ('{-1, null, 1, 2, 3}')");
+        getRow().getArray("LONGA", long[].class);
+    }
 }

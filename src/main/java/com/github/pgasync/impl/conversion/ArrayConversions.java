@@ -55,6 +55,11 @@ enum ArrayConversions  {
     }
 
     public static <T> T toArray(Class<T> type, Oid oid, byte[] value, BiFunction<Oid,byte[],Object> parse) {
+        Class elementType = getElementType(type);
+        if(elementType.isPrimitive()) {
+            throw new IllegalArgumentException("Primitive arrays are not supported due to possible NULL values");
+        }
+
         char[] text = new String(value, UTF_8).toCharArray();
         List<List<Object>> holder = new ArrayList<>(1);
 
@@ -62,7 +67,7 @@ enum ArrayConversions  {
             throw new IllegalStateException("Failed to read array");
         }
 
-        return (T) toNestedArrays(holder.get(0), getElementType(type), getElementOid(oid), parse);
+        return (T) toNestedArrays(holder.get(0), elementType, getElementOid(oid), parse);
     }
 
     static int skipBounds(final char[] text, final int start) {
