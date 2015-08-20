@@ -15,7 +15,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 enum ArrayConversions  {
     ;
 
-    public static byte[] fromArray(final Object[] elements, final Function<Object,byte[]> printFn) {
+    public static byte[] fromArray(final Object elements, final Function<Object,byte[]> printFn) {
         return appendArray(new StringBuilder(), elements, printFn).toString().getBytes(UTF_8);
     }
 

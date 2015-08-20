@@ -6,9 +6,9 @@ import org.junit.*;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
+import static java.util.Arrays.asList;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
@@ -132,34 +132,34 @@ public class ArrayConversionsTest {
             new Integer[]{1, 2, 3},
             new Integer[]{4, 5, 6}
         };
-        dbr.query("INSERT INTO CA_TEST (INTA) VALUES ($1)", Arrays.asList(new Object[]{a}));
+        dbr.query("INSERT INTO CA_TEST (INTA) VALUES ($1)", asList(new Object[]{a}));
         assertArrayEquals(
             a,
             dbr.query(
                 "SELECT INTA FROM CA_TEST WHERE INTA = $1",
-                Arrays.asList(new Object[]{a})).row(0).getArray("INTA", Integer[].class));
+                asList(new Object[]{a})).row(0).getArray("INTA", Integer[].class));
     }
 
     @Test
     public void roundtripUTF8() {
         String[] a = new String[]{"U&\"d\\0061t\\+000061\"", "d\u0061t\u0061\u2301" };
-        dbr.query("INSERT INTO CA_TEST (TEXTA) VALUES ($1)", Arrays.asList(new Object[]{a}));
+        dbr.query("INSERT INTO CA_TEST (TEXTA) VALUES ($1)", asList(new Object[]{a}));
         assertArrayEquals(
             a,
             dbr.query(
                 "SELECT TEXTA FROM CA_TEST WHERE TEXTA = $1",
-                Arrays.asList(new Object[]{a})).row(0).getArray("TEXTA", String[].class));
+                asList(new Object[]{a})).row(0).getArray("TEXTA", String[].class));
     }
 
     @Test
     public void insertUnboxed() {
         short[][] a = new short[][]{new short[]{0, 1}, new short[]{1, 0}};
-        dbr.query("INSERT INTO CA_TEST (INTA) VALUES ($1)", Arrays.asList(new Object[]{a}));
+        dbr.query("INSERT INTO CA_TEST (INTA) VALUES ($1)", asList(new Object[]{a}));
         assertEquals(
             1,
             dbr.query(
                 "SELECT INTA FROM CA_TEST WHERE INTA = $1",
-                Arrays.asList(new Object[]{a})).size());
+                asList(new Object[]{a})).size());
     }
 
     @Test
@@ -182,5 +182,15 @@ public class ArrayConversionsTest {
     public void shouldNotAllowPrimitiveArrays() {
         dbr.query("INSERT INTO CA_TEST (LONGA) VALUES ('{-1, null, 1, 2, 3}')");
         getRow().getArray("LONGA", long[].class);
+    }
+
+    @Test
+    public void shouldAllowPrimitiveArrayParameters() {
+        long[] input = {1L, 2L, 3L};
+        dbr.query("INSERT INTO CA_TEST (LONGA) VALUES ($1)", asList(input));
+        Long[] output = getRow().getArray("LONGA", Long[].class);
+        for(int i = 0; i < input.length; i++) {
+            assertEquals(input[i], output[i].longValue());
+        }
     }
 }

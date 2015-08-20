@@ -132,7 +132,7 @@ public class DataConverter {
             return BooleanConversions.fromBoolean((boolean) o);
         }
         if (o.getClass().isArray()) {
-            return ArrayConversions.fromArray((Object[]) o, this::fromObject);
+            return ArrayConversions.fromArray(o, this::fromObject);
         }
         if(o instanceof String || o instanceof Number || o instanceof Character || o instanceof UUID) {
             return o.toString().getBytes(UTF_8);
