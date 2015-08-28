@@ -90,11 +90,11 @@ public class PgConnection implements Connection {
         }
         stream.send(
                 asList(new Parse(sql),
-                    new Bind(dataConverter.fromParameters(params)),
-                    ExtendedQuery.DESCRIBE,
-                    ExtendedQuery.EXECUTE,
-                    ExtendedQuery.CLOSE,
-                    ExtendedQuery.SYNC),
+                        new Bind(dataConverter.fromParameters(params)),
+                        ExtendedQuery.DESCRIBE,
+                        ExtendedQuery.EXECUTE,
+                        ExtendedQuery.CLOSE,
+                        ExtendedQuery.SYNC),
                 messages -> {
                     if (!fireErrorHandler(messages.stream(), onError)) {
                         applyConsumer(onQuery, reduce(new QueryResponseReader(), messages.stream()).get(), onError);
@@ -105,6 +105,28 @@ public class PgConnection implements Connection {
     @Override
     public void begin(Consumer<Transaction> handler, Consumer<Throwable> onError) {
         query("BEGIN", beginRs -> applyConsumer(handler, new ConnectionTx(), onError), onError);
+    }
+
+    @Override
+    public void listen(String channel, Consumer<String> onNotification, Consumer<String> onListenStarted, Consumer<Throwable> onError) {
+        stream.send(new Query("LISTEN " + channel),
+                messages -> {
+                    if (!fireErrorHandler(messages.stream(), onError)) {
+                        String unlistenToken = stream.registerNotificationHandler(channel, onNotification);
+                        applyConsumer(onListenStarted, unlistenToken, onError);
+                    }
+                });
+    }
+
+    @Override
+    public void unlisten(String channel, String unlistenToken, Runnable onListenStopped, Consumer<Throwable> onError) {
+        stream.send(new Query("UNLISTEN " + channel),
+                messages -> {
+                    if (!fireErrorHandler(messages.stream(), onError)) {
+                        stream.unRegisterNotificationHandler(channel, unlistenToken);
+                        applyRunnable(onListenStopped, onError);
+                    }
+                });
     }
 
     @Override

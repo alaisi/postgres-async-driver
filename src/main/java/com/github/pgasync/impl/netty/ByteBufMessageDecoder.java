@@ -39,7 +39,8 @@ class ByteBufMessageDecoder extends ByteToMessageDecoder {
                 new ReadyForQueryDecoder(), 
                 new RowDescriptionDecoder(), 
                 new CommandCompleteDecoder(),
-                new DataRowDecoder() }) {
+                new DataRowDecoder(),
+                new NotificationResponseDecoder() }) {
             DECODERS.put(decoder.getMessageId(), decoder);
         }
     }

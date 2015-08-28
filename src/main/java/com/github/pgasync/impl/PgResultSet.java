@@ -16,7 +16,6 @@ package com.github.pgasync.impl;
 
 import com.github.pgasync.ResultSet;
 import com.github.pgasync.Row;
-import com.github.pgasync.impl.message.RowDescription.ColumnDescription;
 
 import java.util.*;
 

@@ -15,7 +15,6 @@
 package com.github.pgasync.impl.io;
 
 import com.github.pgasync.impl.message.ErrorResponse;
-import com.github.pgasync.impl.message.ErrorResponse.Level;
 
 import java.nio.ByteBuffer;
 
@@ -43,7 +42,7 @@ public class ErrorResponseDecoder implements Decoder<ErrorResponse> {
 
     @Override
     public byte getMessageId() {
-        return (byte) 'E';
+        return 'E';
     }
 
     @Override

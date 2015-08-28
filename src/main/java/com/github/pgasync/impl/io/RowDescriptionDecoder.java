@@ -56,7 +56,7 @@ public class RowDescriptionDecoder implements Decoder<RowDescription> {
 
     @Override
     public byte getMessageId() {
-        return (byte) 'T';
+        return 'T';
     }
 
     @Override

@@ -37,4 +37,8 @@ public interface PgProtocolStream {
 
     void close();
 
+    String registerNotificationHandler(String channel, Consumer<String> onNotification);
+
+    void unRegisterNotificationHandler(String channel, String unlistenToken);
+
 }

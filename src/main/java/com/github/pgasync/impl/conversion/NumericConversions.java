@@ -2,7 +2,6 @@ package com.github.pgasync.impl.conversion;
 
 import com.github.pgasync.SqlException;
 import com.github.pgasync.impl.Oid;
-import com.github.pgasync.impl.io.IO;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;

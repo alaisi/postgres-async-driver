@@ -19,7 +19,11 @@ import com.github.pgasync.ConnectionPoolBuilder.PoolProperties;
 import com.github.pgasync.impl.conversion.DataConverter;
 
 import java.net.InetSocketAddress;
-import java.util.*;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 /**
@@ -45,6 +49,8 @@ public abstract class PgConnectionPool implements ConnectionPool {
     final Queue<QueuedCallback> waiters = new LinkedList<>();
     final Queue<Connection> connections = new LinkedList<>();
     final Object lock = new Object[0];
+
+    final Map<String,Connection> listeners = new ConcurrentHashMap<>();
 
     final InetSocketAddress address;
     final String username;
@@ -98,8 +104,27 @@ public abstract class PgConnectionPool implements ConnectionPool {
                                     release(connection);
                                     onError.accept(exception);
                                 }),
-                    onError);
+                onError);
 
+    }
+
+    @Override
+    public void listen(String channel, Consumer<String> onNotification, Consumer<String> onListenStarted, Consumer<Throwable> onError) {
+        getConnection(connection -> connection.listen(channel, onNotification,
+                token -> {
+                    listeners.put(token, connection);
+                    onListenStarted.accept(token);
+                }, onError), onError);
+    }
+
+    @Override
+    public void unlisten(String channel, String unlistenToken, Runnable onListenStopped, Consumer<Throwable> onError) {
+        Connection connection = listeners.get(unlistenToken);
+        if(connection == null) {
+            onError.accept(new IllegalStateException("Connection token does not map to a connection"));
+            return;
+        }
+        connection.unlisten(channel, unlistenToken, onListenStopped, onError);
     }
 
     @Override
@@ -108,6 +133,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
         synchronized (lock) {
             for(Connection conn = connections.poll(); conn != null; conn = connections.poll()) {
                 conn.close();
+                // TODO: remove conn from listeners
             }
             for(QueuedCallback waiter = waiters.poll(); waiter != null; waiter = waiters.poll()) {
                 waiter.errorHandler.accept(new SqlException("Connection pool is closed"));

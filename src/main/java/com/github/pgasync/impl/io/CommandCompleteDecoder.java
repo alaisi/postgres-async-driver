@@ -46,7 +46,7 @@ public class CommandCompleteDecoder implements Decoder<CommandComplete> {
 
     @Override
     public byte getMessageId() {
-        return (byte) 'C';
+        return 'C';
     }
 
     @Override

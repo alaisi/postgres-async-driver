@@ -42,7 +42,7 @@ public class DataRowDecoder implements Decoder<DataRow> {
 
     @Override
     public byte getMessageId() {
-        return (byte) 'D';
+        return 'D';
     }
 
     @Override

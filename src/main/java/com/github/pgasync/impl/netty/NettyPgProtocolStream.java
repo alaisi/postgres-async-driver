@@ -30,9 +30,13 @@ import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.function.Consumer;
 
-import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
 
 /**
  * Netty connection to PostgreSQL backend.
@@ -44,6 +48,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     final EventLoopGroup group;
     final SocketAddress address;
     final boolean useSsl;
+    final ConcurrentMap<String,Map<String,Consumer<String>>> listeners = new ConcurrentHashMap<>();
 
     ChannelHandlerContext ctx;
     volatile Consumer<Message> onReceive;
@@ -63,7 +68,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
                 .connect(address)
                 .addListener(future -> {
                     if (!future.isSuccess()) {
-                        replyTo.accept(asList(new ChannelError(future.cause())));
+                        replyTo.accept(singletonList(new ChannelError(future.cause())));
                     }
                 });
     }
@@ -93,6 +98,25 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     }
 
     @Override
+    public String registerNotificationHandler(String channel, Consumer<String> onNotification) {
+        Map<String,Consumer<String>> consumers = new ConcurrentHashMap<>();
+        Map<String,Consumer<String>> old = listeners.putIfAbsent(channel, consumers);
+        consumers = old != null ? old : consumers;
+
+        String token = UUID.randomUUID().toString();
+        consumers.put(token, onNotification);
+        return token;
+    }
+
+    @Override
+    public void unRegisterNotificationHandler(String channel, String unlistenToken) {
+        Map<String,Consumer<String>> consumers = listeners.get(channel);
+        if(consumers == null || consumers.remove(unlistenToken) == null) {
+            throw new IllegalStateException("No consumers on channel " + channel + " with token " + unlistenToken);
+        }
+    }
+
+    @Override
     public void close() {
         ctx.close();
     }
@@ -108,6 +132,13 @@ public class NettyPgProtocolStream implements PgProtocolStream {
                 consumer.accept(messages);
             }
         };
+    }
+
+    void publishNotification(NotificationResponse notification) {
+        Map<String,Consumer<String>> consumers = listeners.get(notification.getChannel());
+        if(consumers != null) {
+            consumers.values().forEach(c -> c.accept(notification.getPayload()));
+        }
     }
 
     ChannelInboundHandlerAdapter newStartupHandler(StartupMessage startup, Consumer<List<Message>> replyTo) {
@@ -175,6 +206,10 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         return new ChannelInboundHandlerAdapter() {
             @Override
             public void channelRead(ChannelHandlerContext context, Object msg) throws Exception {
+                if(msg instanceof NotificationResponse) {
+                    publishNotification((NotificationResponse) msg);
+                    return;
+                }
                 onReceive.accept((Message) msg);
             }
             @Override

@@ -50,7 +50,7 @@ public class AuthenticationDecoder implements Decoder<Authentication> {
 
     @Override
     public byte getMessageId() {
-        return (byte) 'R';
+        return 'R';
     }
 
     @Override

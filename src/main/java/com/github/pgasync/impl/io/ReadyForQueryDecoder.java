@@ -43,7 +43,7 @@ public class ReadyForQueryDecoder implements Decoder<ReadyForQuery> {
 
     @Override
     public byte getMessageId() {
-        return (byte) 'Z';
+        return 'Z';
     }
 
 }

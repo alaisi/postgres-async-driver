@@ -5,6 +5,6 @@ package com.github.pgasync;
  *
  * @author Antti Laisi
  */
-public interface Db extends QueryExecutor, TransactionExecutor, AutoCloseable {
+public interface Db extends QueryExecutor, TransactionExecutor, Listenable, AutoCloseable {
 
 }
