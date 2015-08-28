@@ -83,6 +83,11 @@ public class ConnectionPoolBuilder {
         return this;
     }
 
+    public ConnectionPoolBuilder pipeline(boolean pipeline) {
+        properties.usePipelining = pipeline;
+        return this;
+    }
+
     public ConnectionPoolBuilder validationQuery(String validationQuery) {
         properties.validationQuery = validationQuery;
         return this;
@@ -102,6 +107,7 @@ public class ConnectionPoolBuilder {
         DataConverter dataConverter = null;
         List<Converter<?>> converters = new ArrayList<>();
         boolean useSsl;
+        boolean usePipelining;
         String validationQuery = "SELECT 1";
 
         public String getHostname() {
@@ -124,6 +130,9 @@ public class ConnectionPoolBuilder {
         }
         public boolean getUseSsl() {
             return useSsl;
+        }
+        public boolean getUsePipelining() {
+            return usePipelining;
         }
         public DataConverter getDataConverter() {
             return dataConverter != null ? dataConverter : new DataConverter(converters);
