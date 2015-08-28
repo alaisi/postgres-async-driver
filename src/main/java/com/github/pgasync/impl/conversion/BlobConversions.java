@@ -17,7 +17,7 @@ enum BlobConversions {
         switch (oid) {
             case UNSPECIFIED: // fallthrough
             case BYTEA:
-                return parseHexBinary(new String(value, UTF_8).substring(2));
+                return parseHexBinary(new String(value, 2, value.length - 2, UTF_8));
             default:
                 throw new SqlException("Unsupported conversion " + oid.name() + " -> byte[]");
         }
