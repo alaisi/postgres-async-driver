@@ -34,6 +34,9 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.Queue;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.LinkedBlockingDeque;
 import java.util.function.Consumer;
 
 import static java.util.Collections.singletonList;
@@ -51,12 +54,13 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     final ConcurrentMap<String,Map<String,Consumer<String>>> listeners = new ConcurrentHashMap<>();
 
     ChannelHandlerContext ctx;
-    volatile Consumer<Message> onReceive;
+    final Queue<Consumer<Message>> onReceivers;
 
-    public NettyPgProtocolStream(EventLoopGroup group, SocketAddress address, boolean useSsl) {
+    public NettyPgProtocolStream(EventLoopGroup group, SocketAddress address, boolean useSsl, boolean pipeline) {
         this.group = group;
         this.address = address;
         this.useSsl = useSsl; // TODO: refactor into SSLConfig with trust parameters
+        this.onReceivers = pipeline ? new LinkedBlockingDeque<>() : new ArrayBlockingQueue<>(1);
     }
 
     @Override
@@ -78,8 +82,14 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         if(!isConnected()) {
             throw new IllegalStateException("Channel is closed");
         }
-        onReceive = newReplyHandler(replyTo);
+        addNewReplyHandler(replyTo);
         ctx.writeAndFlush(message);
+    }
+
+    private void addNewReplyHandler(Consumer<List<Message>> replyTo) {
+        if (!onReceivers.offer(newReplyHandler(replyTo))) {
+            replyTo.accept(singletonList(new ChannelError("Pipelining not enabled")));
+        }
     }
 
     @Override
@@ -87,7 +97,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         if(!isConnected()) {
             throw new IllegalStateException("Channel is closed");
         }
-        onReceive = newReplyHandler(replyTo);
+        addNewReplyHandler(replyTo);
         messages.forEach(ctx::write);
         ctx.flush();
     }
@@ -128,7 +138,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
             if(msg instanceof ReadyForQuery
                     || msg instanceof ChannelError
                     || (msg instanceof Authentication && !((Authentication) msg).isAuthenticationOk())) {
-                onReceive = null;
+                onReceivers.remove();
                 consumer.accept(messages);
             }
         };
@@ -159,7 +169,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
             }
             void startup(ChannelHandlerContext context) {
                 ctx = context;
-                onReceive = newReplyHandler(replyTo);
+                addNewReplyHandler(replyTo);
                 context.writeAndFlush(startup);
                 context.pipeline().remove(this);
             }
@@ -210,19 +220,15 @@ public class NettyPgProtocolStream implements PgProtocolStream {
                     publishNotification((NotificationResponse) msg);
                     return;
                 }
-                onReceive.accept((Message) msg);
+                onReceivers.peek().accept((Message) msg);
             }
             @Override
             public void channelInactive(ChannelHandlerContext context) throws Exception {
-                if(onReceive != null) {
-                    onReceive.accept(new ChannelError("Channel state changed to inactive"));
-                }
+                onReceivers.forEach(r -> r.accept(new ChannelError("Channel state changed to inactive")));
             }
             @Override
             public void exceptionCaught(ChannelHandlerContext context, Throwable cause) throws Exception {
-                if(onReceive != null) {
-                    onReceive.accept(new ChannelError(cause));
-                }
+                onReceivers.forEach(r -> r.accept(new ChannelError(cause)));
             }
         };
     }

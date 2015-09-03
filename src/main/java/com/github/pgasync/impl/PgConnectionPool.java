@@ -60,6 +60,8 @@ public abstract class PgConnectionPool implements ConnectionPool {
     final ConnectionValidator validator;
 
     final int poolSize;
+    protected final boolean pipeline;
+
     int currentSize;
     volatile boolean closed;
 
@@ -71,6 +73,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
         this.poolSize = properties.getPoolSize();
         this.dataConverter = properties.getDataConverter();
         this.validator = properties.getValidator();
+        this.pipeline = properties.getUsePipelining();
     }
 
     @Override
@@ -82,15 +85,18 @@ public abstract class PgConnectionPool implements ConnectionPool {
     @SuppressWarnings("rawtypes")
     public void query(String sql, List params, Consumer<ResultSet> onResult, Consumer<Throwable> onError) {
         getConnection(connection ->
+        {
                         connection.query(sql, params,
                                 result -> {
-                                    release(connection);
+                                    releaseIfNotPipelining(connection);
                                     onResult.accept(result);
                                 },
                                 exception -> {
-                                    release(connection);
+                                    releaseIfNotPipelining(connection);
                                     onError.accept(exception);
-                                }),
+                                });
+                        releaseIfPipelining(connection);
+        },
                 onError);
     }
 
@@ -173,6 +179,18 @@ public abstract class PgConnectionPool implements ConnectionPool {
         new PgConnection(openStream(address), dataConverter)
                 .connect(username, password, database, onConnection, onError);
 
+    }
+
+    private void releaseIfPipelining(Connection connection) {
+        if (pipeline) {
+            release(connection);
+        }
+    }
+
+    private void releaseIfNotPipelining(Connection connection) {
+        if (!pipeline) {
+            release(connection);
+        }
     }
 
     @Override
