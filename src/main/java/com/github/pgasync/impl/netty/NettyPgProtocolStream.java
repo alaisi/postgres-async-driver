@@ -26,17 +26,12 @@ import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
+import io.netty.util.concurrent.*;
+import io.netty.util.concurrent.Future;
 
 import java.net.SocketAddress;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.Queue;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.LinkedBlockingDeque;
+import java.util.*;
+import java.util.concurrent.*;
 import java.util.function.Consumer;
 
 import static java.util.Collections.singletonList;
@@ -70,11 +65,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
                 .channel(NioSocketChannel.class)
                 .handler(newProtocolInitializer(newStartupHandler(startup, replyTo)))
                 .connect(address)
-                .addListener(future -> {
-                    if (!future.isSuccess()) {
-                        replyTo.accept(singletonList(new ChannelError(future.cause())));
-                    }
-                });
+                .addListener(errorListener(replyTo));
     }
 
     @Override
@@ -83,7 +74,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
             throw new IllegalStateException("Channel is closed");
         }
         addNewReplyHandler(replyTo);
-        ctx.writeAndFlush(message);
+        ctx.writeAndFlush(message).addListener(errorListener(replyTo));
     }
 
     private void addNewReplyHandler(Consumer<List<Message>> replyTo) {
@@ -98,7 +89,8 @@ public class NettyPgProtocolStream implements PgProtocolStream {
             throw new IllegalStateException("Channel is closed");
         }
         addNewReplyHandler(replyTo);
-        messages.forEach(ctx::write);
+        GenericFutureListener<Future<Object>> errorListener = errorListener(replyTo);
+        messages.forEach(msg -> ctx.write(msg).addListener(errorListener));
         ctx.flush();
     }
 
@@ -151,6 +143,14 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         }
     }
 
+    <T> GenericFutureListener<io.netty.util.concurrent.Future<T>> errorListener(Consumer<List<Message>> replyTo) {
+        return future -> {
+            if(!future.isSuccess()) {
+                replyTo.accept(singletonList(new ChannelError(future.cause())));
+            }
+        };
+    }
+
     ChannelInboundHandlerAdapter newStartupHandler(StartupMessage startup, Consumer<List<Message>> replyTo) {
         return new ChannelInboundHandlerAdapter() {
             @Override
@@ -162,7 +162,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
             @Override
             public void channelActive(ChannelHandlerContext context) {
                 if(useSsl) {
-                    context.writeAndFlush(SSLHandshake.INSTANCE);
+                    context.writeAndFlush(SSLHandshake.INSTANCE).addListener(errorListener(replyTo));
                 } else {
                     startup(context);
                 }
@@ -170,7 +170,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
             void startup(ChannelHandlerContext context) {
                 ctx = context;
                 addNewReplyHandler(replyTo);
-                context.writeAndFlush(startup);
+                context.writeAndFlush(startup).addListener(errorListener(replyTo));
                 context.pipeline().remove(this);
             }
         };
