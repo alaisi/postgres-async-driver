@@ -14,22 +14,24 @@
 
 package com.github.pgasync.impl;
 
-import com.github.pgasync.ConnectionPool;
+import com.github.pgasync.ResultSet;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
-import java.util.LinkedList;
-import java.util.Queue;
-import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Consumer;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.function.IntFunction;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
-import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
+import static java.util.stream.Collectors.toList;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 /**
  * Tests for connection pool concurrency.
@@ -38,54 +40,36 @@ import static org.junit.Assert.assertTrue;
  */
 public class ConnectionPoolingTest {
 
-    final Consumer<Throwable> err = t -> { throw new AssertionError("failed", t); };
-    final ConnectionPool pool = DatabaseRule.createPool(10);
+    @Rule
+    public final DatabaseRule dbr = new DatabaseRule();
 
     @Before
     public void create() {
-        ResultHolder result = new ResultHolder();
-        pool.query("DROP TABLE IF EXISTS CP_TEST; CREATE TABLE CP_TEST (ID VARCHAR(255) PRIMARY KEY)",
-                result, result.errorHandler());
-        result.result();
+        dbr.query("DROP TABLE IF EXISTS CP_TEST; CREATE TABLE CP_TEST (ID VARCHAR(255) PRIMARY KEY)");
     }
 
     @After
     public void drop() {
-        ResultHolder result = new ResultHolder();
-        pool.query("DROP TABLE CP_TEST", result, result.errorHandler());
-        result.result();
-        pool.close();
+        dbr.query("DROP TABLE CP_TEST");
     }
 
     @Test
     public void shouldRunAllQueuedCallbacks() throws Exception {
-        
-        final AtomicInteger count = new AtomicInteger(); 
-        final CountDownLatch latch = new CountDownLatch(1000);
+        final int count = 1000;
+        IntFunction<Callable<ResultSet>> insert = value -> () -> dbr.query("INSERT INTO CP_TEST VALUES($1)", singletonList(value));
+        List<Callable<ResultSet>> tasks = IntStream.range(0, count).mapToObj(insert).collect(toList());
 
-        for(int i = 0; i < 20; i++) {
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    final Queue<Runnable> queries = new LinkedList<>();
-                    for(int j = 0; j < 50; j++) {
-                        queries.add(() -> pool.query("INSERT INTO CP_TEST VALUES($1)", asList(UUID.randomUUID()), result -> {
-                            latch.countDown();
-                            count.incrementAndGet();
-                            if(!queries.isEmpty()) {
-                                queries.poll().run();
-                            }
-                        }, err));
-                    }
-                    queries.poll().run();
-                }
-            }).start();
+        ExecutorService executor = Executors.newFixedThreadPool(20);
+        executor.invokeAll(tasks).stream().map(this::await);
+
+        assertEquals(count, dbr.query("SELECT COUNT(*) FROM CP_TEST").row(0).getLong(0).longValue());
+    }
+
+    <T> T await(Future<T> future) {
+        try {
+            return future.get();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
-        assertTrue(latch.await(5L, TimeUnit.SECONDS));
-        assertEquals(1000, count.get());
-
-        ResultHolder result = new ResultHolder();
-        pool.query("SELECT COUNT(*) FROM CP_TEST", result, result.errorHandler());
-        assertEquals(count.get(), result.result().row(0).getLong(0).longValue());
     }
 }
