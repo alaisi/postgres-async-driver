@@ -27,8 +27,10 @@ import java.util.function.Consumer;
  */
 public interface PgProtocolStream {
 
+    EventEmitter<Message> connect(StartupMessage startup);
     void connect(StartupMessage startup, Consumer<List<Message>> replyTo);
 
+    EventEmitter<Message> send(Message message);
     void send(Message message, Consumer<List<Message>> replyTo);
 
     void send(List<Message> message, Consumer<List<Message>> replyTo);

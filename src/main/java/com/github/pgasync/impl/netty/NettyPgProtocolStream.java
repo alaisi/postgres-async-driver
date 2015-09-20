@@ -15,6 +15,7 @@
 package com.github.pgasync.impl.netty;
 
 import com.github.pgasync.SqlException;
+import com.github.pgasync.impl.EventEmitter;
 import com.github.pgasync.impl.PgProtocolStream;
 import com.github.pgasync.impl.message.*;
 import io.netty.bootstrap.Bootstrap;
@@ -56,6 +57,20 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         this.address = address;
         this.useSsl = useSsl; // TODO: refactor into SSLConfig with trust parameters
         this.onReceivers = pipeline ? new LinkedBlockingDeque<>() : new ArrayBlockingQueue<>(1);
+    }
+
+    @Override
+    public EventEmitter<Message> connect(StartupMessage startup) {
+        return EventEmitter.create(emitter -> {
+
+        });
+    }
+
+    @Override
+    public EventEmitter<Message> send(Message message) {
+        return EventEmitter.create(emitter -> {
+
+        });
     }
 
     @Override

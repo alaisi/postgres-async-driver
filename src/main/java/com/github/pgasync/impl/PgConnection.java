@@ -15,13 +15,11 @@
 package com.github.pgasync.impl;
 
 import com.github.pgasync.*;
+import com.github.pgasync.impl.EventEmitter.Emitter;
 import com.github.pgasync.impl.conversion.DataConverter;
 import com.github.pgasync.impl.message.*;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -45,6 +43,41 @@ public class PgConnection implements Connection {
     public PgConnection(PgProtocolStream stream, DataConverter dataConverter) {
         this.stream = stream;
         this.dataConverter = dataConverter;
+    }
+
+    EventEmitter<Connection> connect(String username, String password, String database) {
+        return EventEmitter.create(emitter ->
+                stream.connect(new StartupMessage(username, database)).on(
+                        Authentication.class, auth  -> authenticate(username, password, auth, emitter),
+                        ReadyForQuery.class,  __    -> emitter.emit(Connection.class, this),
+                        Throwable.class,      emitter::error));
+    }
+
+    private void authenticate(String username, String password, Authentication authentication, Emitter<Connection> emitter) {
+        stream.send(new PasswordMessage(username, password, authentication.getMd5Salt())).on(
+                ReadyForQuery.class, __ -> emitter.emit(Connection.class, this),
+                Throwable.class,           emitter::error);
+    }
+
+    public EventEmitter<Row> query(String sql) {
+        return EventEmitter.create(emitter -> {
+
+            Map<String,PgColumn> columns = new HashMap<>();
+
+            stream.send(new Query(sql)).on(
+                    RowDescription.class, desc -> columns.putAll(getColumns(desc.getColumns())),
+                    DataRow.class,        data -> emitter.emit(Row.class, new PgRow(data, columns, dataConverter)),
+                    Throwable.class,              emitter::error
+            );
+        });
+    }
+
+    private Map<String,PgColumn> getColumns(ColumnDescription[] descriptions) {
+        Map<String,PgColumn> columns = new HashMap<>();
+        for (int i = 0; i < descriptions.length; i++) {
+            columns.put(descriptions[i].getName().toUpperCase(), new PgColumn(i, descriptions[i].getType()));
+        }
+        return columns;
     }
 
     void connect(String username, String password, String database,
