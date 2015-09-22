@@ -15,7 +15,6 @@
 package com.github.pgasync.impl.netty;
 
 import com.github.pgasync.SqlException;
-import com.github.pgasync.impl.EventEmitter;
 import com.github.pgasync.impl.PgProtocolStream;
 import com.github.pgasync.impl.message.*;
 import io.netty.bootstrap.Bootstrap;
@@ -27,15 +26,19 @@ import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
-import io.netty.util.concurrent.*;
 import io.netty.util.concurrent.Future;
+import io.netty.util.concurrent.GenericFutureListener;
+import rx.Observable;
+import rx.Subscriber;
 
+import java.io.IOException;
 import java.net.SocketAddress;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.LinkedBlockingDeque;
 import java.util.function.Consumer;
-
-import static java.util.Collections.singletonList;
 
 /**
  * Netty connection to PostgreSQL backend.
@@ -47,66 +50,51 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     final EventLoopGroup group;
     final SocketAddress address;
     final boolean useSsl;
+
+    final GenericFutureListener<Future<? super Object>> onError;
+    final Queue<Subscriber<? super Message>> subscribers;
     final ConcurrentMap<String,Map<String,Consumer<String>>> listeners = new ConcurrentHashMap<>();
 
     ChannelHandlerContext ctx;
-    final Queue<Consumer<Message>> onReceivers;
 
     public NettyPgProtocolStream(EventLoopGroup group, SocketAddress address, boolean useSsl, boolean pipeline) {
         this.group = group;
         this.address = address;
         this.useSsl = useSsl; // TODO: refactor into SSLConfig with trust parameters
-        this.onReceivers = pipeline ? new LinkedBlockingDeque<>() : new ArrayBlockingQueue<>(1);
+        this.subscribers = pipeline ? new LinkedBlockingDeque<>() : new ArrayBlockingQueue<>(1);
+        this.onError = future -> {
+            if(!future.isSuccess()) {
+                subscribers.peek().onError(future.cause());
+            }
+        };
     }
 
     @Override
-    public EventEmitter<Message> connect(StartupMessage startup) {
-        return EventEmitter.create(emitter -> {
+    public Observable<Message> connect(StartupMessage startup) {
+        return protocolObservable(subscriber -> {
 
+            pushSubscriber(subscriber);
+            new Bootstrap()
+                    .group(group)
+                    .channel(NioSocketChannel.class)
+                    .handler(newProtocolInitializer(newStartupHandler(startup)))
+                    .connect(address)
+                    .addListener(onError);
         });
     }
 
     @Override
-    public EventEmitter<Message> send(Message message) {
-        return EventEmitter.create(emitter -> {
+    public Observable<Message> send(Message... messages) {
+        return protocolObservable(subscriber -> {
 
+            if (!isConnected()) {
+                subscriber.onError(new IllegalStateException("Channel is closed"));
+                return;
+            }
+
+            pushSubscriber(subscriber);
+            write(messages);
         });
-    }
-
-    @Override
-    public void connect(StartupMessage startup, Consumer<List<Message>> replyTo) {
-        new Bootstrap()
-                .group(group)
-                .channel(NioSocketChannel.class)
-                .handler(newProtocolInitializer(newStartupHandler(startup, replyTo)))
-                .connect(address)
-                .addListener(errorListener(replyTo));
-    }
-
-    @Override
-    public void send(Message message, Consumer<List<Message>> replyTo) {
-        if(!isConnected()) {
-            throw new IllegalStateException("Channel is closed");
-        }
-        addNewReplyHandler(replyTo);
-        ctx.writeAndFlush(message).addListener(errorListener(replyTo));
-    }
-
-    private void addNewReplyHandler(Consumer<List<Message>> replyTo) {
-        if (!onReceivers.offer(newReplyHandler(replyTo))) {
-            replyTo.accept(singletonList(new ChannelError("Pipelining not enabled")));
-        }
-    }
-
-    @Override
-    public void send(List<Message> messages, Consumer<List<Message>> replyTo) {
-        if(!isConnected()) {
-            throw new IllegalStateException("Channel is closed");
-        }
-        addNewReplyHandler(replyTo);
-        GenericFutureListener<Future<Object>> errorListener = errorListener(replyTo);
-        messages.forEach(msg -> ctx.write(msg).addListener(errorListener));
-        ctx.flush();
     }
 
     @Override
@@ -138,55 +126,61 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         ctx.close();
     }
 
-    Consumer<Message> newReplyHandler(Consumer<List<Message>> consumer) {
-        List<Message> messages = new ArrayList<>();
-        return msg -> {
-            messages.add(msg);
-            if(msg instanceof ReadyForQuery
-                    || msg instanceof ChannelError
-                    || (msg instanceof Authentication && !((Authentication) msg).isAuthenticationOk())) {
-                onReceivers.remove();
-                consumer.accept(messages);
-            }
-        };
+    private void pushSubscriber(Subscriber<? super Message> subscriber) {
+        if(!subscribers.offer(subscriber)) {
+            throw new IllegalStateException("Pipelining not enabled");
+        }
     }
 
-    void publishNotification(NotificationResponse notification) {
+    private void write(Message... messages) {
+        for(Message message : messages) {
+            ctx.write(message).addListener(onError);
+        }
+        ctx.flush();
+    }
+
+    private void publishNotification(NotificationResponse notification) {
         Map<String,Consumer<String>> consumers = listeners.get(notification.getChannel());
         if(consumers != null) {
             consumers.values().forEach(c -> c.accept(notification.getPayload()));
         }
     }
 
-    <T> GenericFutureListener<io.netty.util.concurrent.Future<T>> errorListener(Consumer<List<Message>> replyTo) {
-        return future -> {
-            if(!future.isSuccess()) {
-                replyTo.accept(singletonList(new ChannelError(future.cause())));
-            }
-        };
+    private static <T> Observable<T> protocolObservable(Observable.OnSubscribe<T> onSubscribe) {
+        return Observable.create(onSubscribe)
+                .filter(msg -> {
+                    if (msg instanceof ErrorResponse) {
+                        ErrorResponse error = (ErrorResponse) msg;
+                        throw new SqlException(error.getLevel().name(), error.getCode(), error.getMessage());
+                    }
+                    return true;
+                });
     }
 
-    ChannelInboundHandlerAdapter newStartupHandler(StartupMessage startup, Consumer<List<Message>> replyTo) {
+    private static boolean isCompleteMessage(Object msg) {
+        return msg instanceof ReadyForQuery
+                || (msg instanceof Authentication && !((Authentication) msg).isAuthenticationOk());
+    }
+
+    ChannelInboundHandlerAdapter newStartupHandler(StartupMessage startup) {
         return new ChannelInboundHandlerAdapter() {
+            @Override
+            public void channelActive(ChannelHandlerContext context) {
+                NettyPgProtocolStream.this.ctx = context;
+
+                if(useSsl) {
+                    write(SSLHandshake.INSTANCE);
+                    return;
+                }
+                write(startup);
+                context.pipeline().remove(this);
+            }
             @Override
             public void userEventTriggered(ChannelHandlerContext context, Object evt) throws Exception {
                 if (evt instanceof SslHandshakeCompletionEvent && ((SslHandshakeCompletionEvent) evt).isSuccess()) {
-                    startup(context);
+                    write(startup);
+                    context.pipeline().remove(this);
                 }
-            }
-            @Override
-            public void channelActive(ChannelHandlerContext context) {
-                if(useSsl) {
-                    context.writeAndFlush(SSLHandshake.INSTANCE).addListener(errorListener(replyTo));
-                } else {
-                    startup(context);
-                }
-            }
-            void startup(ChannelHandlerContext context) {
-                ctx = context;
-                addNewReplyHandler(replyTo);
-                context.writeAndFlush(startup).addListener(errorListener(replyTo));
-                context.pipeline().remove(this);
             }
         };
     }
@@ -222,7 +216,6 @@ public class NettyPgProtocolStream implements PgProtocolStream {
                 ctx.pipeline().addFirst(
                         SslContext.newClientContext(InsecureTrustManagerFactory.INSTANCE)
                                 .newHandler(ctx.alloc()));
-
             }
         };
     }
@@ -231,30 +224,34 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         return new ChannelInboundHandlerAdapter() {
             @Override
             public void channelRead(ChannelHandlerContext context, Object msg) throws Exception {
+
                 if(msg instanceof NotificationResponse) {
                     publishNotification((NotificationResponse) msg);
                     return;
                 }
-                onReceivers.peek().accept((Message) msg);
+
+                if(isCompleteMessage(msg)) {
+                    Subscriber<? super Message> subscriber = subscribers.remove();
+                    subscriber.onNext((Message) msg);
+                    subscriber.onCompleted();
+                    return;
+                }
+
+                subscribers.peek().onNext((Message) msg);
             }
             @Override
             public void channelInactive(ChannelHandlerContext context) throws Exception {
-                onReceivers.forEach(r -> r.accept(new ChannelError("Channel state changed to inactive")));
+                exceptionCaught(context, new IOException("Channel state changed to inactive"));
             }
             @Override
+            @SuppressWarnings("MismatchedQueryAndUpdateOfCollection")
             public void exceptionCaught(ChannelHandlerContext context, Throwable cause) throws Exception {
-                onReceivers.forEach(r -> r.accept(new ChannelError(cause)));
+                Collection<Subscriber<? super Message>> unsubscribe = new LinkedList<>();
+                if(subscribers.removeAll(unsubscribe)) {
+                    unsubscribe.forEach(subscriber -> subscriber.onError(cause));
+                }
             }
         };
-    }
-
-    static class ChannelError extends SqlException implements Message {
-        ChannelError(String message) {
-            super(message);
-        }
-        public ChannelError(Throwable cause) {
-            super(cause);
-        }
     }
 
 }

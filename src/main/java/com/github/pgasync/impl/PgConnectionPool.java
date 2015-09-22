@@ -177,8 +177,8 @@ public abstract class PgConnectionPool implements ConnectionPool {
         }
 
         new PgConnection(openStream(address), dataConverter)
-                .connect(username, password, database, onConnection, onError);
-
+                .connect(username, password, database)
+                .subscribe(onConnection::accept, onError::accept);
     }
 
     private void releaseIfPipelining(Connection connection) {

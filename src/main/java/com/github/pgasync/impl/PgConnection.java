@@ -14,20 +14,23 @@
 
 package com.github.pgasync.impl;
 
-import com.github.pgasync.*;
-import com.github.pgasync.impl.EventEmitter.Emitter;
+import com.github.pgasync.Connection;
+import com.github.pgasync.ResultSet;
+import com.github.pgasync.Row;
+import com.github.pgasync.Transaction;
 import com.github.pgasync.impl.conversion.DataConverter;
 import com.github.pgasync.impl.message.*;
+import rx.Observable;
+import rx.functions.Func1;
 
 import java.util.*;
+import java.util.AbstractMap.SimpleImmutableEntry;
+import java.util.Map.Entry;
 import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.Supplier;
-import java.util.stream.Stream;
 
-import static com.github.pgasync.impl.Functions.*;
+import static com.github.pgasync.impl.Functions.applyConsumer;
+import static com.github.pgasync.impl.Functions.applyRunnable;
 import static com.github.pgasync.impl.message.RowDescription.ColumnDescription;
-import static java.util.Arrays.asList;
 
 /**
  * A connection to PostgreSQL backed. The postmaster forks a backend process for
@@ -45,60 +48,17 @@ public class PgConnection implements Connection {
         this.dataConverter = dataConverter;
     }
 
-    EventEmitter<Connection> connect(String username, String password, String database) {
-        return EventEmitter.create(emitter ->
-                stream.connect(new StartupMessage(username, database)).on(
-                        Authentication.class, auth  -> authenticate(username, password, auth, emitter),
-                        ReadyForQuery.class,  __    -> emitter.emit(Connection.class, this),
-                        Throwable.class,      emitter::error));
+    Observable<Connection> connect(String username, String password, String database) {
+       return stream.connect(new StartupMessage(username, database))
+               .flatMap(message -> authenticate(username, password, message))
+               .filter(ReadyForQuery.class::isInstance)
+               .map(ready -> this);
     }
 
-    private void authenticate(String username, String password, Authentication authentication, Emitter<Connection> emitter) {
-        stream.send(new PasswordMessage(username, password, authentication.getMd5Salt())).on(
-                ReadyForQuery.class, __ -> emitter.emit(Connection.class, this),
-                Throwable.class,           emitter::error);
-    }
-
-    public EventEmitter<Row> query(String sql) {
-        return EventEmitter.create(emitter -> {
-
-            Map<String,PgColumn> columns = new HashMap<>();
-
-            stream.send(new Query(sql)).on(
-                    RowDescription.class, desc -> columns.putAll(getColumns(desc.getColumns())),
-                    DataRow.class,        data -> emitter.emit(Row.class, new PgRow(data, columns, dataConverter)),
-                    Throwable.class,              emitter::error
-            );
-        });
-    }
-
-    private Map<String,PgColumn> getColumns(ColumnDescription[] descriptions) {
-        Map<String,PgColumn> columns = new HashMap<>();
-        for (int i = 0; i < descriptions.length; i++) {
-            columns.put(descriptions[i].getName().toUpperCase(), new PgColumn(i, descriptions[i].getType()));
-        }
-        return columns;
-    }
-
-    void connect(String username, String password, String database,
-                        Consumer<Connection> onConnected, Consumer<Throwable> onError) {
-
-        stream.connect(new StartupMessage(username, database), messages -> {
-            if (fireErrorHandler(messages.stream(), onError)) {
-                return;
-            }
-            if(messages.stream().anyMatch(m -> m instanceof ReadyForQuery)) {
-                applyConsumer(onConnected, this, onError);
-                return;
-            }
-            byte[] md5salt = reduce(new AuthenticationResponseReader(), messages.stream()).get();
-            stream.send(new PasswordMessage(username, password, md5salt), pwMessages -> {
-                if (fireErrorHandler(pwMessages.stream(), onError)) {
-                    return;
-                }
-                applyConsumer(onConnected, this, onError);
-            });
-        });
+    Observable<? extends Message> authenticate(String username, String password, Message message) {
+        return message instanceof Authentication
+                ? stream.send(new PasswordMessage(username, password, ((Authentication) message).getMd5Salt()))
+                : Observable.just(message);
     }
 
     boolean isConnected() {
@@ -107,11 +67,10 @@ public class PgConnection implements Connection {
 
     @Override
     public void query(String sql, Consumer<ResultSet> onQuery, Consumer<Throwable> onError) {
-        stream.send(new Query(sql), messages -> {
-            if (!fireErrorHandler(messages.stream(), onError)) {
-                applyConsumer(onQuery, reduce(new QueryResponseReader(), messages.stream()).get(), onError);
-            }
-        });
+        stream.send(new Query(sql))
+                .reduce(new QueryResponse(), this::toResponse)
+                .map(this::toResultSet)
+                .subscribe(onQuery::accept, onError::accept);
     }
 
     @Override
@@ -121,18 +80,11 @@ public class PgConnection implements Connection {
             query(sql, onQuery, onError);
             return;
         }
-        stream.send(
-                asList(new Parse(sql),
-                        new Bind(dataConverter.fromParameters(params)),
-                        ExtendedQuery.DESCRIBE,
-                        ExtendedQuery.EXECUTE,
-                        ExtendedQuery.CLOSE,
-                        ExtendedQuery.SYNC),
-                messages -> {
-                    if (!fireErrorHandler(messages.stream(), onError)) {
-                        applyConsumer(onQuery, reduce(new QueryResponseReader(), messages.stream()).get(), onError);
-                    }
-                });
+        stream.send(new Parse(sql), new Bind(dataConverter.fromParameters(params)),
+                    ExtendedQuery.DESCRIBE, ExtendedQuery.EXECUTE, ExtendedQuery.CLOSE, ExtendedQuery.SYNC)
+                .reduce(new QueryResponse(), this::toResponse)
+                .map(this::toResultSet)
+                .subscribe(onQuery::accept, onError::accept);
     }
 
     @Override
@@ -142,24 +94,20 @@ public class PgConnection implements Connection {
 
     @Override
     public void listen(String channel, Consumer<String> onNotification, Consumer<String> onListenStarted, Consumer<Throwable> onError) {
-        stream.send(new Query("LISTEN " + channel),
-                messages -> {
-                    if (!fireErrorHandler(messages.stream(), onError)) {
-                        String unlistenToken = stream.registerNotificationHandler(channel, onNotification);
-                        applyConsumer(onListenStarted, unlistenToken, onError);
-                    }
-                });
+        stream.send(new Query("LISTEN " + channel))
+                .subscribe(msg -> {
+                }, onError::accept,
+                        () -> onListenStarted.accept(stream.registerNotificationHandler(channel, onNotification)));
     }
 
     @Override
     public void unlisten(String channel, String unlistenToken, Runnable onListenStopped, Consumer<Throwable> onError) {
-        stream.send(new Query("UNLISTEN " + channel),
-                messages -> {
-                    if (!fireErrorHandler(messages.stream(), onError)) {
-                        stream.unRegisterNotificationHandler(channel, unlistenToken);
-                        applyRunnable(onListenStopped, onError);
-                    }
-                });
+        stream.send(new Query("UNLISTEN " + channel))
+                .subscribe(msg -> {}, onError::accept,
+                        () -> {
+                            stream.unRegisterNotificationHandler(channel, unlistenToken);
+                            onListenStopped.run();
+                        });
     }
 
     @Override
@@ -167,72 +115,47 @@ public class PgConnection implements Connection {
         stream.close();
     }
 
-    boolean fireErrorHandler(Stream<Message> messages, Consumer<Throwable> onError) {
-        Message failure = messages
-                .filter(m -> m instanceof ErrorResponse || m instanceof Throwable)
-                .findFirst().orElse(null);
-
-        if(failure != null && failure instanceof ErrorResponse) {
-            ErrorResponse err = (ErrorResponse) failure;
-            applyConsumer(onError, new SqlException(err.getLevel().name(), err.getCode(), err.getMessage()));
-            return true;
-        }
-        if(failure != null) {
-            applyConsumer(onError, (Throwable) failure);
-            return true;
-        }
-        return false;
+    public Observable<Row> query(String sql) {
+        return stream.send(new Query(sql))
+                .map(mapRowFn())
+                .filter(msg -> msg != null)
+                .map(row -> new PgRow(row.getKey(), row.getValue(), dataConverter));
     }
 
-    class QueryResponseReader implements Function<Message,QueryResponseReader>, Supplier<PgResultSet> {
-
-        Map<String, PgColumn> columns;
-        List<Row> rows = new ArrayList<>();
-        int updated;
-
-        @Override
-        public PgResultSet get() {
-            return new PgResultSet(columns, rows, updated);
-        }
-
-        @Override
-        public QueryResponseReader apply(Message msg) {
-            if(msg instanceof RowDescription) {
-                columns = toColumns(((RowDescription) msg).getColumns());
-            } else if (msg instanceof DataRow) {
-                rows.add(new PgRow((DataRow) msg, columns, dataConverter));
-            } else if(msg instanceof CommandComplete) {
-                updated = ((CommandComplete) msg).getUpdatedRows();
+    Func1<? super Message, Entry<DataRow,Map<String,PgColumn>>> mapRowFn() {
+        Map<String, PgColumn> columns = new HashMap<>();
+        return msg -> {
+            if (msg instanceof RowDescription) {
+                columns.putAll(getColumns(((RowDescription) msg).getColumns()));
+                return null;
             }
-            return this;
-        }
-
-        Map<String,PgColumn> toColumns(ColumnDescription[] columnDescriptions) {
-            Map<String,PgColumn> columns = new LinkedHashMap<>();
-            for (int i = 0; i < columnDescriptions.length; i++) {
-                columns.put(columnDescriptions[i].getName().toUpperCase(),
-                        new PgColumn(i, columnDescriptions[i].getType()));
-            }
-            return columns;
-        }
+            return msg instanceof DataRow
+                    ? new SimpleImmutableEntry<>((DataRow) msg, columns)
+                    : null;
+        };
     }
 
-    static class AuthenticationResponseReader implements Function<Message,AuthenticationResponseReader>, Supplier<byte[]> {
-
-        byte[] md5salt;
-
-        @Override
-        public byte[] get() {
-            return md5salt;
+    QueryResponse toResponse(QueryResponse response, Message message) {
+        if (message instanceof RowDescription) {
+            response.columns = getColumns(((RowDescription) message).getColumns());
+        } else if (message instanceof DataRow) {
+            response.rows.add(new PgRow((DataRow) message, response.columns, dataConverter));
+        } else if (message instanceof CommandComplete) {
+            response.updated = ((CommandComplete) message).getUpdatedRows();
         }
+        return response;
+    }
 
-        @Override
-        public AuthenticationResponseReader apply(Message message) {
-            if(md5salt == null && message instanceof Authentication) {
-                md5salt = ((Authentication) message).getMd5Salt();
-            }
-            return this;
+    PgResultSet toResultSet(QueryResponse response) {
+        return new PgResultSet(response.columns, response.rows, response.updated);
+    }
+
+    static Map<String,PgColumn> getColumns(ColumnDescription[] descriptions) {
+        Map<String,PgColumn> columns = new HashMap<>();
+        for (int i = 0; i < descriptions.length; i++) {
+            columns.put(descriptions[i].getName().toUpperCase(), new PgColumn(i, descriptions[i].getType()));
         }
+        return columns;
     }
 
     class ConnectionTx implements Transaction {
@@ -254,4 +177,9 @@ public class PgConnection implements Connection {
         }
     }
 
+    static class QueryResponse {
+        Map<String, PgColumn> columns;
+        List<Row> rows = new ArrayList<>();
+        int updated;
+    }
 }
