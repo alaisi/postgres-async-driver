@@ -15,7 +15,6 @@
 package com.github.pgasync.impl;
 
 import com.github.pgasync.Connection;
-import com.github.pgasync.ResultSet;
 import com.github.pgasync.Row;
 import com.github.pgasync.Transaction;
 import com.github.pgasync.impl.conversion.DataConverter;
@@ -23,13 +22,14 @@ import com.github.pgasync.impl.message.*;
 import rx.Observable;
 import rx.functions.Func1;
 
-import java.util.*;
 import java.util.AbstractMap.SimpleImmutableEntry;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.function.Consumer;
 
-import static com.github.pgasync.impl.Functions.applyConsumer;
-import static com.github.pgasync.impl.Functions.applyRunnable;
 import static com.github.pgasync.impl.message.RowDescription.ColumnDescription;
 
 /**
@@ -57,8 +57,8 @@ public class PgConnection implements Connection {
 
     Observable<? extends Message> authenticate(String username, String password, Message message) {
         return message instanceof Authentication
-                ? stream.send(new PasswordMessage(username, password, ((Authentication) message).getMd5Salt()))
-                : Observable.just(message);
+                    ? stream.send(new PasswordMessage(username, password, ((Authentication) message).getMd5Salt()))
+                    : Observable.just(message);
     }
 
     boolean isConnected() {
@@ -66,37 +66,33 @@ public class PgConnection implements Connection {
     }
 
     @Override
-    public void query(String sql, Consumer<ResultSet> onQuery, Consumer<Throwable> onError) {
-        stream.send(new Query(sql))
-                .reduce(new QueryResponse(), this::toResponse)
-                .map(this::toResultSet)
-                .subscribe(onQuery::accept, onError::accept);
+    public Observable<Row> query(String sql) {
+        return stream.send(new Query(sql))
+                .flatMap(toDataRowFn())
+                .map(row -> new PgRow(row.getKey(), row.getValue(), dataConverter));
     }
 
     @Override
-    @SuppressWarnings({ "unchecked", "rawtypes" })
-    public void query(String sql, List params, Consumer<ResultSet> onQuery, Consumer<Throwable> onError) {
-        if (params == null || params.isEmpty()) {
-            query(sql, onQuery, onError);
-            return;
-        }
-        stream.send(new Parse(sql), new Bind(dataConverter.fromParameters(params)),
-                    ExtendedQuery.DESCRIBE, ExtendedQuery.EXECUTE, ExtendedQuery.CLOSE, ExtendedQuery.SYNC)
-                .reduce(new QueryResponse(), this::toResponse)
-                .map(this::toResultSet)
-                .subscribe(onQuery::accept, onError::accept);
+    public Observable<Row> query(String sql, Object... params) {
+        return stream.send( new Parse(sql),
+                            new Bind(dataConverter.fromParameters(params)),
+                            ExtendedQuery.DESCRIBE,
+                            ExtendedQuery.EXECUTE,
+                            ExtendedQuery.CLOSE,
+                            ExtendedQuery.SYNC)
+                .flatMap(toDataRowFn())
+                .map(row -> new PgRow(row.getKey(), row.getValue(), dataConverter));
     }
 
     @Override
-    public void begin(Consumer<Transaction> handler, Consumer<Throwable> onError) {
-        query("BEGIN", beginRs -> applyConsumer(handler, new ConnectionTx(), onError), onError);
+    public Observable<Transaction> begin() {
+        return query("BEGIN").map(row -> new ConnectionTx());
     }
 
     @Override
     public void listen(String channel, Consumer<String> onNotification, Consumer<String> onListenStarted, Consumer<Throwable> onError) {
         stream.send(new Query("LISTEN " + channel))
-                .subscribe(msg -> {
-                }, onError::accept,
+                .subscribe(msg -> {}, onError::accept,
                         () -> onListenStarted.accept(stream.registerNotificationHandler(channel, onNotification)));
     }
 
@@ -115,23 +111,16 @@ public class PgConnection implements Connection {
         stream.close();
     }
 
-    public Observable<Row> query(String sql) {
-        return stream.send(new Query(sql))
-                .map(mapRowFn())
-                .filter(msg -> msg != null)
-                .map(row -> new PgRow(row.getKey(), row.getValue(), dataConverter));
-    }
-
-    Func1<? super Message, Entry<DataRow,Map<String,PgColumn>>> mapRowFn() {
+    Func1<? super Message, Observable<Entry<DataRow,Map<String,PgColumn>>>> toDataRowFn() {
         Map<String, PgColumn> columns = new HashMap<>();
-        return msg -> {
-            if (msg instanceof RowDescription) {
-                columns.putAll(getColumns(((RowDescription) msg).getColumns()));
-                return null;
+        return message -> {
+            if(message instanceof DataRow) {
+                return Observable.just(new SimpleImmutableEntry<>((DataRow) message, columns));
             }
-            return msg instanceof DataRow
-                    ? new SimpleImmutableEntry<>((DataRow) msg, columns)
-                    : null;
+            if (message instanceof RowDescription) {
+                columns.putAll(getColumns(((RowDescription) message).getColumns()));
+            }
+            return Observable.empty();
         };
     }
 
@@ -160,20 +149,20 @@ public class PgConnection implements Connection {
 
     class ConnectionTx implements Transaction {
         @Override
-        public void commit(Runnable onCompleted, Consumer<Throwable> onCommitError) {
-            PgConnection.this.query("COMMIT", (rs) -> applyRunnable(onCompleted, onCommitError), onCommitError);
+        public Observable<Void> commit() {
+            return PgConnection.this.query("COMMIT").map(row -> null);
         }
         @Override
-        public void rollback(Runnable onCompleted, Consumer<Throwable> onRollbackError) {
-            PgConnection.this.query("ROLLBACK", (rs) -> applyRunnable(onCompleted, onRollbackError), onRollbackError);
+        public Observable<Void> rollback() {
+            return PgConnection.this.query("ROLLBACK").map(row -> null);
         }
         @Override
-        public void query(String sql, Consumer<ResultSet> onResult, Consumer<Throwable> onError) {
-            PgConnection.this.query(sql, onResult, onError);
+        public Observable<Row> query(String sql) {
+            return PgConnection.this.query(sql);
         }
         @Override
-        public void query(String sql, List params, Consumer<ResultSet> onResult, Consumer<Throwable> onError) {
-            PgConnection.this.query(sql, params, onResult, onError);
+        public Observable<Row> query(String sql, Object... params) {
+            return PgConnection.this.query(sql, params);
         }
     }
 

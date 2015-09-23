@@ -150,7 +150,10 @@ public class DataConverter {
     }
 
     public byte[][] fromParameters(List<Object> parameters) {
-        byte[][] params = new byte[parameters.size()][];
+        return fromParameters(parameters.toArray(new Object[parameters.size()]));
+    }
+    public byte[][] fromParameters(Object... parameters) {
+        byte[][] params = new byte[parameters.length][];
         int i = 0;
         for (Object param : parameters) {
             params[i++] = fromObject(param);

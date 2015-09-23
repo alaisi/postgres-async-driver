@@ -148,14 +148,13 @@ public class NettyPgProtocolStream implements PgProtocolStream {
 
     private static <T> Observable<T> protocolObservable(Observable.OnSubscribe<T> onSubscribe) {
         return Observable.create(onSubscribe)
-                .filter(msg -> {
-                    if (msg instanceof ErrorResponse) {
+                .flatMap(msg -> {
+                    if(msg instanceof ErrorResponse) {
                         ErrorResponse error = (ErrorResponse) msg;
-                        throw new SqlException(error.getLevel().name(), error.getCode(), error.getMessage());
+                        return Observable.error(new SqlException(error.getLevel().name(), error.getCode(), error.getMessage()));
                     }
-                    return true;
-                });
-    }
+                    return Observable.just(msg);
+                });}
 
     private static boolean isCompleteMessage(Object msg) {
         return msg instanceof ReadyForQuery

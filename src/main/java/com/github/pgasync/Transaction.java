@@ -14,7 +14,7 @@
 
 package com.github.pgasync;
 
-import java.util.function.Consumer;
+import rx.Observable;
 
 /**
  * A unit of work. Transactions must be committed or rolled back, otherwise a
@@ -26,19 +26,13 @@ import java.util.function.Consumer;
 public interface Transaction extends QueryExecutor {
 
     /**
-     * Commits a transaction.
-     * 
-     * @param onCompleted Called when commit completes
-     * @param onError Called on exception thrown
+     * Commits a transaction
      */
-    void commit(Runnable onCompleted, Consumer<Throwable> onError);
+    Observable<Void> commit();
 
     /**
      * Rollbacks a transaction.
-     * 
-     * @param onCompleted Called when rollback completes
-     * @param onError Called on exception thrown
      */
-    void rollback(Runnable onCompleted, Consumer<Throwable> onError);
+    Observable<Void> rollback();
 
 }

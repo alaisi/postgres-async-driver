@@ -14,15 +14,14 @@
 
 package com.github.pgasync.impl;
 
-import com.github.pgasync.ResultSet;
-import com.github.pgasync.Row;
-import com.github.pgasync.SqlException;
+import com.github.pgasync.*;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
 
 import java.util.Iterator;
+import java.util.concurrent.CountDownLatch;
 
 import static org.junit.Assert.assertEquals;
 
@@ -74,6 +73,24 @@ public class QueryResultTest {
     @Test(expected = SqlException.class)
     public void shouldInvokeErrorHandlerOnError() {
         dbr.query("SELECT * FROM not_there");
+    }
+
+    @Test
+    public void shouldStreamResultRows() throws Exception {
+        ConnectionPool pool = (ConnectionPool) dbr.db();
+        CountDownLatch latch = new CountDownLatch(1);
+        pool.getConnection(c -> {
+            PgConnection conn = (PgConnection) c;
+            conn.query("select generate_series(1, 10)")
+                    .subscribe(
+                            row -> System.out.println(row.getLong(0)),
+                            Throwable::printStackTrace,
+                            () -> {
+                                pool.release(conn);
+                                latch.countDown();
+                            });
+        }, Throwable::printStackTrace);
+        latch.await();
     }
 
 }

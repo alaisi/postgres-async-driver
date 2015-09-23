@@ -16,8 +16,7 @@ package com.github.pgasync.impl;
 
 
 import com.github.pgasync.Connection;
-
-import java.util.function.Consumer;
+import rx.Observable;
 
 /**
  * @author Antti Laisi
@@ -30,11 +29,15 @@ public class ConnectionValidator {
         this.validationQuery = validationQuery;
     }
 
-    void validate(Connection connection, Runnable onValid, Consumer<Throwable> onError) {
+    Observable<Connection> validate(Connection connection) {
         if(validationQuery == null) {
-            onValid.run();
-            return;
+            return Observable.just(connection);
         }
-        connection.query(validationQuery, rs -> onValid.run(), onError);
+        return Observable.create(subscriber -> connection.query(validationQuery)
+                                                    .subscribe(row -> { }, subscriber::onError,
+                                                            () -> {
+                                                                subscriber.onNext(connection);
+                                                                subscriber.onCompleted();
+                                                            }));
     }
 }
