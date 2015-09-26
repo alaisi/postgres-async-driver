@@ -24,7 +24,7 @@ import java.nio.ByteBuffer;
  * <pre>
  * ReadyForQuery (B)
  *  Byte1('Z')
- *      Identifies the message type. ReadyForQuery is sent whenever the backend is ready for a new query cycle.
+ *      Identifies the message type. ReadyForQuery is sent whenever the backend is ready for a new queryRows cycle.
  *  Int32(5)
  *      Length of message contents in bytes, including self.
  *  Byte1

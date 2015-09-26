@@ -10,13 +10,6 @@ import rx.Observable;
 public interface QueryExecutor {
 
     /**
-     * Executes a simple query.
-     *
-     * @param sql SQL to execute.
-     */
-    Observable<Row> query(String sql);
-
-    /**
      * Executes an anonymous prepared statement. Uses native PostgreSQL syntax with $arg instead of ?
      * to mark parameters. Supported parameter types are String, Character, Number, Time, Date, Timestamp
      * and byte[].
@@ -24,6 +17,21 @@ public interface QueryExecutor {
      * @param sql SQL to execute
      * @param params Parameter values
      */
-    Observable<Row> query(String sql, Object... params);
+    Observable<Row> queryRows(String sql, Object... params);
+
+    /**
+     * Executes a simple queryRows.
+     *
+     * @param sql SQL to execute.
+     */
+    default Observable<Row> queryRows(String sql) {
+        return queryRows(sql, (Object[]) null);
+    }
+
+    Observable<ResultSet> querySet(String sql, Object... params);
+
+    default Observable<ResultSet> querySet(String sql) {
+        return querySet(sql, (Object[]) null);
+    }
 
 }

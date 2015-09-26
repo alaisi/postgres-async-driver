@@ -15,30 +15,31 @@
 package com.github.pgasync.impl;
 
 import com.github.pgasync.Connection;
+import com.github.pgasync.ResultSet;
 import com.github.pgasync.Row;
 import com.github.pgasync.Transaction;
 import com.github.pgasync.impl.conversion.DataConverter;
 import com.github.pgasync.impl.message.*;
 import rx.Observable;
-import rx.functions.Func1;
+import rx.Subscriber;
+import rx.Subscription;
 
-import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
-import java.util.function.Consumer;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static com.github.pgasync.impl.message.RowDescription.ColumnDescription;
 
 /**
  * A connection to PostgreSQL backed. The postmaster forks a backend process for
- * each connection. A connection can process only a single query at a time.
+ * each connection. A connection can process only a single queryRows at a time.
  * 
  * @author Antti Laisi
  */
-public class PgConnection implements Connection {
+public class PgConnection implements Connection, Transaction {
 
     final PgProtocolStream stream;
     final DataConverter dataConverter;
@@ -66,44 +67,63 @@ public class PgConnection implements Connection {
     }
 
     @Override
-    public Observable<Row> query(String sql) {
-        return stream.send(new Query(sql))
-                .flatMap(toDataRowFn())
-                .map(row -> new PgRow(row.getKey(), row.getValue(), dataConverter));
+    public Observable<ResultSet> querySet(String sql, Object... params) {
+        return sendQuery(sql, params)
+                .lift(toResultSet(dataConverter));
     }
 
     @Override
-    public Observable<Row> query(String sql, Object... params) {
-        return stream.send( new Parse(sql),
-                            new Bind(dataConverter.fromParameters(params)),
-                            ExtendedQuery.DESCRIBE,
-                            ExtendedQuery.EXECUTE,
-                            ExtendedQuery.CLOSE,
-                            ExtendedQuery.SYNC)
-                .flatMap(toDataRowFn())
-                .map(row -> new PgRow(row.getKey(), row.getValue(), dataConverter));
+    public Observable<Row> queryRows(String sql, Object... params) {
+        return sendQuery(sql, params)
+                .lift(toRow(dataConverter));
     }
 
     @Override
     public Observable<Transaction> begin() {
-        return query("BEGIN").map(row -> new ConnectionTx());
+        return queryRows("BEGIN").map(row -> this);
     }
 
     @Override
-    public void listen(String channel, Consumer<String> onNotification, Consumer<String> onListenStarted, Consumer<Throwable> onError) {
-        stream.send(new Query("LISTEN " + channel))
-                .subscribe(msg -> {}, onError::accept,
-                        () -> onListenStarted.accept(stream.registerNotificationHandler(channel, onNotification)));
+    public Observable<Void> commit() {
+        return queryRows("COMMIT").map(row -> null);
     }
 
     @Override
-    public void unlisten(String channel, String unlistenToken, Runnable onListenStopped, Consumer<Throwable> onError) {
-        stream.send(new Query("UNLISTEN " + channel))
-                .subscribe(msg -> {}, onError::accept,
-                        () -> {
-                            stream.unRegisterNotificationHandler(channel, unlistenToken);
-                            onListenStopped.run();
-                        });
+    public Observable<Void> rollback() {
+        return queryRows("ROLLBACK").map(row -> null);
+    }
+
+    @Override
+    public Observable<String> listen(String channel) {
+        return querySet("LISTEN " + channel).lift(subscriber -> {
+
+            AtomicReference<String> token = new AtomicReference<>();
+            AtomicBoolean unsubscribed = new AtomicBoolean();
+
+            subscriber.add(new Subscription() {
+                @Override
+                public void unsubscribe() {
+                    stream.unRegisterNotificationHandler(channel, token.get());
+                    unsubscribed.set(true);
+                }
+                @Override
+                public boolean isUnsubscribed() {
+                    return unsubscribed.get();
+                }
+            });
+            return new Subscriber<ResultSet>() {
+                @Override
+                public void onCompleted() {
+                    token.set(stream.registerNotificationHandler(channel, subscriber::onNext));
+                }
+                @Override
+                public void onError(Throwable e) {
+                    subscriber.onError(e);
+                }
+                @Override
+                public void onNext(ResultSet s) { }
+            };
+        });
     }
 
     @Override
@@ -111,32 +131,71 @@ public class PgConnection implements Connection {
         stream.close();
     }
 
-    Func1<? super Message, Observable<Entry<DataRow,Map<String,PgColumn>>>> toDataRowFn() {
-        Map<String, PgColumn> columns = new HashMap<>();
-        return message -> {
-            if(message instanceof DataRow) {
-                return Observable.just(new SimpleImmutableEntry<>((DataRow) message, columns));
+    private Observable<Message> sendQuery(String sql, Object[] params) {
+        return params == null || params.length == 0
+                ? stream.send(
+                    new Query(sql))
+                : stream.send(
+                    new Parse(sql),
+                    new Bind(dataConverter.fromParameters(params)),
+                    ExtendedQuery.DESCRIBE,
+                    ExtendedQuery.EXECUTE,
+                    ExtendedQuery.CLOSE,
+                    ExtendedQuery.SYNC);
+    }
+
+    static Observable.Operator<Row,? super Message> toRow(DataConverter dataConverter) {
+        return subscriber -> new Subscriber<Message>() {
+
+            Map<String, PgColumn> columns;
+
+            @Override
+            public void onNext(Message message) {
+                if (message instanceof RowDescription) {
+                    columns = getColumns(((RowDescription) message).getColumns());
+                } else if(message instanceof DataRow) {
+                    subscriber.onNext(new PgRow((DataRow) message, columns, dataConverter));
+                }
             }
-            if (message instanceof RowDescription) {
-                columns.putAll(getColumns(((RowDescription) message).getColumns()));
+            @Override
+            public void onError(Throwable e) {
+                subscriber.onError(e);
             }
-            return Observable.empty();
+            @Override
+            public void onCompleted() {
+                subscriber.onCompleted();
+            }
         };
     }
 
-    QueryResponse toResponse(QueryResponse response, Message message) {
-        if (message instanceof RowDescription) {
-            response.columns = getColumns(((RowDescription) message).getColumns());
-        } else if (message instanceof DataRow) {
-            response.rows.add(new PgRow((DataRow) message, response.columns, dataConverter));
-        } else if (message instanceof CommandComplete) {
-            response.updated = ((CommandComplete) message).getUpdatedRows();
-        }
-        return response;
-    }
+    static Observable.Operator<ResultSet,? super Message> toResultSet(DataConverter dataConverter) {
+        return subscriber -> new Subscriber<Message>() {
 
-    PgResultSet toResultSet(QueryResponse response) {
-        return new PgResultSet(response.columns, response.rows, response.updated);
+            Map<String, PgColumn> columns;
+            List<Row> rows = new ArrayList<>();
+            int updated;
+
+            @Override
+            public void onNext(Message message) {
+                if (message instanceof RowDescription) {
+                    columns = getColumns(((RowDescription) message).getColumns());
+                } else if(message instanceof DataRow) {
+                    rows.add(new PgRow((DataRow) message, columns, dataConverter));
+                } else if(message instanceof CommandComplete) {
+                    updated = ((CommandComplete) message).getUpdatedRows();
+                } else if(message instanceof ReadyForQuery) {
+                    subscriber.onNext(new PgResultSet(columns, rows, updated));
+                }
+            }
+            @Override
+            public void onError(Throwable e) {
+                subscriber.onError(e);
+            }
+            @Override
+            public void onCompleted() {
+                subscriber.onCompleted();
+            }
+        };
     }
 
     static Map<String,PgColumn> getColumns(ColumnDescription[] descriptions) {
@@ -147,28 +206,4 @@ public class PgConnection implements Connection {
         return columns;
     }
 
-    class ConnectionTx implements Transaction {
-        @Override
-        public Observable<Void> commit() {
-            return PgConnection.this.query("COMMIT").map(row -> null);
-        }
-        @Override
-        public Observable<Void> rollback() {
-            return PgConnection.this.query("ROLLBACK").map(row -> null);
-        }
-        @Override
-        public Observable<Row> query(String sql) {
-            return PgConnection.this.query(sql);
-        }
-        @Override
-        public Observable<Row> query(String sql, Object... params) {
-            return PgConnection.this.query(sql, params);
-        }
-    }
-
-    static class QueryResponse {
-        Map<String, PgColumn> columns;
-        List<Row> rows = new ArrayList<>();
-        int updated;
-    }
 }

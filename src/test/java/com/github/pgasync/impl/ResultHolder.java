@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
- * Helper for waiting query completion.
+ * Helper for waiting queryRows completion.
  * 
  * @author Antti Laisi
  */

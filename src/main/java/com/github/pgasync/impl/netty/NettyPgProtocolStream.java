@@ -148,13 +148,27 @@ public class NettyPgProtocolStream implements PgProtocolStream {
 
     private static <T> Observable<T> protocolObservable(Observable.OnSubscribe<T> onSubscribe) {
         return Observable.create(onSubscribe)
-                .flatMap(msg -> {
-                    if(msg instanceof ErrorResponse) {
-                        ErrorResponse error = (ErrorResponse) msg;
-                        return Observable.error(new SqlException(error.getLevel().name(), error.getCode(), error.getMessage()));
+                .lift(subscriber -> new Subscriber<T>() {
+                    @Override
+                    public void onCompleted() {
+                        subscriber.onCompleted();
                     }
-                    return Observable.just(msg);
-                });}
+                    @Override
+                    public void onError(Throwable e) {
+                        subscriber.onError(e);
+                    }
+                    @Override
+                    public void onNext(T message) {
+                        if (message instanceof ErrorResponse) {
+                            ErrorResponse error = (ErrorResponse) message;
+                            subscriber.onError(new SqlException(error.getLevel().name(), error.getCode(), error.getMessage()));
+                            subscriber.unsubscribe();
+                            return;
+                        }
+                        subscriber.onNext(message);
+                    }
+                });
+    }
 
     private static boolean isCompleteMessage(Object msg) {
         return msg instanceof ReadyForQuery
@@ -231,8 +245,10 @@ public class NettyPgProtocolStream implements PgProtocolStream {
 
                 if(isCompleteMessage(msg)) {
                     Subscriber<? super Message> subscriber = subscribers.remove();
-                    subscriber.onNext((Message) msg);
-                    subscriber.onCompleted();
+                    if(!subscriber.isUnsubscribed()) {
+                        subscriber.onNext((Message) msg);
+                        subscriber.onCompleted();
+                    }
                     return;
                 }
 

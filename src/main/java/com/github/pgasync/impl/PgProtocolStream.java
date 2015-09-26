@@ -16,8 +16,6 @@ package com.github.pgasync.impl;
 
 import com.github.pgasync.impl.message.Message;
 import com.github.pgasync.impl.message.StartupMessage;
-import com.github.pgasync.impl.reactive.AsyncPublisher;
-import org.reactivestreams.Publisher;
 import rx.Observable;
 
 import java.util.function.Consumer;

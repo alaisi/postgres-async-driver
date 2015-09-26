@@ -14,15 +14,18 @@
 
 package com.github.pgasync.impl;
 
-import com.github.pgasync.*;
+import com.github.pgasync.ResultSet;
+import com.github.pgasync.Row;
+import com.github.pgasync.SqlException;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
 
 import java.util.Iterator;
-import java.util.concurrent.CountDownLatch;
+import java.util.List;
 
+import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 
 /**
@@ -34,7 +37,7 @@ public class QueryResultTest {
 
     @ClassRule
     public static DatabaseRule dbr = new DatabaseRule();
-    
+
     @BeforeClass
     public static void create() {
         drop();
@@ -77,20 +80,13 @@ public class QueryResultTest {
 
     @Test
     public void shouldStreamResultRows() throws Exception {
-        ConnectionPool pool = (ConnectionPool) dbr.db();
-        CountDownLatch latch = new CountDownLatch(1);
-        pool.getConnection(c -> {
-            PgConnection conn = (PgConnection) c;
-            conn.query("select generate_series(1, 10)")
-                    .subscribe(
-                            row -> System.out.println(row.getLong(0)),
-                            Throwable::printStackTrace,
-                            () -> {
-                                pool.release(conn);
-                                latch.countDown();
-                            });
-        }, Throwable::printStackTrace);
-        latch.await();
+        List<Integer> series = dbr.db().queryRows("select generate_series(1, 5)")
+                .map(row -> row.getInt(0))
+                .toList()
+                .toBlocking()
+                .single();
+
+        assertEquals(asList(1, 2, 3, 4, 5), series);
     }
 
 }

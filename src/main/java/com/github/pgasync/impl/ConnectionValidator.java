@@ -33,7 +33,7 @@ public class ConnectionValidator {
         if(validationQuery == null) {
             return Observable.just(connection);
         }
-        return Observable.create(subscriber -> connection.query(validationQuery)
+        return Observable.create(subscriber -> connection.queryRows(validationQuery)
                                                     .subscribe(row -> { }, subscriber::onError,
                                                             () -> {
                                                                 subscriber.onNext(connection);
