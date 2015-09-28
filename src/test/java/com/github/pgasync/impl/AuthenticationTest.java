@@ -12,7 +12,6 @@ import static org.junit.Assert.fail;
 public class AuthenticationTest {
 
     @Test
-    @Ignore
     public void shouldThrowExceptionOnInvalidCredentials() throws Exception {
         try (ConnectionPool pool = createPoolBuilder(1).password("_invalid_").build()) {
             pool.queryRows("SELECT 1").toBlocking().first();

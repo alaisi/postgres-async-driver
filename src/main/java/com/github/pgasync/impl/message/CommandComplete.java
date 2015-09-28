@@ -33,4 +33,9 @@ public class CommandComplete implements Message {
     public int getUpdatedRows() {
         return updatedRows;
     }
+
+    @Override
+    public String toString() {
+        return String.format("CommandComplete(updatedRows=%d)", updatedRows);
+    }
 }

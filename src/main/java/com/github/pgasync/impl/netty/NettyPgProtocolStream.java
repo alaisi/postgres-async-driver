@@ -38,7 +38,6 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /**
@@ -82,7 +81,17 @@ public class NettyPgProtocolStream implements PgProtocolStream {
                     .connect(address)
                     .addListener(onError);
 
-        }).lift(throwErrorResponses());
+        }).flatMap(this::throwErrorResponses);
+    }
+
+    @Override
+    public Observable<Message> authenticate(PasswordMessage password) {
+        return Observable.create(subscriber -> {
+
+            pushSubscriber(subscriber);
+            write(password);
+
+        }).flatMap(this::throwErrorResponses);
     }
 
     @Override
@@ -97,7 +106,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
             pushSubscriber(subscriber);
             write(messages);
 
-        }).lift(throwErrorResponses());
+        }).lift(throwErrorResponsesOnComplete());
     }
 
     @Override
@@ -149,7 +158,13 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         }
     }
 
-    private static Observable.Operator<Message,? super Object> throwErrorResponses() {
+    private Observable<Message> throwErrorResponses(Object message) {
+        return message instanceof ErrorResponse
+                ? Observable.error(toSqlException((ErrorResponse) message))
+                : Observable.just((Message) message);
+    }
+
+    private static Observable.Operator<Message,? super Object> throwErrorResponsesOnComplete() {
         return subscriber -> new Subscriber<Object>() {
 
             SqlException sqlException;
@@ -171,8 +186,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
             @Override
             public void onNext(Object message) {
                 if (message instanceof ErrorResponse) {
-                    ErrorResponse error = (ErrorResponse) message;
-                    sqlException = new SqlException(error.getLevel().name(), error.getCode(), error.getMessage());
+                    sqlException = toSqlException((ErrorResponse) message);
                     return;
                 }
                 subscriber.onNext((Message) message);
@@ -183,6 +197,10 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     private static boolean isCompleteMessage(Object msg) {
         return msg == ReadyForQuery.INSTANCE
                 || (msg instanceof Authentication && !((Authentication) msg).isAuthenticationOk());
+    }
+
+    private static SqlException toSqlException(ErrorResponse error) {
+        return new SqlException(error.getLevel().name(), error.getCode(), error.getMessage());
     }
 
     ChannelInboundHandlerAdapter newStartupHandler(StartupMessage startup) {

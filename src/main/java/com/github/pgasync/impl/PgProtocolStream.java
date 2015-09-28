@@ -15,6 +15,7 @@
 package com.github.pgasync.impl;
 
 import com.github.pgasync.impl.message.Message;
+import com.github.pgasync.impl.message.PasswordMessage;
 import com.github.pgasync.impl.message.StartupMessage;
 import rx.Observable;
 
@@ -28,6 +29,8 @@ import java.util.function.Consumer;
 public interface PgProtocolStream {
 
     Observable<Message> connect(StartupMessage startup);
+
+    Observable<Message> authenticate(PasswordMessage password);
 
     Observable<Message> send(Message... messages);
 

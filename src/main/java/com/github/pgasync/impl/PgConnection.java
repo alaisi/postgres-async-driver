@@ -58,7 +58,7 @@ public class PgConnection implements Connection, Transaction {
 
     Observable<? extends Message> authenticate(String username, String password, Message message) {
         return message instanceof Authentication
-                    ? stream.send(new PasswordMessage(username, password, ((Authentication) message).getMd5Salt()))
+                    ? stream.authenticate(new PasswordMessage(username, password, ((Authentication) message).getMd5Salt()))
                     : Observable.just(message);
     }
 
