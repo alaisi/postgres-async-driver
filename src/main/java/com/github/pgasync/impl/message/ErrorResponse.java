@@ -42,4 +42,9 @@ public class ErrorResponse implements Message {
     public String getMessage() {
         return message;
     }
+
+    @Override
+    public String toString() {
+        return String.format("ErrorResponse(level=%s,code=%s,message=%s)", level, code, message);
+    }
 }

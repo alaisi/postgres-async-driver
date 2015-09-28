@@ -183,7 +183,7 @@ public class PgConnection implements Connection, Transaction {
                     rows.add(new PgRow((DataRow) message, columns, dataConverter));
                 } else if(message instanceof CommandComplete) {
                     updated = ((CommandComplete) message).getUpdatedRows();
-                } else if(message instanceof ReadyForQuery) {
+                } else if(message == ReadyForQuery.INSTANCE) {
                     subscriber.onNext(new PgResultSet(columns, rows, updated));
                 }
             }

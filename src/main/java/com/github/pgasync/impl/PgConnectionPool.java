@@ -72,8 +72,8 @@ public abstract class PgConnectionPool implements ConnectionPool {
         return getConnection()
                 .doOnNext(this::releaseIfPipelining)
                 .flatMap(connection -> connection.queryRows(sql, params)
-                        .doOnError(t -> releaseIfNotPipelining(connection))
-                        .doOnCompleted(() -> releaseIfNotPipelining(connection)));
+                                        .doOnError(t -> releaseIfNotPipelining(connection))
+                                        .doOnCompleted(() -> releaseIfNotPipelining(connection)));
     }
 
     @Override
@@ -81,16 +81,16 @@ public abstract class PgConnectionPool implements ConnectionPool {
         return getConnection()
                 .doOnNext(this::releaseIfPipelining)
                 .flatMap(connection -> connection.querySet(sql, params)
-                        .doOnError(t -> releaseIfNotPipelining(connection))
-                        .doOnCompleted(() -> releaseIfNotPipelining(connection)));
+                                        .doOnError(t -> releaseIfNotPipelining(connection))
+                                        .doOnCompleted(() -> releaseIfNotPipelining(connection)));
     }
 
     @Override
     public Observable<Transaction> begin() {
         return getConnection()
                 .flatMap(connection -> connection.begin()
-                        .doOnError(t -> release(connection))
-                        .map(tx -> new ReleasingTransaction(connection, tx)));
+                                        .doOnError(t -> release(connection))
+                                        .map(tx -> new ReleasingTransaction(connection, tx)));
     }
 
     @Override
@@ -162,6 +162,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
 
     @Override
     public void release(Connection connection) {
+
         if(closed) {
             connection.close();
             return;

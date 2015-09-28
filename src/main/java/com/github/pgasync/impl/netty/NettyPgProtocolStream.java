@@ -38,6 +38,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /**
@@ -71,7 +72,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
 
     @Override
     public Observable<Message> connect(StartupMessage startup) {
-        return protocolObservable(subscriber -> {
+        return Observable.create(subscriber -> {
 
             pushSubscriber(subscriber);
             new Bootstrap()
@@ -80,12 +81,13 @@ public class NettyPgProtocolStream implements PgProtocolStream {
                     .handler(newProtocolInitializer(newStartupHandler(startup)))
                     .connect(address)
                     .addListener(onError);
-        });
+
+        }).lift(throwErrorResponses());
     }
 
     @Override
     public Observable<Message> send(Message... messages) {
-        return protocolObservable(subscriber -> {
+        return Observable.create(subscriber -> {
 
             if (!isConnected()) {
                 subscriber.onError(new IllegalStateException("Channel is closed"));
@@ -94,7 +96,8 @@ public class NettyPgProtocolStream implements PgProtocolStream {
 
             pushSubscriber(subscriber);
             write(messages);
-        });
+
+        }).lift(throwErrorResponses());
     }
 
     @Override
@@ -128,7 +131,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
 
     private void pushSubscriber(Subscriber<? super Message> subscriber) {
         if(!subscribers.offer(subscriber)) {
-            throw new IllegalStateException("Pipelining not enabled");
+            throw new IllegalStateException("Pipelining not enabled " + subscribers.peek());
         }
     }
 
@@ -146,32 +149,39 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         }
     }
 
-    private static <T> Observable<T> protocolObservable(Observable.OnSubscribe<T> onSubscribe) {
-        return Observable.create(onSubscribe)
-                .lift(subscriber -> new Subscriber<T>() {
-                    @Override
-                    public void onCompleted() {
-                        subscriber.onCompleted();
-                    }
-                    @Override
-                    public void onError(Throwable e) {
-                        subscriber.onError(e);
-                    }
-                    @Override
-                    public void onNext(T message) {
-                        if (message instanceof ErrorResponse) {
-                            ErrorResponse error = (ErrorResponse) message;
-                            subscriber.onError(new SqlException(error.getLevel().name(), error.getCode(), error.getMessage()));
-                            subscriber.unsubscribe();
-                            return;
-                        }
-                        subscriber.onNext(message);
-                    }
-                });
+    private static Observable.Operator<Message,? super Object> throwErrorResponses() {
+        return subscriber -> new Subscriber<Object>() {
+
+            SqlException sqlException;
+
+            @Override
+            public void onCompleted() {
+                if(sqlException != null) {
+                    subscriber.onError(sqlException);
+                    return;
+                }
+                subscriber.onCompleted();
+            }
+
+            @Override
+            public void onError(Throwable e) {
+                subscriber.onError(e);
+            }
+
+            @Override
+            public void onNext(Object message) {
+                if (message instanceof ErrorResponse) {
+                    ErrorResponse error = (ErrorResponse) message;
+                    sqlException = new SqlException(error.getLevel().name(), error.getCode(), error.getMessage());
+                    return;
+                }
+                subscriber.onNext((Message) message);
+            }
+        };
     }
 
     private static boolean isCompleteMessage(Object msg) {
-        return msg instanceof ReadyForQuery
+        return msg == ReadyForQuery.INSTANCE
                 || (msg instanceof Authentication && !((Authentication) msg).isAuthenticationOk());
     }
 
@@ -245,10 +255,8 @@ public class NettyPgProtocolStream implements PgProtocolStream {
 
                 if(isCompleteMessage(msg)) {
                     Subscriber<? super Message> subscriber = subscribers.remove();
-                    if(!subscriber.isUnsubscribed()) {
-                        subscriber.onNext((Message) msg);
-                        subscriber.onCompleted();
-                    }
+                    subscriber.onNext((Message) msg);
+                    subscriber.onCompleted();
                     return;
                 }
 
