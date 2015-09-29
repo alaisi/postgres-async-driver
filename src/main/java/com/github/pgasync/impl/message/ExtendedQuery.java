@@ -15,7 +15,7 @@
 package com.github.pgasync.impl.message;
 
 /**
- * Stateless extended queryRows protocol messages.
+ * Stateless extended query protocol messages.
  * 
  * @author Antti Laisi
  */

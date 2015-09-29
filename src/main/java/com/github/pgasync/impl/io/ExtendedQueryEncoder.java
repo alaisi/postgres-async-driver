@@ -40,7 +40,7 @@ import java.nio.ByteBuffer;
  *  String
  *      The name of the portal to execute (an empty string selects the unnamed portal).
  *  Int32
- *      Maximum number of rows to return, if portal contains a queryRows that returns rows (ignored otherwise). Zero denotes "no limit".
+ *      Maximum number of rows to return, if portal contains a query that returns rows (ignored otherwise). Zero denotes "no limit".
  *
  * Sync (F)
  *  Byte1('S')

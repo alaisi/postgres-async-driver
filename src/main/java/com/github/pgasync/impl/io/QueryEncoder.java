@@ -26,7 +26,7 @@ import static com.github.pgasync.impl.io.IO.putCString;
  * <pre>
  * Query (F)
  *  Byte1('Q')
- *      Identifies the message as a simple queryRows.
+ *      Identifies the message as a simple query.
  *  Int32
  *      Length of message contents in bytes, including self.
  *  String
