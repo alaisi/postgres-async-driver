@@ -15,9 +15,10 @@
 package com.github.pgasync.impl;
 
 import com.github.pgasync.impl.message.Message;
+import com.github.pgasync.impl.message.PasswordMessage;
 import com.github.pgasync.impl.message.StartupMessage;
+import rx.Observable;
 
-import java.util.List;
 import java.util.function.Consumer;
 
 /**
@@ -27,11 +28,11 @@ import java.util.function.Consumer;
  */
 public interface PgProtocolStream {
 
-    void connect(StartupMessage startup, Consumer<List<Message>> replyTo);
+    Observable<Message> connect(StartupMessage startup);
 
-    void send(Message message, Consumer<List<Message>> replyTo);
+    Observable<Message> authenticate(PasswordMessage password);
 
-    void send(List<Message> message, Consumer<List<Message>> replyTo);
+    Observable<Message> send(Message... messages);
 
     boolean isConnected();
 

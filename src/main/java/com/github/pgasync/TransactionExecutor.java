@@ -1,6 +1,6 @@
 package com.github.pgasync;
 
-import java.util.function.Consumer;
+import rx.Observable;
 
 /**
  * TransactionExecutor begins backend transactions.
@@ -11,10 +11,7 @@ public interface TransactionExecutor {
 
     /**
      * Begins a transaction.
-     *
-     * @param onTransaction Called when transaction is successfully started.
-     * @param onError Called on exception thrown
      */
-    void begin(Consumer<Transaction> onTransaction, Consumer<Throwable> onError);
+    Observable<Transaction> begin();
 
 }

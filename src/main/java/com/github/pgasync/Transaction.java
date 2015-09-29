@@ -14,6 +14,8 @@
 
 package com.github.pgasync;
 
+import rx.Observable;
+
 import java.util.function.Consumer;
 
 /**
@@ -26,19 +28,33 @@ import java.util.function.Consumer;
 public interface Transaction extends QueryExecutor {
 
     /**
-     * Commits a transaction.
-     * 
-     * @param onCompleted Called when commit completes
-     * @param onError Called on exception thrown
+     * Commits a transaction
      */
-    void commit(Runnable onCompleted, Consumer<Throwable> onError);
+    Observable<Void> commit();
 
     /**
      * Rollbacks a transaction.
-     * 
+     */
+    Observable<Void> rollback();
+
+    /**
+     * Commits a transaction.
+     *
+     * @param onCompleted Called when commit completes
+     * @param onError Called on exception thrown
+     */
+    default void commit(Runnable onCompleted, Consumer<Throwable> onError) {
+        commit().subscribe(__ -> onCompleted.run(), onError::accept);
+    }
+
+    /**
+     * Rollbacks a transaction.
+     *
      * @param onCompleted Called when rollback completes
      * @param onError Called on exception thrown
      */
-    void rollback(Runnable onCompleted, Consumer<Throwable> onError);
+    default void rollback(Runnable onCompleted, Consumer<Throwable> onError) {
+        rollback().subscribe(__ -> onCompleted.run(), onError::accept);
+    }
 
 }

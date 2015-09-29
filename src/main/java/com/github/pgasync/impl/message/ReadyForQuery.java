@@ -19,4 +19,9 @@ package com.github.pgasync.impl.message;
  */
 public enum ReadyForQuery implements Message {
     INSTANCE;
+
+    @Override
+    public String toString() {
+        return "ReadyForQuery()";
+    }
 }

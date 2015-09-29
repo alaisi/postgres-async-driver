@@ -23,7 +23,9 @@ import org.junit.ClassRule;
 import org.junit.Test;
 
 import java.util.Iterator;
+import java.util.List;
 
+import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 
 /**
@@ -35,7 +37,7 @@ public class QueryResultTest {
 
     @ClassRule
     public static DatabaseRule dbr = new DatabaseRule();
-    
+
     @BeforeClass
     public static void create() {
         drop();
@@ -74,6 +76,17 @@ public class QueryResultTest {
     @Test(expected = SqlException.class)
     public void shouldInvokeErrorHandlerOnError() {
         dbr.query("SELECT * FROM not_there");
+    }
+
+    @Test
+    public void shouldStreamResultRows() throws Exception {
+        List<Integer> series = dbr.db().queryRows("select generate_series(1, 5)")
+                .map(row -> row.getInt(0))
+                .toList()
+                .toBlocking()
+                .single();
+
+        assertEquals(asList(1, 2, 3, 4, 5), series);
     }
 
 }

@@ -30,7 +30,7 @@ import static com.github.pgasync.impl.io.IO.putCString;
  *  Int32
  *      Length of message contents in bytes, including self.
  *  String
- *      The query string itself.
+ *      The queryRows string itself.
  * </pre>
  *
  * @author Antti Laisi

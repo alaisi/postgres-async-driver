@@ -34,4 +34,9 @@ public class Authentication implements Message {
     public boolean isAuthenticationOk() {
         return success;
     }
+
+    @Override
+    public String toString() {
+        return String.format("Authentication(success=%s,md5salt=%s)", success, md5salt);
+    }
 }

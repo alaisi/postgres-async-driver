@@ -14,7 +14,7 @@
 
 package com.github.pgasync;
 
-import java.util.function.Consumer;
+import rx.Observable;
 
 /**
  * Pool of backend {@link Connection}s. Pools implement {@link Db} so
@@ -29,11 +29,8 @@ public interface ConnectionPool extends Db {
      * Executes a {@link java.util.function.Consumer} callback when a connection is
      * available. Connection passed to callback must be freed with
      * {@link com.github.pgasync.ConnectionPool#release(Connection)}
-     * 
-     * @param handler Called when a connection is acquired
-     * @param onError Called on exception thrown
      */
-    void getConnection(Consumer<Connection> handler, Consumer<Throwable> onError);
+    Observable<Connection> getConnection();
 
     /**
      * Releases a connection back to the pool.
