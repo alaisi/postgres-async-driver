@@ -23,7 +23,7 @@ public class ListenNotifyTest {
     public void shouldReceiveNotificationsOnListenedChannel() throws Exception {
         BlockingQueue<String> result = new LinkedBlockingQueue<>(5);
 
-        Subscription subscription = pool.listen("example").subscribe(result::add);
+        Subscription subscription = pool.listen("example").subscribe(result::add, Throwable::printStackTrace);
         TimeUnit.SECONDS.sleep(2);
 
         pool.querySet("notify example, 'msg'").toBlocking().single();

@@ -23,6 +23,7 @@ import com.github.pgasync.impl.message.*;
 import rx.Observable;
 import rx.Subscriber;
 import rx.Subscription;
+import rx.subscriptions.Subscriptions;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -95,35 +96,15 @@ public class PgConnection implements Connection, Transaction {
 
     @Override
     public Observable<String> listen(String channel) {
-        return querySet("LISTEN " + channel).lift(subscriber -> {
+        AtomicReference<String> token = new AtomicReference<>();
+        return Observable.<String>create(subscriber ->
 
-            AtomicReference<String> token = new AtomicReference<>();
-            AtomicBoolean unsubscribed = new AtomicBoolean();
+                querySet("LISTEN " + channel)
+                        .subscribe( rs -> token.set(stream.registerNotificationHandler(channel, subscriber::onNext)),
+                                    subscriber::onError)
 
-            subscriber.add(new Subscription() {
-                @Override
-                public void unsubscribe() {
-                    stream.unRegisterNotificationHandler(channel, token.get());
-                    unsubscribed.set(true);
-                }
-                @Override
-                public boolean isUnsubscribed() {
-                    return unsubscribed.get();
-                }
-            });
-            return new Subscriber<ResultSet>() {
-                @Override
-                public void onCompleted() {
-                    token.set(stream.registerNotificationHandler(channel, subscriber::onNext));
-                }
-                @Override
-                public void onError(Throwable e) {
-                    subscriber.onError(e);
-                }
-                @Override
-                public void onNext(ResultSet s) { }
-            };
-        });
+        ).doOnUnsubscribe(() -> querySet("UNLISTEN " + channel)
+                                    .subscribe(rs -> stream.unRegisterNotificationHandler(channel, token.get())));
     }
 
     @Override
