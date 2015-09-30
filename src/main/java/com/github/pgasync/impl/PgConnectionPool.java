@@ -22,24 +22,25 @@ import rx.Subscriber;
 import rx.observers.Subscribers;
 
 import java.net.InetSocketAddress;
-import java.util.LinkedList;
-import java.util.Queue;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Pool for backend connections. Callbacks are queued and executed when pool has an available
  * connection.
  *
- * TODO: Locking scheme is optimized for small thread pools and doesn't scale all that well
- * for large ones.
- *
  * @author Antti Laisi
  */
 public abstract class PgConnectionPool implements ConnectionPool {
 
-    final Queue<Subscriber<? super Connection>> waiters = new LinkedList<>();
-    final Queue<Connection> connections = new LinkedList<>();
-    final Object lock = new Object[0];
+    final int poolSize;
+    final AtomicInteger currentSize = new AtomicInteger();
+    final BlockingQueue<Subscriber<? super Connection>> subscribers = new LinkedBlockingQueue<>();
+    final BlockingQueue<Connection> connections = new LinkedBlockingQueue<>();
 
     final InetSocketAddress address;
     final String username;
@@ -47,12 +48,9 @@ public abstract class PgConnectionPool implements ConnectionPool {
     final String database;
     final DataConverter dataConverter;
     final ConnectionValidator validator;
+    final boolean pipeline;
 
-    final int poolSize;
-    protected final boolean pipeline;
-
-    int currentSize;
-    volatile boolean closed;
+    final AtomicBoolean closed = new AtomicBoolean();
 
     public PgConnectionPool(PoolProperties properties) {
         this.address = new InetSocketAddress(properties.getHostname(), properties.getPort());
@@ -78,15 +76,15 @@ public abstract class PgConnectionPool implements ConnectionPool {
         return getConnection()
                 .doOnNext(this::releaseIfPipelining)
                 .flatMap(connection -> connection.querySet(sql, params)
-                                        .doOnTerminate(() -> releaseIfNotPipelining(connection)));
+                        .doOnTerminate(() -> releaseIfNotPipelining(connection)));
     }
 
     @Override
     public Observable<Transaction> begin() {
         return getConnection()
                 .flatMap(connection -> connection.begin()
-                                        .doOnError(t -> release(connection))
-                                        .map(tx -> new ReleasingTransaction(connection, tx)));
+                        .doOnError(t -> release(connection))
+                        .map(tx -> new ReleasingTransaction(connection, tx)));
     }
 
     @Override
@@ -94,51 +92,45 @@ public abstract class PgConnectionPool implements ConnectionPool {
         return getConnection()
                 .lift(subscriber -> Subscribers.create(
                         connection -> connection.listen(channel)
-                                        .doOnSubscribe(() -> release(connection))
-                                        .onErrorResumeNext(exception -> listen(channel))
-                                        .subscribe(subscriber),
+                                .doOnSubscribe(() -> release(connection))
+                                .onErrorResumeNext(exception -> listen(channel))
+                                .subscribe(subscriber),
                         subscriber::onError));
     }
 
     @Override
+    @SuppressWarnings("MismatchedQueryAndUpdateOfCollection")
     public void close() {
-        closed = true;
-        synchronized (lock) {
-            for(Connection conn = connections.poll(); conn != null; conn = connections.poll()) {
-                conn.close();
-                // TODO: remove conn from listeners
-            }
-            for(Subscriber<? super Connection> waiter = waiters.poll(); waiter != null; waiter = waiters.poll()) {
-                waiter.onError(new SqlException("Connection pool is closed"));
-            }
+        closed.set(true);
+
+        List<Connection> closeConnections = new ArrayList<>();
+        if(connections.drainTo(closeConnections) > 0) {
+            closeConnections.forEach(Connection::close);
+        }
+
+        List<Subscriber<? super Connection>> cancelSubscribers = new ArrayList<>();
+        if(subscribers.drainTo(cancelSubscribers) > 0) {
+            cancelSubscribers.forEach(subscriber -> subscriber.onError(new SqlException("Connection pool is closed")));
         }
     }
 
     @Override
     public Observable<Connection> getConnection() {
-        if(closed) {
+        if(closed.get()) {
             return Observable.error(new SqlException("Connection pool is closed"));
         }
 
         return Observable.create(subscriber -> {
 
-            Connection connection;
-
-            synchronized (lock) {
-                connection = connections.poll();
-                if (connection == null) {
-                    if (currentSize < poolSize) {
-                        currentSize++;
-                    } else {
-                        waiters.add(subscriber);
-                        return;
-                    }
-                }
-            }
-
+            Connection connection = connections.poll();
             if (connection != null) {
                 subscriber.onNext(connection);
                 subscriber.onCompleted();
+                return;
+            }
+
+            if(!tryIncreaseSize()) {
+                subscribers.add(subscriber);
                 return;
             }
 
@@ -146,6 +138,18 @@ public abstract class PgConnectionPool implements ConnectionPool {
                     .connect(username, password, database)
                     .subscribe(subscriber);
         });
+    }
+
+    private boolean tryIncreaseSize() {
+        while(true) {
+            final int current = currentSize.get();
+            if(current == poolSize) {
+                return false;
+            }
+            if(currentSize.compareAndSet(current, current + 1)) {
+                return true;
+            }
+        }
     }
 
     private void releaseIfPipelining(Connection connection) {
@@ -163,29 +167,23 @@ public abstract class PgConnectionPool implements ConnectionPool {
     @Override
     public void release(Connection connection) {
 
-        if(closed) {
+        if(closed.get()) {
             connection.close();
             return;
         }
 
-        Subscriber<? super Connection> next;
-        boolean failed;
-
-        synchronized (lock) {
-            failed = !((PgConnection) connection).isConnected();
-            next = waiters.poll();
-            if (next == null) {
-                if(failed) {
-                    currentSize--;
-                } else {
-                    connections.add(connection);
-                }
-            }
-        }
+        boolean failed = !((PgConnection) connection).isConnected();
+        Subscriber<? super Connection> next = subscribers.poll();
 
         if(next == null) {
+            if(failed) {
+                currentSize.decrementAndGet();
+            } else {
+                connections.add(connection);
+            }
             return;
         }
+
         if(failed) {
             getConnection().subscribe(next);
             return;
