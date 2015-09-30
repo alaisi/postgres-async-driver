@@ -23,9 +23,7 @@ import rx.observers.Subscribers;
 
 import java.net.InetSocketAddress;
 import java.util.LinkedList;
-import java.util.Map;
 import java.util.Queue;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -42,8 +40,6 @@ public abstract class PgConnectionPool implements ConnectionPool {
     final Queue<Subscriber<? super Connection>> waiters = new LinkedList<>();
     final Queue<Connection> connections = new LinkedList<>();
     final Object lock = new Object[0];
-
-    final Map<String,Connection> listeners = new ConcurrentHashMap<>();
 
     final InetSocketAddress address;
     final String username;
@@ -98,8 +94,9 @@ public abstract class PgConnectionPool implements ConnectionPool {
         return getConnection()
                 .lift(subscriber -> Subscribers.create(
                         connection -> connection.listen(channel)
-                                .doOnSubscribe(() -> release(connection))
-                                .subscribe(subscriber),
+                                        .doOnSubscribe(() -> release(connection))
+                                        .onErrorResumeNext(exception -> listen(channel))
+                                        .subscribe(subscriber),
                         subscriber::onError));
     }
 
