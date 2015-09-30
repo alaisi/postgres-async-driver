@@ -34,11 +34,9 @@ import rx.Subscriber;
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.util.*;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.LinkedBlockingDeque;
-import java.util.function.Consumer;
 
 /**
  * Netty connection to PostgreSQL backend.
@@ -53,15 +51,15 @@ public class NettyPgProtocolStream implements PgProtocolStream {
 
     final GenericFutureListener<Future<? super Object>> onError;
     final Queue<Subscriber<? super Message>> subscribers;
-    final ConcurrentMap<String,Map<String,Consumer<String>>> listeners = new ConcurrentHashMap<>();
+    final ConcurrentMap<String,Map<String,Subscriber<? super String>>> listeners = new ConcurrentHashMap<>();
 
     ChannelHandlerContext ctx;
 
-    public NettyPgProtocolStream(EventLoopGroup group, SocketAddress address, boolean useSsl, boolean pipeline) {
+    public NettyPgProtocolStream(EventLoopGroup group, SocketAddress address, boolean useSsl) {
         this.group = group;
         this.address = address;
         this.useSsl = useSsl; // TODO: refactor into SSLConfig with trust parameters
-        this.subscribers = pipeline ? new LinkedBlockingDeque<>() : new ArrayBlockingQueue<>(1);
+        this.subscribers = new LinkedBlockingDeque<>(); // TODO: limit pipeline queue depth
         this.onError = future -> {
             if(!future.isSuccess()) {
                 subscribers.peek().onError(future.cause());
@@ -115,22 +113,25 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     }
 
     @Override
-    public String registerNotificationHandler(String channel, Consumer<String> onNotification) {
-        Map<String,Consumer<String>> consumers = new ConcurrentHashMap<>();
-        Map<String,Consumer<String>> old = listeners.putIfAbsent(channel, consumers);
-        consumers = old != null ? old : consumers;
+    public Observable<String> listen(String channel) {
 
-        String token = UUID.randomUUID().toString();
-        consumers.put(token, onNotification);
-        return token;
-    }
+        String subscriptionId = UUID.randomUUID().toString();
 
-    @Override
-    public void unRegisterNotificationHandler(String channel, String unlistenToken) {
-        Map<String,Consumer<String>> consumers = listeners.get(channel);
-        if(consumers == null || consumers.remove(unlistenToken) == null) {
-            throw new IllegalStateException("No consumers on channel " + channel + " with token " + unlistenToken);
-        }
+        return Observable.<String>create(subscriber -> {
+
+            Map<String, Subscriber<? super String>> consumers = new ConcurrentHashMap<>();
+            Map<String, Subscriber<? super String>> old = listeners.putIfAbsent(channel, consumers);
+            consumers = old != null ? old : consumers;
+
+            consumers.put(subscriptionId, subscriber);
+
+        }).doOnUnsubscribe(() -> {
+
+            Map<String, Subscriber<? super String>> consumers = listeners.get(channel);
+            if (consumers == null || consumers.remove(subscriptionId) == null) {
+                throw new IllegalStateException("No consumers on channel " + channel + " with id " + subscriptionId);
+            }
+        });
     }
 
     @Override
@@ -152,9 +153,9 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     }
 
     private void publishNotification(NotificationResponse notification) {
-        Map<String,Consumer<String>> consumers = listeners.get(notification.getChannel());
+        Map<String,Subscriber<? super String>> consumers = listeners.get(notification.getChannel());
         if(consumers != null) {
-            consumers.values().forEach(c -> c.accept(notification.getPayload()));
+            consumers.values().forEach(c -> c.onNext(notification.getPayload()));
         }
     }
 
@@ -170,26 +171,24 @@ public class NettyPgProtocolStream implements PgProtocolStream {
             SqlException sqlException;
 
             @Override
-            public void onCompleted() {
-                if(sqlException != null) {
-                    subscriber.onError(sqlException);
-                    return;
-                }
-                subscriber.onCompleted();
-            }
-
-            @Override
-            public void onError(Throwable e) {
-                subscriber.onError(e);
-            }
-
-            @Override
             public void onNext(Object message) {
                 if (message instanceof ErrorResponse) {
                     sqlException = toSqlException((ErrorResponse) message);
                     return;
                 }
+                if(sqlException != null && message == ReadyForQuery.INSTANCE) {
+                    subscriber.onError(sqlException);
+                    return;
+                }
                 subscriber.onNext((Message) message);
+            }
+            @Override
+            public void onError(Throwable e) {
+                subscriber.onError(e);
+            }
+            @Override
+            public void onCompleted() {
+                subscriber.onCompleted();
             }
         };
     }

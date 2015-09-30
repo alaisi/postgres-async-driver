@@ -22,15 +22,11 @@ import com.github.pgasync.impl.conversion.DataConverter;
 import com.github.pgasync.impl.message.*;
 import rx.Observable;
 import rx.Subscriber;
-import rx.Subscription;
-import rx.subscriptions.Subscriptions;
+import rx.observers.Subscribers;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.*;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import static com.github.pgasync.impl.message.RowDescription.ColumnDescription;
 
@@ -40,7 +36,7 @@ import static com.github.pgasync.impl.message.RowDescription.ColumnDescription;
  * 
  * @author Antti Laisi
  */
-public class PgConnection implements Connection, Transaction {
+public class PgConnection implements Connection {
 
     final PgProtocolStream stream;
     final DataConverter dataConverter;
@@ -53,7 +49,7 @@ public class PgConnection implements Connection, Transaction {
     Observable<Connection> connect(String username, String password, String database) {
        return stream.connect(new StartupMessage(username, database))
                .flatMap(message -> authenticate(username, password, message))
-               .filter(ReadyForQuery.class::isInstance)
+               .single(message -> message == ReadyForQuery.INSTANCE)
                .map(ready -> this);
     }
 
@@ -81,30 +77,17 @@ public class PgConnection implements Connection, Transaction {
 
     @Override
     public Observable<Transaction> begin() {
-        return queryRows("BEGIN").map(row -> this);
-    }
-
-    @Override
-    public Observable<Void> commit() {
-        return queryRows("COMMIT").map(row -> null);
-    }
-
-    @Override
-    public Observable<Void> rollback() {
-        return queryRows("ROLLBACK").map(row -> null);
+        return querySet("BEGIN").map(rs -> new PgConnectionTransaction());
     }
 
     @Override
     public Observable<String> listen(String channel) {
-        AtomicReference<String> token = new AtomicReference<>();
-        return Observable.<String>create(subscriber ->
-
-                querySet("LISTEN " + channel)
-                        .subscribe( rs -> token.set(stream.registerNotificationHandler(channel, subscriber::onNext)),
-                                    subscriber::onError)
-
-        ).doOnUnsubscribe(() -> querySet("UNLISTEN " + channel)
-                                    .subscribe(rs -> stream.unRegisterNotificationHandler(channel, token.get())));
+        // TODO: wait for commit before sending unlisten as otherwise it can be rolled back
+        return querySet("LISTEN " + channel)
+                .<String>lift(subscriber -> Subscribers.create( rs -> stream.listen(channel)
+                                                                        .subscribe(subscriber),
+                                                                subscriber::onError))
+                .doOnUnsubscribe(() -> querySet("UNLISTEN " + channel).subscribe(rs -> { }));
     }
 
     @Override
@@ -185,6 +168,37 @@ public class PgConnection implements Connection, Transaction {
             columns.put(descriptions[i].getName().toUpperCase(), new PgColumn(i, descriptions[i].getType()));
         }
         return columns;
+    }
+
+    /**
+     * Transaction that rollbacks the tx on backend error and closes the connection on COMMIT/ROLLBACK failure.
+     */
+    class PgConnectionTransaction implements Transaction {
+        @Override
+        public Observable<Void> commit() {
+            return PgConnection.this.querySet("COMMIT")
+                    .map(rs -> (Void) null)
+                    .doOnError(exception -> close());
+        }
+        @Override
+        public Observable<Void> rollback() {
+            return PgConnection.this.querySet("ROLLBACK")
+                    .map(rs -> (Void) null)
+                    .doOnError(exception -> close());
+        }
+        @Override
+        public Observable<Row> queryRows(String sql, Object... params) {
+            return PgConnection.this.queryRows(sql, params)
+                    .onErrorResumeNext(this::doRollback);
+        }
+        @Override
+        public Observable<ResultSet> querySet(String sql, Object... params) {
+            return PgConnection.this.querySet(sql, params)
+                    .onErrorResumeNext(this::doRollback);
+        }
+        <T> Observable<T> doRollback(Throwable t) {
+            return rollback().flatMap(__ -> Observable.error(t));
+        }
     }
 
 }

@@ -10,6 +10,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -36,6 +37,9 @@ public class ListenNotifyTest {
 
         subscription.unsubscribe();
         assertTrue(subscription.isUnsubscribed());
+
+        pool.querySet("notify example, 'msg'").toBlocking().single();
+        assertNull(result.poll(2, TimeUnit.SECONDS));
     }
 
     @AfterClass

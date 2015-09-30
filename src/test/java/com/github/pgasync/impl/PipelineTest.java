@@ -16,8 +16,24 @@ package com.github.pgasync.impl;
 
 import com.github.pgasync.Connection;
 import com.github.pgasync.ConnectionPool;
+import com.github.pgasync.ResultSet;
+import org.junit.After;
+import org.junit.Ignore;
+import org.junit.Test;
 
+import java.util.Deque;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+
+import static com.github.pgasync.impl.DatabaseRule.createPoolBuilder;
+import static java.lang.System.currentTimeMillis;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.isA;
+import static org.junit.Assert.assertThat;
 
 /**
  * Tests for statement pipelining.
@@ -29,7 +45,7 @@ public class PipelineTest {
 
     Connection c;
     ConnectionPool pool;
-/*
+
     @After
     public void closeConnection() {
         if (c != null) {
@@ -49,8 +65,7 @@ public class PipelineTest {
         Deque<Long> results = new LinkedBlockingDeque<>();
         long startWrite = currentTimeMillis();
         for (int i = 0; i < count; ++i) {
-            pool.queryRows("select " + i + ", pg_sleep(" + sleep + ")", r -> results.add(currentTimeMillis()),
-                    err);
+            pool.query("select " + i + ", pg_sleep(" + sleep + ")", r -> results.add(currentTimeMillis()), err);
         }
         long writeTime = currentTimeMillis() - startWrite;
 
@@ -66,18 +81,18 @@ public class PipelineTest {
     private Connection getConnection(boolean pipeline) throws InterruptedException {
         pool = createPoolBuilder(1).pipeline(pipeline).build();
         SynchronousQueue<Connection> connQueue = new SynchronousQueue<>();
-        pool.getConnection(c -> connQueue.add(c), err);
+        pool.getConnection().subscribe(connQueue::add);
         return c = connQueue.take();
     }
 
-    @Test
+    @Test @Ignore("TODO: Setup pipeline queue limits")
     public void disabledConnectionPipeliningThrowsErrorWhenPipeliningIsAttempted() throws Exception {
         Connection c = getConnection(false);
 
         BlockingQueue<ResultSet> rs = new LinkedBlockingDeque<>();
         BlockingQueue<Throwable> err = new LinkedBlockingDeque<>();
         for (int i = 0; i < 2; ++i) {
-            c.queryRows("select " + i + ", pg_sleep(0.5)", r -> rs.add(r), e -> err.add(e));
+            c.query("select " + i + ", pg_sleep(0.5)", rs::add, err::add);
         }
         assertThat(err.take().getMessage(), containsString("Pipelining not enabled"));
         assertThat(rs.take(), isA(ResultSet.class));
@@ -92,8 +107,7 @@ public class PipelineTest {
         Deque<Long> results = new LinkedBlockingDeque<>();
         long startWrite = currentTimeMillis();
         for (int i = 0; i < count; ++i) {
-            c.queryRows("select " + i + ", pg_sleep(" + sleep + ")", r -> results.add(currentTimeMillis()),
-                    err);
+            c.query("select " + i + ", pg_sleep(" + sleep + ")", r -> results.add(currentTimeMillis()), err);
         }
         long writeTime = currentTimeMillis() - startWrite;
 
@@ -119,12 +133,9 @@ public class PipelineTest {
         long startWrite = currentTimeMillis();
         pool.begin(t -> {
             for (int i = 0; i < count; ++i) {
-                t.queryRows("select " + i + ", pg_sleep(" + sleep + ")", r -> results.add(currentTimeMillis()),
-                        err);
+                t.query("select " + i + ", pg_sleep(" + sleep + ")", r -> results.add(currentTimeMillis()), err);
             }
-            t.commit(() -> {
-                sync.countDown();
-            } , err);
+            t.commit(sync::countDown, err);
             writeTime.set(currentTimeMillis() - startWrite);
         } , err);
         sync.await(3, SECONDS);
@@ -137,5 +148,5 @@ public class PipelineTest {
         assertThat(MILLISECONDS.toSeconds(writeTime.get()), is(0L));
         assertThat(MILLISECONDS.toSeconds(readTime + 999) >= remoteWaitTimeSeconds, is(true));
     }
-    */
+
 }

@@ -24,16 +24,6 @@ public interface QueryExecutor {
     Observable<Row> queryRows(String sql, Object... params);
 
     /**
-     * Executes a simple query.
-     *
-     * @param sql SQL to execute.
-     * @return Cold observable that emits 0-n rows.
-     */
-    default Observable<Row> queryRows(String sql) {
-        return queryRows(sql, (Object[]) null);
-    }
-
-    /**
      * Executes an anonymous prepared statement. Uses native PostgreSQL syntax with $arg instead of ?
      * to mark parameters. Supported parameter types are String, Character, Number, Time, Date, Timestamp
      * and byte[].
@@ -43,16 +33,6 @@ public interface QueryExecutor {
      * @return Cold observable that emits a single result set.
      */
     Observable<ResultSet> querySet(String sql, Object... params);
-
-    /**
-     * Executes a simple query.
-     *
-     * @param sql SQL to execute.
-     * @return Cold observable that emits a single result set.
-     */
-    default Observable<ResultSet> querySet(String sql) {
-        return querySet(sql, (Object[]) null);
-    }
 
     /**
      * Executes a simple query.

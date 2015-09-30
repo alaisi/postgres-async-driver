@@ -19,12 +19,14 @@ import com.github.pgasync.ConnectionPoolBuilder.PoolProperties;
 import com.github.pgasync.impl.conversion.DataConverter;
 import rx.Observable;
 import rx.Subscriber;
+import rx.observers.Subscribers;
 
 import java.net.InetSocketAddress;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Pool for backend connections. Callbacks are queued and executed when pool has an available
@@ -72,8 +74,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
         return getConnection()
                 .doOnNext(this::releaseIfPipelining)
                 .flatMap(connection -> connection.queryRows(sql, params)
-                                        .doOnError(t -> releaseIfNotPipelining(connection))
-                                        .doOnCompleted(() -> releaseIfNotPipelining(connection)));
+                                        .doOnTerminate(() -> releaseIfNotPipelining(connection)));
     }
 
     @Override
@@ -81,8 +82,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
         return getConnection()
                 .doOnNext(this::releaseIfPipelining)
                 .flatMap(connection -> connection.querySet(sql, params)
-                                        .doOnError(t -> releaseIfNotPipelining(connection))
-                                        .doOnCompleted(() -> releaseIfNotPipelining(connection)));
+                                        .doOnTerminate(() -> releaseIfNotPipelining(connection)));
     }
 
     @Override
@@ -96,8 +96,11 @@ public abstract class PgConnectionPool implements ConnectionPool {
     @Override
     public Observable<String> listen(String channel) {
         return getConnection()
-                .flatMap(connection -> connection.listen(channel)
-                                        .doOnSubscribe(() -> release(connection)));
+                .lift(subscriber -> Subscribers.create(
+                        connection -> connection.listen(channel)
+                                .doOnSubscribe(() -> release(connection))
+                                .subscribe(subscriber),
+                        subscriber::onError));
     }
 
     @Override
@@ -232,10 +235,12 @@ public abstract class PgConnectionPool implements ConnectionPool {
     */
 
     /**
-     * Transaction that rollbacks the tx on backend error and chains releasing the connection after COMMIT/ROLLBACK.
+     * Transaction that chains releasing the connection after COMMIT/ROLLBACK.
      */
     class ReleasingTransaction implements Transaction {
-        Connection txconn;
+
+        final AtomicBoolean released = new AtomicBoolean();
+        final Connection txconn;
         final Transaction transaction;
 
         ReleasingTransaction(Connection txconn, Transaction transaction) {
@@ -247,53 +252,41 @@ public abstract class PgConnectionPool implements ConnectionPool {
         public Observable<Void> rollback() {
             return transaction.rollback()
                     .doOnCompleted(this::releaseConnection)
-                    .doOnError(exception -> closeAndRelease());
+                    .doOnError(exception -> closeAndReleaseConnection());
         }
 
         @Override
         public Observable<Void> commit() {
             return transaction.commit()
                     .doOnCompleted(this::releaseConnection)
-                    .onErrorResumeNext(this::doRollback);
+                    .doOnError(exception -> closeAndReleaseConnection());
         }
 
         @Override
         public Observable<Row> queryRows(String sql, Object... params) {
-            if (txconn == null) {
+            if (released.get()) {
                 return Observable.error(new SqlException("Transaction is already completed"));
             }
-            return txconn.queryRows(sql)
-                    .onErrorResumeNext(this::doRollback);
+            return transaction.queryRows(sql)
+                    .doOnError(exception -> releaseConnection());
         }
 
         @Override
         public Observable<ResultSet> querySet(String sql, Object... params) {
-            if (txconn == null) {
+            if (released.get()) {
                 return Observable.error(new SqlException("Transaction is already completed"));
             }
-            return txconn.querySet(sql, params)
-                    .onErrorResumeNext(this::doRollback);
+            return transaction.querySet(sql, params)
+                    .doOnError(exception -> releaseConnection());
         }
 
         void releaseConnection() {
             release(txconn);
-            txconn = null;
+            released.set(true);
         }
-        void closeAndRelease() {
+        void closeAndReleaseConnection() {
             txconn.close();
             releaseConnection();
-        }
-
-        <T> Observable<T> doRollback(Throwable exception) {
-            if (!((PgConnection) txconn).isConnected()) {
-                release(txconn);
-                txconn = null;
-                return Observable.error(exception);
-            }
-
-            return transaction.rollback()
-                    .doOnError(rollbackException -> closeAndRelease())
-                    .flatMap(__ -> Observable.error(exception));
         }
     }
 }

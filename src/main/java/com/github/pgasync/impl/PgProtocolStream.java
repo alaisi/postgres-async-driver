@@ -19,8 +19,6 @@ import com.github.pgasync.impl.message.PasswordMessage;
 import com.github.pgasync.impl.message.StartupMessage;
 import rx.Observable;
 
-import java.util.function.Consumer;
-
 /**
  * Stream of messages from/to backend server.
  * 
@@ -34,12 +32,10 @@ public interface PgProtocolStream {
 
     Observable<Message> send(Message... messages);
 
+    Observable<String> listen(String channel);
+
     boolean isConnected();
 
     void close();
-
-    String registerNotificationHandler(String channel, Consumer<String> onNotification);
-
-    void unRegisterNotificationHandler(String channel, String unlistenToken);
 
 }
