@@ -52,7 +52,7 @@ public class PgConnection implements Connection {
     }
 
     Observable<? extends Message> authenticate(String username, String password, Message message) {
-        return message instanceof Authentication
+        return message instanceof Authentication && !((Authentication) message).isAuthenticationOk()
                     ? stream.authenticate(new PasswordMessage(username, password, ((Authentication) message).getMd5Salt()))
                     : Observable.just(message);
     }
