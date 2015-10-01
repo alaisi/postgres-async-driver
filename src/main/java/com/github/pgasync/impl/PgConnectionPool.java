@@ -22,12 +22,12 @@ import rx.Subscriber;
 import rx.observers.Subscribers;
 
 import java.net.InetSocketAddress;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
  * Pool for backend connections. Callbacks are queued and executed when pool has an available
@@ -90,28 +90,36 @@ public abstract class PgConnectionPool implements ConnectionPool {
     @Override
     public Observable<String> listen(String channel) {
         return getConnection()
-                .lift(subscriber -> Subscribers.create(
-                        connection -> connection.listen(channel)
-                                .doOnSubscribe(() -> release(connection))
-                                .onErrorResumeNext(exception -> listen(channel))
-                                .subscribe(subscriber),
-                        subscriber::onError));
+                .lift(subscriber ->
+                        Subscribers.create(
+                                connection -> connection.listen(channel)
+                                        .doOnSubscribe(() -> release(connection))
+                                        .onErrorResumeNext(exception -> listen(channel))
+                                        .subscribe(subscriber),
+                                subscriber::onError));
     }
 
     @Override
-    @SuppressWarnings("MismatchedQueryAndUpdateOfCollection")
     public void close() {
         closed.set(true);
 
-        List<Connection> closeConnections = new ArrayList<>();
-        if(connections.drainTo(closeConnections) > 0) {
-            closeConnections.forEach(Connection::close);
+        while(!subscribers.isEmpty()) {
+            Subscriber<? super Connection> subscriber = subscribers.poll();
+            if(subscriber != null) {
+                subscriber.onError(new SqlException("Connection pool is closing"));
+            }
         }
 
-        List<Subscriber<? super Connection>> cancelSubscribers = new ArrayList<>();
-        if(subscribers.drainTo(cancelSubscribers) > 0) {
-            cancelSubscribers.forEach(subscriber -> subscriber.onError(new SqlException("Connection pool is closed")));
-        }
+        try {
+            while (currentSize.get() > 0) {
+                Connection connection = connections.poll(10, SECONDS);
+                if(connection == null) {
+                    break;
+                }
+                connection.close();
+                currentSize.decrementAndGet();
+            }
+        } catch (InterruptedException e) { /* ignore */ }
     }
 
     @Override
@@ -246,15 +254,13 @@ public abstract class PgConnectionPool implements ConnectionPool {
         @Override
         public Observable<Void> rollback() {
             return transaction.rollback()
-                    .doOnCompleted(this::releaseConnection)
-                    .doOnError(exception -> closeAndReleaseConnection());
+                    .doOnTerminate(this::releaseConnection);
         }
 
         @Override
         public Observable<Void> commit() {
             return transaction.commit()
-                    .doOnCompleted(this::releaseConnection)
-                    .doOnError(exception -> closeAndReleaseConnection());
+                    .doOnTerminate(this::releaseConnection);
         }
 
         @Override
@@ -278,10 +284,6 @@ public abstract class PgConnectionPool implements ConnectionPool {
         void releaseConnection() {
             release(txconn);
             released.set(true);
-        }
-        void closeAndReleaseConnection() {
-            txconn.close();
-            releaseConnection();
         }
     }
 }
