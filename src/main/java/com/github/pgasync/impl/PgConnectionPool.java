@@ -22,11 +22,12 @@ import rx.Subscriber;
 import rx.observers.Subscribers;
 
 import java.net.InetSocketAddress;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.LinkedList;
+import java.util.Queue;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
+import javax.annotation.concurrent.GuardedBy;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
@@ -38,9 +39,17 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 public abstract class PgConnectionPool implements ConnectionPool {
 
     final int poolSize;
-    final AtomicInteger currentSize = new AtomicInteger();
-    final BlockingQueue<Subscriber<? super Connection>> subscribers = new LinkedBlockingQueue<>();
-    final BlockingQueue<Connection> connections = new LinkedBlockingQueue<>();
+    final ReentrantLock lock = new ReentrantLock();
+    @GuardedBy("lock")
+    final Condition closingConnectionReleased = lock.newCondition();
+    @GuardedBy("lock")
+    int currentSize;
+    @GuardedBy("lock")
+    boolean closed;
+    @GuardedBy("lock")
+    final Queue<Subscriber<? super Connection>> subscribers = new LinkedList<>();
+    @GuardedBy("lock")
+    final Queue<Connection> connections = new LinkedList<>();
 
     final InetSocketAddress address;
     final String username;
@@ -49,8 +58,6 @@ public abstract class PgConnectionPool implements ConnectionPool {
     final DataConverter dataConverter;
     final ConnectionValidator validator;
     final boolean pipeline;
-
-    final AtomicBoolean closed = new AtomicBoolean();
 
     public PgConnectionPool(PoolProperties properties) {
         this.address = new InetSocketAddress(properties.getHostname(), properties.getPort());
@@ -101,63 +108,82 @@ public abstract class PgConnectionPool implements ConnectionPool {
 
     @Override
     public void close() {
-        closed.set(true);
 
-        while(!subscribers.isEmpty()) {
-            Subscriber<? super Connection> subscriber = subscribers.poll();
-            if(subscriber != null) {
-                subscriber.onError(new SqlException("Connection pool is closing"));
-            }
-        }
-
+        lock.lock();
         try {
-            while (currentSize.get() > 0) {
-                Connection connection = connections.poll(10, SECONDS);
-                if(connection == null) {
-                    break;
+            closed = true;
+
+            while(!subscribers.isEmpty()) {
+                Subscriber<? super Connection> subscriber = subscribers.poll();
+                if(subscriber != null) {
+                    subscriber.onError(new SqlException("Connection pool is closing"));
                 }
-                connection.close();
-                currentSize.decrementAndGet();
             }
-        } catch (InterruptedException e) { /* ignore */ }
+
+            try {
+                while (currentSize > 0) {
+                    Connection connection = connections.poll();
+                    if(connection == null) {
+                        if (closingConnectionReleased.await(10, SECONDS)) {
+                            break;
+                        }
+                        continue;
+                    }
+                    currentSize--;
+                    connection.close();
+                }
+            } catch (InterruptedException e) { /* ignore */ }
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override
     public Observable<Connection> getConnection() {
-        if(closed.get()) {
-            return Observable.error(new SqlException("Connection pool is closed"));
-        }
-
         return Observable.create(subscriber -> {
+            boolean locked = true;
+            lock.lock();
+            try {
+                if (closed) {
+                    lock.unlock();
+                    locked = false;
+                    subscriber.onError(new SqlException("Connection pool is closed"));
+                    return;
+                }
 
-            Connection connection = connections.poll();
-            if (connection != null) {
-                subscriber.onNext(connection);
-                subscriber.onCompleted();
-                return;
+                Connection connection = connections.poll();
+                if (connection != null) {
+                    lock.unlock();
+                    locked = false;
+                    subscriber.onNext(connection);
+                    subscriber.onCompleted();
+                    return;
+                }
+
+                if(!tryIncreaseSize()) {
+                    subscribers.add(subscriber);
+                    return;
+                }
+                lock.unlock();
+                locked = false;
+
+                new PgConnection(openStream(address), dataConverter)
+                        .connect(username, password, database)
+                        .subscribe(subscriber);
+            } finally {
+                if (locked) {
+                    lock.unlock();
+                }
             }
-
-            if(!tryIncreaseSize()) {
-                subscribers.add(subscriber);
-                return;
-            }
-
-            new PgConnection(openStream(address), dataConverter)
-                    .connect(username, password, database)
-                    .subscribe(subscriber);
         });
     }
 
     private boolean tryIncreaseSize() {
-        while(true) {
-            final int current = currentSize.get();
-            if(current == poolSize) {
-                return false;
-            }
-            if(currentSize.compareAndSet(current, current + 1)) {
-                return true;
-            }
+        if(currentSize >= poolSize) {
+            return false;
         }
+        currentSize++;
+        return true;
     }
 
     private void releaseIfPipelining(Connection connection) {
@@ -174,27 +200,26 @@ public abstract class PgConnectionPool implements ConnectionPool {
 
     @Override
     public void release(Connection connection) {
-
-        if(closed.get()) {
-            connection.close();
-            return;
-        }
-
         boolean failed = !((PgConnection) connection).isConnected();
-        Subscriber<? super Connection> next = subscribers.poll();
 
-        if(next == null) {
-            if(failed) {
-                currentSize.decrementAndGet();
-            } else {
-                connections.add(connection);
+        Subscriber<? super Connection> next;
+        lock.lock();
+        try {
+            if(subscribers.isEmpty()) {
+                if(failed) {
+                    currentSize--;
+                } else {
+                    connections.add(connection);
+                }
+                if (closed) {
+                    this.closingConnectionReleased.signalAll();
+                }
+                return;
             }
-            return;
-        }
 
-        if(failed) {
-            getConnection().subscribe(next);
-            return;
+            next = subscribers.poll();
+        } finally {
+            lock.unlock();
         }
 
         next.onNext(connection);
