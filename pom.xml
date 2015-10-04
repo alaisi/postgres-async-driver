@@ -39,12 +39,16 @@
 		<url>https://github.com/alaisi/postgres-async-driver/issues</url>
 	</issueManagement>
 
+	<prerequisites>
+		<maven>3.3</maven>
+	</prerequisites>
+
 	<build>
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
-				<version>3.1</version>
+				<version>3.3</version>
 				<configuration>
 					<source>1.8</source>
 					<target>1.8</target>
@@ -57,7 +61,7 @@
 		<dependency>
 			<groupId>io.netty</groupId>
 			<artifactId>netty-handler</artifactId>
-			<version>4.0.24.Final</version>
+			<version>4.0.32.Final</version>
 		</dependency>
 		<dependency>
 			<groupId>org.reactivestreams</groupId>
@@ -72,7 +76,7 @@
 		<dependency>
 			<groupId>junit</groupId>
 			<artifactId>junit</artifactId>
-			<version>4.11</version>
+			<version>4.12</version>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
