@@ -169,6 +169,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
 
                 new PgConnection(openStream(address), dataConverter)
                         .connect(username, password, database)
+                        .doOnError(__ -> release(null))
                         .subscribe(subscriber);
             } finally {
                 if (locked) {
@@ -200,7 +201,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
 
     @Override
     public void release(Connection connection) {
-        boolean failed = !((PgConnection) connection).isConnected();
+        boolean failed = connection == null || !((PgConnection) connection).isConnected();
 
         Subscriber<? super Connection> next;
         lock.lock();
