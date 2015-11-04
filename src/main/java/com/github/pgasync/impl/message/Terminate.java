@@ -12,20 +12,11 @@
  * limitations under the License.
  */
 
-package com.github.pgasync;
-
-import rx.Observable;
+package com.github.pgasync.impl.message;
 
 /**
- * A single physical connection to PostgreSQL backend.
- * 
- * @author Antti Laisi
+ * @author  Antti Laisi
  */
-public interface Connection extends Db {
-
-    /**
-     * Closes the connection.
-     */
-    Observable<Void> close();
-
+public enum Terminate implements Message {
+    INSTANCE
 }

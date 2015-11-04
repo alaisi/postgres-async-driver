@@ -11,21 +11,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.github.pgasync.impl.io;
 
-package com.github.pgasync;
+import com.github.pgasync.impl.message.Terminate;
 
-import rx.Observable;
+import java.nio.ByteBuffer;
 
 /**
- * A single physical connection to PostgreSQL backend.
- * 
  * @author Antti Laisi
  */
-public interface Connection extends Db {
+public class TerminateEncoder implements Encoder<Terminate> {
 
-    /**
-     * Closes the connection.
-     */
-    Observable<Void> close();
+    @Override
+    public Class<Terminate> getMessageType() {
+        return Terminate.class;
+    }
 
+    @Override
+    public void write(Terminate msg, ByteBuffer buffer) {
+        buffer.put((byte) 'X');
+        buffer.putInt(4);
+    }
 }

@@ -107,35 +107,42 @@ public abstract class PgConnectionPool implements ConnectionPool {
     }
 
     @Override
-    public void close() {
-
-        lock.lock();
-        try {
-            closed = true;
-
-            while(!subscribers.isEmpty()) {
-                Subscriber<? super Connection> subscriber = subscribers.poll();
-                if(subscriber != null) {
-                    subscriber.onError(new SqlException("Connection pool is closing"));
-                }
-            }
-
+    public Observable<Void> close() {
+        return Observable.create(subscriber -> {
+            lock.lock();
             try {
-                while (currentSize > 0) {
-                    Connection connection = connections.poll();
-                    if(connection == null) {
-                        if (closingConnectionReleased.await(10, SECONDS)) {
-                            break;
-                        }
-                        continue;
+                closed = true;
+
+                // TODO: this currently blocks the thread
+
+                while(!subscribers.isEmpty()) {
+                    Subscriber<? super Connection> queued = subscribers.poll();
+                    if(queued != null) {
+                        queued.onError(new SqlException("Connection pool is closing"));
                     }
-                    currentSize--;
-                    connection.close();
                 }
-            } catch (InterruptedException e) { /* ignore */ }
-        } finally {
-            lock.unlock();
-        }
+
+                try {
+                    while (currentSize > 0) {
+                        Connection connection = connections.poll();
+                        if(connection == null) {
+                            if (closingConnectionReleased.await(10, SECONDS)) {
+                                break;
+                            }
+                            continue;
+                        }
+                        currentSize--;
+                        connection.close().toBlocking().single();
+                    }
+                } catch (InterruptedException e) { /* ignore */ }
+
+                subscriber.onNext(null);
+                subscriber.onCompleted();
+
+            } finally {
+                lock.unlock();
+            }
+        });
     }
 
     @Override

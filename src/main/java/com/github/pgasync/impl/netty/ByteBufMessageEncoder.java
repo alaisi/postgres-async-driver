@@ -41,7 +41,8 @@ public class ByteBufMessageEncoder extends MessageToByteEncoder<Message> {
                 new QueryEncoder(), 
                 new ParseEncoder(), 
                 new BindEncoder(), 
-                new ExtendedQueryEncoder() }) {
+                new ExtendedQueryEncoder(),
+                new TerminateEncoder() }) {
             ENCODERS.put(encoder.getMessageType(), encoder);
         }
     }

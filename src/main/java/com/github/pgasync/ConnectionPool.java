@@ -39,9 +39,4 @@ public interface ConnectionPool extends Db {
      */
     void release(Connection connection);
 
-    /**
-     * Closes the pool.
-     */
-    void close();
-
 }

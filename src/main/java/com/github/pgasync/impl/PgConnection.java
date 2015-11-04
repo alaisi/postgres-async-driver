@@ -89,8 +89,10 @@ public class PgConnection implements Connection {
     }
 
     @Override
-    public void close() {
-        stream.close();
+    public Observable<Void> close() {
+        return Observable.concat(stream.send(Terminate.INSTANCE), stream.close())
+                .first()
+                .map(__ -> null);
     }
 
     private Observable<Message> sendQuery(String sql, Object[] params) {

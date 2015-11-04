@@ -135,8 +135,15 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     }
 
     @Override
-    public void close() {
-        ctx.close();
+    public Observable<Void> close() {
+        return Observable.create(subscriber -> ctx.close().addListener(f -> {
+            if(!f.isSuccess()) {
+                subscriber.onError(f.cause());
+                return;
+            }
+            subscriber.onNext(null);
+            subscriber.onCompleted();
+        }));
     }
 
     private void pushSubscriber(Subscriber<? super Message> subscriber) {

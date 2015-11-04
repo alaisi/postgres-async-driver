@@ -19,6 +19,13 @@ import com.github.pgasync.impl.PgConnectionPool;
 import com.github.pgasync.impl.PgProtocolStream;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.util.concurrent.Future;
+import io.netty.util.concurrent.GenericFutureListener;
+import io.netty.util.concurrent.Promise;
+import rx.Observable;
+import rx.Subscriber;
+import rx.functions.Action1;
+import rx.observers.Subscribers;
 
 import java.net.InetSocketAddress;
 
@@ -44,8 +51,21 @@ public class NettyPgConnectionPool extends PgConnectionPool {
     }
 
     @Override
-    public void close() {
-        super.close();
-        group.shutdownGracefully();
+    public Observable<Void> close() {
+        return super.close()
+                .lift(subscriber -> Subscribers.create(
+                        __ -> group.shutdownGracefully().addListener(close(subscriber, null)),
+                        ex -> group.shutdownGracefully().addListener(close(subscriber, ex))));
+    }
+
+    private <T> GenericFutureListener<Future<T>> close(Subscriber<?> subscriber, Throwable exception) {
+        return f -> {
+            if (exception == null && !f.isSuccess()) {
+                subscriber.onNext(null);
+                subscriber.onCompleted();
+                return;
+            }
+            subscriber.onError(f.isSuccess() ? exception : f.cause());
+        };
     }
 }

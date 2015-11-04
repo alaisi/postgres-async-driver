@@ -36,6 +36,6 @@ public interface PgProtocolStream {
 
     boolean isConnected();
 
-    void close();
+    Observable<Void> close();
 
 }
