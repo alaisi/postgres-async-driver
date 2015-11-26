@@ -90,7 +90,7 @@ public class PerformanceTest {
     @After
     public void close() {
         threadPool.shutdownNow();
-        dbPool.close();
+        dbPool.close().toBlocking().single();
     }
 
     @Test(timeout = 1000)

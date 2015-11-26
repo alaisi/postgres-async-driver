@@ -24,9 +24,11 @@ import rx.observers.Subscribers;
 import java.net.InetSocketAddress;
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.logging.Logger;
 import javax.annotation.concurrent.GuardedBy;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
@@ -109,6 +111,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
     @Override
     public Observable<Void> close() {
         return Observable.create(subscriber -> {
+
             lock.lock();
             try {
                 closed = true;
@@ -132,7 +135,11 @@ public abstract class PgConnectionPool implements ConnectionPool {
                             continue;
                         }
                         currentSize--;
-                        connection.close().toBlocking().single();
+                        CountDownLatch wait = new CountDownLatch(1);
+                        connection.close().subscribe(__ -> wait.countDown(), __ -> wait.countDown());
+                        if(!wait.await(5, SECONDS)) {
+                            Logger.getLogger(getClass().getName()).warning("Closing connection timed out");
+                        }
                     }
                 } catch (InterruptedException e) { /* ignore */ }
 

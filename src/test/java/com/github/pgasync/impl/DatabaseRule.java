@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -40,7 +41,14 @@ class DatabaseRule extends ExternalResource {
     @Override
     protected void after() {
         if(pool != null) {
-            pool.close();
+            CountDownLatch latch = new CountDownLatch(1);
+            pool.close().subscribe(__ -> latch.countDown(), ex -> {
+                ex.printStackTrace();
+                latch.countDown();
+            });
+            try {
+                latch.await(30, TimeUnit.SECONDS);
+            } catch (InterruptedException e) { /* ignore */ }
         }
     }
 

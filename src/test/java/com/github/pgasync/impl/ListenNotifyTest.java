@@ -44,6 +44,6 @@ public class ListenNotifyTest {
 
     @AfterClass
     public static void close() {
-        pool.close();
+        pool.close().toBlocking().single();
     }
 }

@@ -52,7 +52,7 @@ public class PipelineTest {
             pool.release(c);
         }
         if (pool != null) {
-            pool.close();
+            pool.close().toBlocking().single();
         }
     }
 

@@ -62,7 +62,7 @@ public class NettyPgConnectionPool extends PgConnectionPool {
 
     private <T> GenericFutureListener<Future<T>> close(Subscriber<?> subscriber, Throwable exception) {
         return f -> {
-            if (exception == null && !f.isSuccess()) {
+            if (exception == null && f.isSuccess()) {
                 subscriber.onNext(null);
                 subscriber.onCompleted();
                 return;
