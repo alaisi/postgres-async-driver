@@ -50,6 +50,9 @@ public class DataConverter {
     public BigDecimal toBigDecimal(Oid oid, byte[] value) {
         return value == null ? null : NumericConversions.toBigDecimal(oid, value);
     }
+    public Double toDouble(Oid oid, byte[] value) {
+        return value == null ? null : NumericConversions.toDouble(oid, value);
+    }
     public Date toDate(Oid oid, byte[] value) {
         return value == null ? null : TemporalConversions.toDate(oid, value);
     }

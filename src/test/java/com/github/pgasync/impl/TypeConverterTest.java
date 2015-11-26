@@ -142,6 +142,21 @@ public class TypeConverterTest {
     }
 
     @Test
+    public void shouldConvertNumericToBigDecimal() {
+        assertEquals(new BigDecimal("1223423.01"), dbr.query("select 1223423.01::NUMERIC as sum").row(0).getBigDecimal("sum"));
+    }
+
+    @Test
+    public void shouldConvertFloat4ToDouble() {
+        assertEquals((Double) 1223420.0, dbr.query("select 1223420.0::FLOAT4 as sum").row(0).getDouble("sum"));
+    }
+
+    @Test
+    public void shouldConvertNumericToDouble() {
+        assertEquals((Double) 1223423.01, dbr.query("select 1223423.01::NUMERIC as sum").row(0).getDouble("sum"));
+    }
+
+    @Test
     public void shouldConvertDateToDate() {
         assertEquals(new Date(millis(2014, 1, 31, 0, 0, 0, 0)),
                 dbr.query("select '2014-01-31'::DATE").row(0).getDate(0));

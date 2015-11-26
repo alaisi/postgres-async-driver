@@ -136,6 +136,17 @@ public class PgRow implements Row {
     }
 
     @Override
+    public Double getDouble(int index) {
+        return dataConverter.toDouble(pgColumns[index].type, data.getValue(index));
+    }
+
+    @Override
+    public Double getDouble(String column) {
+        PgColumn pgColumn = getColumn(column);
+        return dataConverter.toDouble(pgColumn.type, data.getValue(pgColumn.index));
+    }
+
+    @Override
     public Date getDate(int index) {
         return dataConverter.toDate(pgColumns[index].type, data.getValue(index));
     }

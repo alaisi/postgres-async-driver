@@ -72,6 +72,10 @@ enum NumericConversions {
     static BigDecimal toBigDecimal(Oid oid, byte[] value) {
         switch (oid) {
             case UNSPECIFIED: // fallthrough
+            case INT2: // fallthrough
+            case INT4: // fallthrough
+            case INT8: // fallthrough
+            case NUMERIC: // fallthrough
             case FLOAT4: // fallthrough
             case FLOAT8:
                 return new BigDecimal(new String(value, UTF_8));
@@ -79,4 +83,20 @@ enum NumericConversions {
                 throw new SqlException("Unsupported conversion " + oid.name() + " -> BigDecimal");
         }
     }
+
+    static Double toDouble(Oid oid, byte[] value) {
+        switch (oid) {
+            case UNSPECIFIED: // fallthrough
+            case INT2: // fallthrough
+            case INT4: // fallthrough
+            case INT8: // fallthrough
+            case NUMERIC: // fallthrough
+            case FLOAT4: // fallthrough
+            case FLOAT8:
+                return Double.valueOf(new String(value, UTF_8));
+            default:
+                throw new SqlException("Unsupported conversion " + oid.name() + " -> BigDecimal");
+        }
+    }
+
 }

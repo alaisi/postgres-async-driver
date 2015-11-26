@@ -60,6 +60,10 @@ public interface Row {
 
     BigDecimal getBigDecimal(String column);
 
+    Double getDouble(int index);
+
+    Double getDouble(String column);
+
     Date getDate(int index);
 
     Date getDate(String column);
