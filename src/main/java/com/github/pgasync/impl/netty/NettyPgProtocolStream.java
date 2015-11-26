@@ -46,8 +46,10 @@ import java.util.concurrent.LinkedBlockingDeque;
 public class NettyPgProtocolStream implements PgProtocolStream {
 
     final EventLoopGroup group;
+    final EventLoop eventLoop;
     final SocketAddress address;
     final boolean useSsl;
+    final boolean pipeline;
 
     final GenericFutureListener<Future<? super Object>> onError;
     final Queue<Subscriber<? super Message>> subscribers;
@@ -55,10 +57,12 @@ public class NettyPgProtocolStream implements PgProtocolStream {
 
     ChannelHandlerContext ctx;
 
-    public NettyPgProtocolStream(EventLoopGroup group, SocketAddress address, boolean useSsl) {
+    public NettyPgProtocolStream(EventLoopGroup group, SocketAddress address, boolean useSsl, boolean pipeline) {
         this.group = group;
+        this.eventLoop = group.next();
         this.address = address;
         this.useSsl = useSsl; // TODO: refactor into SSLConfig with trust parameters
+        this.pipeline = pipeline;
         this.subscribers = new LinkedBlockingDeque<>(); // TODO: limit pipeline queue depth
         this.onError = future -> {
             if(!future.isSuccess()) {
@@ -101,6 +105,14 @@ public class NettyPgProtocolStream implements PgProtocolStream {
                 return;
             }
 
+            if(pipeline && !eventLoop.inEventLoop()) {
+                eventLoop.submit(() -> {
+                    pushSubscriber(subscriber);
+                    write(messages);
+                });
+                return;
+            }
+
             pushSubscriber(subscriber);
             write(messages);
 
@@ -136,14 +148,16 @@ public class NettyPgProtocolStream implements PgProtocolStream {
 
     @Override
     public Observable<Void> close() {
-        return Observable.create(subscriber -> ctx.close().addListener(f -> {
-            if(!f.isSuccess()) {
-                subscriber.onError(f.cause());
+        return Observable.create(subscriber ->
+                    ctx.writeAndFlush(Terminate.INSTANCE).addListener(written ->
+                            ctx.close().addListener(closed -> {
+            if (!closed.isSuccess()) {
+                subscriber.onError(closed.cause());
                 return;
             }
             subscriber.onNext(null);
             subscriber.onCompleted();
-        }));
+        })));
     }
 
     private void pushSubscriber(Subscriber<? super Message> subscriber) {

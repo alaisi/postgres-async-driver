@@ -39,15 +39,17 @@ public class NettyPgConnectionPool extends PgConnectionPool {
 
     final EventLoopGroup group = new NioEventLoopGroup(1);
     final boolean useSsl;
+    final boolean pipeline;
 
     public NettyPgConnectionPool(PoolProperties properties) {
         super(properties);
         useSsl = properties.getUseSsl();
+        pipeline = properties.getUsePipelining();
     }
 
     @Override
     protected PgProtocolStream openStream(InetSocketAddress address) {
-        return new NettyPgProtocolStream(group, address, useSsl);
+        return new NettyPgProtocolStream(group, address, useSsl, pipeline);
     }
 
     @Override
