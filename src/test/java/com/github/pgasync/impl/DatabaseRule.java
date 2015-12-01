@@ -41,14 +41,11 @@ class DatabaseRule extends ExternalResource {
     @Override
     protected void after() {
         if(pool != null) {
-            CountDownLatch latch = new CountDownLatch(1);
-            pool.close().subscribe(__ -> latch.countDown(), ex -> {
-                ex.printStackTrace();
-                latch.countDown();
-            });
             try {
-                latch.await(30, TimeUnit.SECONDS);
-            } catch (InterruptedException e) { /* ignore */ }
+                pool.close();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 

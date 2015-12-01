@@ -24,7 +24,13 @@ import rx.Observable;
 import rx.Subscriber;
 import rx.observers.Subscribers;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Logger;
 
 import static com.github.pgasync.impl.message.RowDescription.ColumnDescription;
 
@@ -89,8 +95,13 @@ public class PgConnection implements Connection {
     }
 
     @Override
-    public Observable<Void> close() {
-        return stream.close();
+    public void close() throws Exception {
+        CountDownLatch latch = new CountDownLatch(1);
+        stream.close().subscribe(__ -> latch.countDown(), ex -> {
+            Logger.getLogger(getClass().getName()).warning("Exception closing connection: " + ex);
+            latch.countDown();
+        });
+        latch.await(1000, TimeUnit.MILLISECONDS);
     }
 
     private Observable<Message> sendQuery(String sql, Object[] params) {
@@ -177,13 +188,13 @@ public class PgConnection implements Connection {
         public Observable<Void> commit() {
             return PgConnection.this.querySet("COMMIT")
                     .map(rs -> (Void) null)
-                    .doOnError(exception -> close());
+                    .doOnError(exception -> stream.close().subscribe());
         }
         @Override
         public Observable<Void> rollback() {
             return PgConnection.this.querySet("ROLLBACK")
                     .map(rs -> (Void) null)
-                    .doOnError(exception -> close());
+                    .doOnError(exception -> stream.close().subscribe());
         }
         @Override
         public Observable<Row> queryRows(String sql, Object... params) {

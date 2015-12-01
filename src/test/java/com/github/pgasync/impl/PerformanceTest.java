@@ -88,9 +88,9 @@ public class PerformanceTest {
     }
 
     @After
-    public void close() {
+    public void close() throws Exception {
         threadPool.shutdownNow();
-        dbPool.close().toBlocking().single();
+        dbPool.close();
     }
 
     @Test(timeout = 1000)
@@ -102,7 +102,7 @@ public class PerformanceTest {
         while (connections.size() < poolSize) {
             MILLISECONDS.sleep(5);
         }
-        connections.forEach(c -> dbPool.release(c));
+        connections.forEach(dbPool::release);
     }
 
     @Test

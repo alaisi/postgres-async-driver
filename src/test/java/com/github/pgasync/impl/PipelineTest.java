@@ -22,7 +22,10 @@ import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.Deque;
-import java.util.concurrent.*;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
@@ -30,9 +33,7 @@ import static com.github.pgasync.impl.DatabaseRule.createPoolBuilder;
 import static java.lang.System.currentTimeMillis;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.isA;
+import static org.hamcrest.CoreMatchers.*;
 import static org.junit.Assert.assertThat;
 
 /**
@@ -47,12 +48,12 @@ public class PipelineTest {
     ConnectionPool pool;
 
     @After
-    public void closeConnection() {
+    public void closeConnection() throws Exception {
         if (c != null) {
             pool.release(c);
         }
         if (pool != null) {
-            pool.close().toBlocking().single();
+            pool.close();
         }
     }
 

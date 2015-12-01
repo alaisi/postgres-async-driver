@@ -21,15 +21,14 @@ import rx.Observable;
 import rx.Subscriber;
 import rx.observers.Subscribers;
 
+import javax.annotation.concurrent.GuardedBy;
 import java.net.InetSocketAddress;
 import java.util.LinkedList;
 import java.util.Queue;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.logging.Logger;
-import javax.annotation.concurrent.GuardedBy;
+
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
@@ -109,47 +108,35 @@ public abstract class PgConnectionPool implements ConnectionPool {
     }
 
     @Override
-    public Observable<Void> close() {
-        return Observable.create(subscriber -> {
+    public void close() throws Exception {
+        lock.lock();
+        try {
+            closed = true;
 
-            lock.lock();
-            try {
-                closed = true;
-
-                // TODO: this currently blocks the thread
-
-                while(!subscribers.isEmpty()) {
-                    Subscriber<? super Connection> queued = subscribers.poll();
-                    if(queued != null) {
-                        queued.onError(new SqlException("Connection pool is closing"));
-                    }
+            while(!subscribers.isEmpty()) {
+                Subscriber<? super Connection> queued = subscribers.poll();
+                if(queued != null) {
+                    queued.onError(new SqlException("Connection pool is closing"));
                 }
-
-                try {
-                    while (currentSize > 0) {
-                        Connection connection = connections.poll();
-                        if(connection == null) {
-                            if (closingConnectionReleased.await(10, SECONDS)) {
-                                break;
-                            }
-                            continue;
-                        }
-                        currentSize--;
-                        CountDownLatch wait = new CountDownLatch(1);
-                        connection.close().subscribe(__ -> wait.countDown(), __ -> wait.countDown());
-                        if(!wait.await(5, SECONDS)) {
-                            Logger.getLogger(getClass().getName()).warning("Closing connection timed out");
-                        }
-                    }
-                } catch (InterruptedException e) { /* ignore */ }
-
-                subscriber.onNext(null);
-                subscriber.onCompleted();
-
-            } finally {
-                lock.unlock();
             }
-        });
+
+            try {
+                while (currentSize > 0) {
+                    Connection connection = connections.poll();
+                    if(connection == null) {
+                        if (closingConnectionReleased.await(10, SECONDS)) {
+                            break;
+                        }
+                        continue;
+                    }
+                    currentSize--;
+                    connection.close();
+                }
+            } catch (InterruptedException e) { /* ignore */ }
+
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override

@@ -14,8 +14,6 @@
 
 package com.github.pgasync;
 
-import rx.Observable;
-
 /**
  * A single physical connection to PostgreSQL backend.
  * 
@@ -24,8 +22,8 @@ import rx.Observable;
 public interface Connection extends Db {
 
     /**
-     * Closes the connection.
+     * Closes the connection, blocks the calling thread until the connection is closed.
      */
-    Observable<Void> close();
+    void close() throws Exception;
 
 }

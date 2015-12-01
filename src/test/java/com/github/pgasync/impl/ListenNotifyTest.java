@@ -9,9 +9,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * @author Antti Laisi
@@ -43,7 +41,7 @@ public class ListenNotifyTest {
     }
 
     @AfterClass
-    public static void close() {
-        pool.close().toBlocking().single();
+    public static void close() throws Exception {
+        pool.close();
     }
 }

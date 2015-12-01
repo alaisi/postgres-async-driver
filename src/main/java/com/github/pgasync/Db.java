@@ -1,17 +1,16 @@
 package com.github.pgasync;
 
-import rx.Observable;
-
 /**
  * Main interface to PostgreSQL backend.
  *
  * @author Antti Laisi
  */
-public interface Db extends QueryExecutor, TransactionExecutor, Listenable {
+public interface Db extends QueryExecutor, TransactionExecutor, Listenable, AutoCloseable {
 
     /**
-     * Closes the pool.
+     * Closes the pool, blocks the calling thread until connections are closed.
      */
-    Observable<Void> close();
+    @Override
+    void close() throws Exception;
 
 }
