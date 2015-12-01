@@ -10,7 +10,7 @@ Postgres-async-driver is available on [Maven Central](http://search.maven.org/#s
 <dependency>
     <groupId>com.github.alaisi.pgasync</groupId>
     <artifactId>postgres-async-driver</artifactId>
-    <version>0.6</version>
+    <version>0.7</version>
 </dependency>
 ```
 
@@ -18,18 +18,32 @@ Postgres-async-driver is available on [Maven Central](http://search.maven.org/#s
 
 ### Hello world
 
-Queries are submitted to a `Db` with success and failure callbacks.
+Querying for a set returns an [rx.Observable](http://reactivex.io/documentation/observable.html) that emits a single [ResultSet](https://github.com/alaisi/postgres-async-driver/blob/master/src/main/java/com/github/pgasync/ResultSet.java).
 
 ```java
 Db db = ...;
-db.query("select 'Hello world!' as message",
-    result -> out.println(result.row(0).getString("message") ),
-    error  -> error.printStackTrace() );
+db.querySet("select 'Hello world!' as message")
+    .map(result -> result.row(0).getString("message"))
+    .subscribe(System.out::println)
+
+// => Hello world
+```
+
+Querying for rows returns an [rx.Observable](http://reactivex.io/documentation/observable.html) that emits 0-n [Rows](https://github.com/alaisi/postgres-async-driver/blob/master/src/main/java/com/github/pgasync/Row.java).
+
+```java
+Db db = ...;
+db.queryRows("select unnest('{ hello, world }'::text[] as message)")
+    .map(row -> row.getString("message"))
+    .subscribe(System.out::println)
+
+// => hello
+// => world
 ```
 
 ### Creating a Db
 
-Db is usually a connection pool that is created with [`com.github.pgasync.ConnectionPoolBuilder`](https://github.com/alaisi/postgres-async-driver/blob/master/src/main/java/com/github/pgasync/ConnectionPoolBuilder.java)
+Db is a connection pool that is created with [`com.github.pgasync.ConnectionPoolBuilder`](https://github.com/alaisi/postgres-async-driver/blob/master/src/main/java/com/github/pgasync/ConnectionPoolBuilder.java)
 
 ```java
 Db db = new ConnectionPoolBuilder()
@@ -49,25 +63,24 @@ Each connection *pool* will start only one IO thread used in communicating with 
 Prepared statements use native PostgreSQL syntax `$index`. Supported parameter types are all primitive types, `String`, `BigDecimal`, `BigInteger`, `UUID`, temporal types in `java.sql` package and `byte[]`.
 
 ```java
-db.query("insert into message(id, body) values($1, $2)", Arrays.asList(123, "hello"),
-    result -> out.printf("Inserted %d rows", result.updatedRows() ),
-    error  -> error.printStackTrace() );
+db.querySet("insert into message(id, body) values($1, $2)", 123, "hello"))
+    .subscribe(result -> out.printf("Inserted %d rows", result.updatedRows() ));
 ```
 
 ### Transactions
 
-A transactional unit of work is started with `begin()`. Queries issued to transaction passed to callback are executed in the same transaction and the tx is automatically rolled back on query failure.
+A transactional unit of work is started with `begin()`. Queries issued to the emitted [Transaction](https://github.com/alaisi/postgres-async-driver/blob/master/src/main/java/com/github/pgasync/Transaction.java) are executed in the same transaction and the tx is automatically rolled back on query failure.
 
 ```java
-Consumer<Throwable> onError = error -> error.printStackTrace();
-db.begin(transaction -> {
-    transaction.query("select 1 as id",
-        result -> {
-            out.printf("Result is %d", result.row(0).getLong("id"));
-            transaction.commit(() -> out.println("Transaction committed"), onError);
-        },
-        error -> err.println("Query failed, tx is now rolled back"))
-}, onError)
+db.begin()
+    .flatMap(tx -> tx.querySet("insert into products (name) values ($1) returning id", "saw")
+        .map(productsResult -> productsResult.row(0).getLong("id"))
+        .flatMap(id -> tx.querySet("insert into promotions (product_id) values ($1)", id))
+        .flatMap(promotionsResult -> tx.commit())
+    ).subscribe(
+        __ -> System.out.println("Transaction committed"),
+        Throwable::printStackTrace);
+
 ```
 
 ### Custom data types
