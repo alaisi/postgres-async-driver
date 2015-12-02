@@ -19,6 +19,7 @@ import com.github.pgasync.ConnectionPoolBuilder.PoolProperties;
 import com.github.pgasync.impl.conversion.DataConverter;
 import rx.Observable;
 import rx.Subscriber;
+import rx.functions.Func1;
 import rx.observers.Subscribers;
 
 import javax.annotation.concurrent.GuardedBy;
@@ -57,7 +58,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
     final String password;
     final String database;
     final DataConverter dataConverter;
-    final ConnectionValidator validator;
+    final Func1<Connection, Observable<Connection>> validator;
     final boolean pipeline;
 
     public PgConnectionPool(PoolProperties properties) {
@@ -141,7 +142,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
 
     @Override
     public Observable<Connection> getConnection() {
-        return Observable.create(subscriber -> {
+        return Observable.<Connection>create(subscriber -> {
             boolean locked = true;
             lock.lock();
             try {
@@ -177,7 +178,8 @@ public abstract class PgConnectionPool implements ConnectionPool {
                     lock.unlock();
                 }
             }
-        });
+        }).flatMap(conn -> validator.call(conn).doOnError(err -> release(conn)))
+                .retry(poolSize + 1);
     }
 
     private boolean tryIncreaseSize() {
@@ -235,34 +237,6 @@ public abstract class PgConnectionPool implements ConnectionPool {
      * @return Stream with no pending messages
      */
     protected abstract PgProtocolStream openStream(InetSocketAddress address);
-
-    /*
-    void validateAndApply(Connection connection, Consumer<Connection> onConnection, Consumer<Throwable> onError, int attempt) {
-
-        Runnable onValid = () -> {
-            try {
-                onConnection.accept(connection);
-            } catch (Throwable t) {
-                release(connection);
-                onError.accept(t);
-            }
-        };
-
-        Consumer<Throwable> onValidationFailed = err -> {
-            if(attempt > poolSize) {
-                onError.accept(err);
-                return;
-            }
-            try {
-                connection.close();
-            } catch (Throwable t) { /* ignored / }
-            release(connection);
-            getConnection(onConnection, onError, attempt + 1);
-        };
-
-        validator.validate(connection, onValid, onValidationFailed);
-    }
-    */
 
     /**
      * Transaction that chains releasing the connection after COMMIT/ROLLBACK.

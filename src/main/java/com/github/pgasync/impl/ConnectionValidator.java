@@ -16,7 +16,9 @@ package com.github.pgasync.impl;
 
 
 import com.github.pgasync.Connection;
+import com.github.pgasync.Row;
 import rx.Observable;
+import rx.Subscriber;
 
 /**
  * @author Antti Laisi
@@ -29,15 +31,21 @@ public class ConnectionValidator {
         this.validationQuery = validationQuery;
     }
 
-    Observable<Connection> validate(Connection connection) {
-        if(validationQuery == null) {
-            return Observable.just(connection);
-        }
-        return Observable.create(subscriber -> connection.queryRows(validationQuery)
-                                                    .subscribe(row -> { }, subscriber::onError,
-                                                            () -> {
-                                                                subscriber.onNext(connection);
-                                                                subscriber.onCompleted();
-                                                            }));
+    public Observable<Connection> validate(Connection connection) {
+        return connection.queryRows(validationQuery)
+                .lift(subscriber -> new Subscriber<Row>() {
+                    @Override
+                    public void onError(Throwable e) {
+                        subscriber.onError(e);
+                    }
+                    @Override
+                    public void onCompleted() {
+                        subscriber.onNext(connection);
+                        subscriber.onCompleted();
+                    }
+                    @Override
+                    public void onNext(Row row) { }
+                });
     }
+
 }
