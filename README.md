@@ -29,7 +29,7 @@ db.querySet("select 'Hello world!' as message")
 // => Hello world
 ```
 
-Querying for rows returns an [rx.Observable](http://reactivex.io/documentation/observable.html) that emits 0-n [Rows](https://github.com/alaisi/postgres-async-driver/blob/master/src/main/java/com/github/pgasync/Row.java).
+Querying for rows returns an [rx.Observable](http://reactivex.io/documentation/observable.html) that emits 0-n [Rows](https://github.com/alaisi/postgres-async-driver/blob/master/src/main/java/com/github/pgasync/Row.java). The rows are emitted immediately as they are received from the server instead of waiting for the entire query to complete.
 
 ```java
 Db db = ...;
@@ -63,7 +63,7 @@ Each connection *pool* will start only one IO thread used in communicating with 
 Prepared statements use native PostgreSQL syntax `$index`. Supported parameter types are all primitive types, `String`, `BigDecimal`, `BigInteger`, `UUID`, temporal types in `java.sql` package and `byte[]`.
 
 ```java
-db.querySet("insert into message(id, body) values($1, $2)", 123, "hello"))
+db.querySet("insert into message(id, body) values($1, $2)", 123, "hello")
     .subscribe(result -> out.printf("Inserted %d rows", result.updatedRows() ));
 ```
 
