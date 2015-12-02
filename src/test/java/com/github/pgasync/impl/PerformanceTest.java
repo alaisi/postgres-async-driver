@@ -14,35 +14,21 @@
 
 package com.github.pgasync.impl;
 
-import static java.lang.Long.MIN_VALUE;
+import com.github.pgasync.Connection;
+import com.github.pgasync.ConnectionPool;
+import org.junit.*;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameters;
+
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.function.Consumer;
+
 import static java.lang.System.currentTimeMillis;
 import static java.lang.System.out;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.junit.runners.MethodSorters.NAME_ASCENDING;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.OptionalLong;
-import java.util.Queue;
-import java.util.SortedMap;
-import java.util.TreeMap;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BrokenBarrierException;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.Exchanger;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.function.Consumer;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.FixMethodOrder;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
-import com.github.pgasync.Connection;
-import com.github.pgasync.ConnectionPool;
 
 @RunWith(Parameterized.class)
 @FixMethodOrder(NAME_ASCENDING)
@@ -94,6 +80,7 @@ public class PerformanceTest {
     }
 
     @Test(timeout = 1000)
+    @Ignore
     public void t1_preAllocatePool() throws InterruptedException {
         Queue<Connection> connections = new ArrayBlockingQueue<>(poolSize);
         for (int i = 0; i < poolSize; ++i) {
@@ -106,6 +93,7 @@ public class PerformanceTest {
     }
 
     @Test
+    @Ignore
     public void t3_run() throws Exception {
         Collection<Callable<Long>> tasks = new ArrayList<>();
         for (int i = 0; i < batchSize; ++i) {
