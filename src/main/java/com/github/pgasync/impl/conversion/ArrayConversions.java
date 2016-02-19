@@ -94,7 +94,9 @@ enum ArrayConversions  {
                 i = readString(text, i, values);
             } else if(c == '{') {
                 i = readArray(text, i, values);
-            } else if (c == 'N') {
+            } else if (c == 'N' && text.length > i + 4 &&
+                    text[i+1] == 'U' && text[i+2] == 'L' && text[i+3] == 'L' &&
+                    (text[i+4] == ',' || text[i+4] == '}' || Character.isWhitespace(text[i+4]))) {
                 i = readNull(i, values);
             } else {
                 i = readValue(text, i, values);

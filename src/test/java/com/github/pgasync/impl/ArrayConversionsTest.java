@@ -6,6 +6,7 @@ import org.junit.*;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import static java.util.Arrays.asList;
@@ -192,5 +193,21 @@ public class ArrayConversionsTest {
         for(int i = 0; i < input.length; i++) {
             assertEquals(input[i], output[i].longValue());
         }
+    }
+
+    @Test
+    public void shouldParseUnquotedStringsCorrectly() {
+        String[] values = new String[] {"NotNull", "NULLA", "string", null};
+        dbr.query("INSERT INTO CA_TEST (TEXTA) VALUES($1)", Collections.singletonList(values));
+        Row row = dbr.query("SELECT * FROM CA_TEST").row(0);
+        assertArrayEquals(values, row.getArray("TEXTA", String[].class));
+    }
+
+    @Test
+    public void shouldParseNullTextCorrectly() {
+        String[] values = new String[] {"NULL", null, "string"};
+        dbr.query("INSERT INTO CA_TEST (TEXTA) VALUES($1)", Collections.singletonList(values));
+        Row row = dbr.query("SELECT * FROM CA_TEST").row(0);
+        assertArrayEquals(values, row.getArray("TEXTA", String[].class));
     }
 }
