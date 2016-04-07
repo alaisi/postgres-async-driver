@@ -60,6 +60,10 @@ enum ArrayConversions  {
             throw new IllegalArgumentException("Primitive arrays are not supported due to possible NULL values");
         }
 
+        if (value == null) {
+            return null;
+        }
+
         char[] text = new String(value, UTF_8).toCharArray();
         List<List<Object>> holder = new ArrayList<>(1);
 

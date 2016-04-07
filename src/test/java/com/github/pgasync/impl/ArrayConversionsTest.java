@@ -128,6 +128,13 @@ public class ArrayConversionsTest {
     }
 
     @Test
+    public void selectNull() {
+        dbr.query("INSERT INTO CA_TEST (TEXTA) VALUES (NULL);");
+
+        assertArrayEquals(null, getRow().getArray("TEXTA", String[].class));
+    }
+
+    @Test
     public void roundtripInt() {
         Integer[][] a = new Integer[][]{
             new Integer[]{1, 2, 3},
