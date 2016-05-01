@@ -185,6 +185,7 @@ public class DataConverter {
             case TIMESTAMP: // fallthrough
             case TIMESTAMPTZ: return toTimestamp(oid, value);
             case UUID: return UUID.fromString(toString(oid, value));
+            case BOOL: return toBoolean(oid, value);
 
             case INT2_ARRAY:
             case INT4_ARRAY:
@@ -199,6 +200,7 @@ public class DataConverter {
             case TIMESTAMPTZ_ARRAY:
             case TIMETZ_ARRAY:
             case TIME_ARRAY:
+            case BOOL_ARRAY:
                 return toArray(Object[].class, oid, value);
             default:
                 return toConvertable(oid, value);

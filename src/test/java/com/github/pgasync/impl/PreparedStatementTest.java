@@ -14,6 +14,7 @@
 
 package com.github.pgasync.impl;
 
+import com.github.pgasync.ResultSet;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
@@ -22,12 +23,15 @@ import org.junit.Test;
 import java.sql.Date;
 import java.sql.Time;
 import java.text.SimpleDateFormat;
+import java.util.Collections;
 import java.util.TimeZone;
 
 import static com.github.pgasync.impl.io.IO.bytes;
 import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Tests for parameter binding.
@@ -46,7 +50,7 @@ public class PreparedStatementTest {
                 + "LONG INT8,INT INT4,SHORT INT2, BYTE INT2,"
                 + "CHAR CHAR(1), STRING VARCHAR(255), CLOB TEXT,"
                 + "TIME TIME, DATE DATE, TS TIMESTAMP,"
-                + "BYTEA BYTEA" + ")");
+                + "BYTEA BYTEA, BOOLEAN BOOLEAN)");
     }
 
     @AfterClass
@@ -127,6 +131,14 @@ public class PreparedStatementTest {
         byte[] b = bytes("blob content");
         dbr.query("INSERT INTO PS_TEST(BYTEA) VALUES ($1)", asList(b));
         assertArrayEquals(b, dbr.query("SELECT BYTEA FROM PS_TEST WHERE BYTEA = $1", asList(b)).row(0).getBytes(0));
+    }
+
+    @Test
+    public void shouldBindBoolean() throws Exception {
+        dbr.query("INSERT INTO PS_TEST(BOOLEAN) VALUES ($1)", singletonList(true));
+        assertTrue((Boolean) ((PgRow) dbr.query("SELECT BOOLEAN FROM PS_TEST WHERE BOOLEAN = $1",
+                singletonList(true)).row(0)).get("BOOLEAN"));
+
     }
 
     static SimpleDateFormat dateFormat(String pattern) {
