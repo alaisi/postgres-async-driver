@@ -14,7 +14,6 @@
 
 package com.github.pgasync.impl;
 
-import com.github.pgasync.ConnectionPool;
 import com.github.pgasync.ResultSet;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -27,7 +26,6 @@ import java.util.function.Consumer;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 /**
  * Tests for BEGIN/COMMIT/ROLLBACK.
@@ -37,7 +35,7 @@ import static org.junit.Assert.fail;
 public class TransactionTest {
 
     final Consumer<Throwable> err = Throwable::printStackTrace;
-    final Consumer<ResultSet> fail = result -> { new AssertionError("Failure expected").printStackTrace(); };
+    final Consumer<ResultSet> fail = result -> new AssertionError("Failure expected").printStackTrace();
 
     @ClassRule
     public static DatabaseRule dbr = new DatabaseRule();

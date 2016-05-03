@@ -6,45 +6,42 @@ import com.github.pgasync.impl.Oid;
 import java.sql.Date;
 import java.sql.Time;
 import java.sql.Timestamp;
-import java.text.DateFormat;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.TimeZone;
+import java.time.*;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.format.DateTimeParseException;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.time.format.DateTimeFormatter.ISO_LOCAL_DATE;
+import static java.time.format.DateTimeFormatter.ISO_LOCAL_TIME;
 
 /**
  * @author Antti Laisi
  *
- * TODO: Add support for Java 8 temporal types and use new parsers.
+ * TODO: Add support for Java 8 temporal types.
  */
 enum TemporalConversions {
     ;
+    static final DateTimeFormatter TIMESTAMP_FORMAT = new DateTimeFormatterBuilder()
+            .parseCaseInsensitive()
+            .append(ISO_LOCAL_DATE)
+            .appendLiteral(' ')
+            .append(ISO_LOCAL_TIME)
+            .toFormatter();
 
-    static final ThreadLocal<DateFormat> DATE_FORMAT = new ThreadLocal<DateFormat>() {
-        @Override
-        protected DateFormat initialValue() {
-            return zoned(new SimpleDateFormat("yyyy-MM-dd"));
-        }
-    };
-    static final ThreadLocal<DateFormat> TIME_FORMAT = new ThreadLocal<DateFormat>() {
-        @Override
-        protected DateFormat initialValue() {
-            return zoned(new SimpleDateFormat("HH:mm:ss.SSS"));
-        }
-    };
-    static final ThreadLocal<DateFormat> TIME_FORMAT_NO_MILLIS = new ThreadLocal<DateFormat>() {
-        @Override
-        protected DateFormat initialValue() {
-            return zoned(new SimpleDateFormat("HH:mm:ss"));
-        }
-    };
-    static final ThreadLocal<DateFormat> TIMESTAMP_FORMAT = new ThreadLocal<DateFormat>() {
-        @Override
-        protected DateFormat initialValue() {
-            return zoned(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS"));
-        }
-    };
+    static final DateTimeFormatter TIMESTAMPZ_FORMAT = new DateTimeFormatterBuilder()
+            .parseCaseInsensitive()
+            .append(ISO_LOCAL_DATE)
+            .appendLiteral(' ')
+            .append(ISO_LOCAL_TIME)
+            .appendOffset("+HH:mm", "")
+            .toFormatter();
+
+    static final DateTimeFormatter TIMEZ_FORMAT = new DateTimeFormatterBuilder()
+            .parseCaseInsensitive()
+            .append(ISO_LOCAL_TIME)
+            .appendOffset("+HH:mm", "")
+            .toFormatter();
 
     static Date toDate(Oid oid, byte[] value) {
         switch (oid) {
@@ -52,8 +49,8 @@ enum TemporalConversions {
             case DATE:
                 String date = new String(value, UTF_8);
                 try {
-                    return new Date(DATE_FORMAT.get().parse(date).getTime());
-                } catch (ParseException e) {
+                    return Date.valueOf(LocalDate.parse(date, ISO_LOCAL_DATE));
+                } catch (DateTimeParseException e) {
                     throw new SqlException("Invalid date: " + date);
                 }
             default:
@@ -62,52 +59,48 @@ enum TemporalConversions {
     }
 
     static Time toTime(Oid oid, byte[] value) {
-        switch (oid) {
-            case UNSPECIFIED: // fallthrough
-            case TIMETZ: // fallthrough
-            case TIME:
-                String time = new String(value, UTF_8);
-                try {
-                    DateFormat format = time.length() == 8 ? TIME_FORMAT_NO_MILLIS.get() : TIME_FORMAT.get();
-                    return new Time(format.parse(time).getTime());
-                } catch (ParseException e) {
-                    throw new SqlException("Invalid time: " + time);
-                }
-            default:
-                throw new SqlException("Unsupported conversion " + oid.name() + " -> Time");
+        String time = new String(value, UTF_8);
+        try {
+            switch (oid) {
+                case UNSPECIFIED: // fallthrough
+                case TIME:
+                    return Time.valueOf(LocalTime.parse(time, ISO_LOCAL_TIME));
+                case TIMETZ:
+                    return Time.valueOf(OffsetTime.parse(time, TIMEZ_FORMAT).toLocalTime());
+                default:
+                    throw new SqlException("Unsupported conversion " + oid.name() + " -> Time");
+            }
+        } catch (DateTimeParseException e) {
+            throw new SqlException("Invalid time: " + time);
         }
     }
 
     static Timestamp toTimestamp(Oid oid, byte[] value) {
-        switch (oid) {
-            case UNSPECIFIED: // fallthrough
-            case TIMESTAMP: // fallthrough
-            case TIMESTAMPTZ:
-                String time = new String(value, UTF_8);
-                try {
-                    return new Timestamp(TIMESTAMP_FORMAT.get().parse(time).getTime());
-                } catch (ParseException e) {
-                    throw new SqlException("Invalid time: " + time);
-                }
-            default:
-                throw new SqlException("Unsupported conversion " + oid.name() + " -> Time");
+        String time = new String(value, UTF_8);
+        try {
+            switch (oid) {
+                case UNSPECIFIED: // fallthrough
+                case TIMESTAMP:
+                    return Timestamp.valueOf(LocalDateTime.parse(time, TIMESTAMP_FORMAT));
+                case TIMESTAMPTZ:
+                    return Timestamp.valueOf(OffsetDateTime.parse(time, TIMESTAMPZ_FORMAT).toLocalDateTime());
+                default:
+                    throw new SqlException("Unsupported conversion " + oid.name() + " -> Time");
+            }
+        } catch (DateTimeParseException e) {
+            throw new SqlException("Invalid time: " + time);
         }
     }
 
     static byte[] fromTime(Time time) {
-        return TIME_FORMAT.get().format(time).getBytes(UTF_8);
+        return ISO_LOCAL_TIME.format(time.toLocalTime()).getBytes(UTF_8);
     }
 
     static byte[] fromDate(Date date) {
-        return DATE_FORMAT.get().format(date).getBytes(UTF_8);
+        return ISO_LOCAL_DATE.format(date.toLocalDate()).getBytes(UTF_8);
     }
 
     static byte[] fromTimestamp(Timestamp ts) {
-        return TIMESTAMP_FORMAT.get().format(ts).getBytes(UTF_8);
-    }
-
-    private static SimpleDateFormat zoned(SimpleDateFormat format) {
-        format.setTimeZone(TimeZone.getTimeZone("UTC"));
-        return format;
+        return TIMESTAMP_FORMAT.format(ts.toLocalDateTime()).getBytes(UTF_8);
     }
 }
