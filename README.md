@@ -10,7 +10,7 @@ Postgres-async-driver is available on [Maven Central](http://search.maven.org/#s
 <dependency>
     <groupId>com.github.alaisi.pgasync</groupId>
     <artifactId>postgres-async-driver</artifactId>
-    <version>0.7</version>
+    <version>0.8</version>
 </dependency>
 ```
 

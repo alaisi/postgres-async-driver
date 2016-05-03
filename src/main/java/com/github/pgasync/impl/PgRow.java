@@ -228,6 +228,10 @@ public class PgRow implements Row {
         return dataConverter.toObject(pgColumn.type, data.getValue(pgColumn.index));
     }
 
+    public Map<String, PgColumn> getColumns() {
+        return columns;
+    }
+
     PgColumn getColumn(String name) {
         if (name == null) {
             throw new IllegalArgumentException("Column name is required");
