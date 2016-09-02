@@ -88,6 +88,9 @@ public class DataConverter {
             case FLOAT8_ARRAY:
                 return ArrayConversions.toArray(arrayType, oid, value, NumericConversions::toBigDecimal);
 
+            case NUMERIC_ARRAY:
+		return ArrayConversions.toArray(arrayType, oid, value, NumericConversions::toDouble);
+
             case TIMESTAMP_ARRAY:
             case TIMESTAMPTZ_ARRAY:
                 return ArrayConversions.toArray(arrayType, oid, value, TemporalConversions::toTimestamp);
@@ -178,6 +181,7 @@ public class DataConverter {
             case INT8: return toLong(oid, value);
             case FLOAT4: // fallthrough
             case FLOAT8: return toBigDecimal(oid, value);
+            case NUMERIC: return toDouble(oid, value);
             case BYTEA: return toBytes(oid, value);
             case DATE: return toDate(oid, value);
             case TIMETZ: // fallthrough

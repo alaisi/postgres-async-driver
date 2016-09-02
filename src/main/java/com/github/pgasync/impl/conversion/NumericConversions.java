@@ -95,7 +95,7 @@ enum NumericConversions {
             case FLOAT8:
                 return Double.valueOf(new String(value, UTF_8));
             default:
-                throw new SqlException("Unsupported conversion " + oid.name() + " -> BigDecimal");
+                throw new SqlException("Unsupported conversion " + oid.name() + " -> Double");
         }
     }
 
