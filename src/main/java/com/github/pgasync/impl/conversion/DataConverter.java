@@ -84,6 +84,7 @@ public class DataConverter {
             case VARCHAR_ARRAY:
                 return ArrayConversions.toArray(arrayType, oid, value, StringConversions::toString);
 
+            case NUMERIC_ARRAY:
             case FLOAT4_ARRAY:
             case FLOAT8_ARRAY:
                 return ArrayConversions.toArray(arrayType, oid, value, NumericConversions::toBigDecimal);
@@ -176,6 +177,7 @@ public class DataConverter {
             case INT2: return toShort(oid, value);
             case INT4: return toInteger(oid, value);
             case INT8: return toLong(oid, value);
+	    case NUMERIC: // fallthrough
             case FLOAT4: // fallthrough
             case FLOAT8: return toBigDecimal(oid, value);
             case BYTEA: return toBytes(oid, value);
@@ -190,6 +192,7 @@ public class DataConverter {
             case INT2_ARRAY:
             case INT4_ARRAY:
             case INT8_ARRAY:
+	    case NUMERIC_ARRAY:
             case FLOAT4_ARRAY:
             case FLOAT8_ARRAY:
             case TEXT_ARRAY:
