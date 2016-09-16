@@ -1,5 +1,8 @@
 package com.github.pgasync.impl;
 
+import static java.lang.System.getenv;
+import static ru.yandex.qatools.embed.postgresql.distribution.Version.V9_5_0;
+
 import com.github.pgasync.ConnectionPool;
 import com.github.pgasync.ConnectionPoolBuilder;
 import com.github.pgasync.Db;
@@ -7,6 +10,7 @@ import com.github.pgasync.ResultSet;
 import org.junit.rules.ExternalResource;
 import rx.Observable;
 
+import java.io.IOException;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.List;
 import java.util.Map.Entry;
@@ -14,12 +18,19 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 
+import ru.yandex.qatools.embed.postgresql.PostgresExecutable;
+import ru.yandex.qatools.embed.postgresql.PostgresProcess;
+import ru.yandex.qatools.embed.postgresql.PostgresStarter;
+import ru.yandex.qatools.embed.postgresql.config.AbstractPostgresConfig;
+import ru.yandex.qatools.embed.postgresql.config.PostgresConfig;
+
 /**
  * @author Antti Laisi
  */
 class DatabaseRule extends ExternalResource {
 
     final ConnectionPoolBuilder builder;
+    static PostgresProcess process;
     ConnectionPool pool;
 
     DatabaseRule() {
@@ -28,6 +39,28 @@ class DatabaseRule extends ExternalResource {
 
     DatabaseRule(ConnectionPoolBuilder builder) {
         this.builder = builder;
+        if (builder instanceof EmbeddedConnectionPoolBuilder)
+        {
+            if (process == null)
+            {
+                try
+                {
+                    PostgresStarter<PostgresExecutable, PostgresProcess> runtime = PostgresStarter.getDefaultInstance();
+                    PostgresConfig config = new PostgresConfig(V9_5_0, new AbstractPostgresConfig.Net(),
+                        new AbstractPostgresConfig.Storage("async-pg"), new AbstractPostgresConfig.Timeout(),
+                        new AbstractPostgresConfig.Credentials("async-pg", "async-pg"));
+                    PostgresExecutable exec = runtime.prepare(config);
+                    process = exec.start();
+                }
+                catch (IOException e)
+                {
+                    throw new RuntimeException(e);
+                }
+            }
+
+            builder.hostname(process.getConfig().net().host());
+            builder.port(process.getConfig().net().port());
+        }
     }
 
     @Override
@@ -85,11 +118,27 @@ class DatabaseRule extends ExternalResource {
         return pool;
     }
 
+    static class EmbeddedConnectionPoolBuilder extends ConnectionPoolBuilder {
+        EmbeddedConnectionPoolBuilder() {
+            database("async-pg");
+            username("async-pg");
+            password("async-pg");
+            port(2345);
+        }
+    }
+
     static ConnectionPool createPool(int size) {
         return createPoolBuilder(size).build();
     }
     static ConnectionPoolBuilder createPoolBuilder(int size) {
-        return new ConnectionPoolBuilder()
+        String db = getenv("PG_DATABASE");
+        String user = getenv("PG_USERNAME");
+        String pass = getenv("PG_PASSWORD");
+
+        if (db == null && user == null && pass == null) {
+            return new EmbeddedConnectionPoolBuilder().poolSize(size);
+        }
+        return new EmbeddedConnectionPoolBuilder()
                 .database(envOrDefault("PG_DATABASE", "postgres"))
                 .username(envOrDefault("PG_USERNAME", "postgres"))
                 .password(envOrDefault("PG_PASSWORD", "postgres"))
@@ -99,7 +148,7 @@ class DatabaseRule extends ExternalResource {
 
 
     static String envOrDefault(String var, String def) {
-        String value = System.getenv(var);
+        String value = getenv(var);
         return value != null ? value : def;
     }
 }
