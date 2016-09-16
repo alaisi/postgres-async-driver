@@ -80,7 +80,7 @@ public class PerformanceTest {
     }
 
     @Test(timeout = 1000)
-    @Ignore
+    //@Ignore
     public void t1_preAllocatePool() throws InterruptedException {
         Queue<Connection> connections = new ArrayBlockingQueue<>(poolSize);
         for (int i = 0; i < poolSize; ++i) {
@@ -93,7 +93,7 @@ public class PerformanceTest {
     }
 
     @Test
-    @Ignore
+    //@Ignore
     public void t3_run() throws Exception {
         Collection<Callable<Long>> tasks = new ArrayList<>();
         for (int i = 0; i < batchSize; ++i) {

@@ -14,10 +14,7 @@
 
 package com.github.pgasync.impl;
 
-import com.github.pgasync.Connection;
-import com.github.pgasync.ResultSet;
-import com.github.pgasync.Row;
-import com.github.pgasync.Transaction;
+import com.github.pgasync.*;
 import com.github.pgasync.impl.conversion.DataConverter;
 import com.github.pgasync.impl.message.*;
 import rx.Observable;
@@ -50,8 +47,9 @@ public class PgConnection implements Connection {
         this.dataConverter = dataConverter;
     }
 
-    Observable<Connection> connect(String username, String password, String database) {
+    public Observable<Connection> connect(String username, String password, String database) {
        return stream.connect(new StartupMessage(username, database))
+               .flatMap(this::throwErrorResponses)
                .flatMap(message -> authenticate(username, password, message))
                .single(message -> message == ReadyForQuery.INSTANCE)
                .map(ready -> this);
@@ -60,10 +58,11 @@ public class PgConnection implements Connection {
     Observable<? extends Message> authenticate(String username, String password, Message message) {
         return message instanceof Authentication && !((Authentication) message).isAuthenticationOk()
                     ? stream.authenticate(new PasswordMessage(username, password, ((Authentication) message).getMd5Salt()))
+                        .flatMap(this::throwErrorResponses)
                     : Observable.just(message);
     }
 
-    boolean isConnected() {
+    public boolean isConnected() {
         return stream.isConnected();
     }
 
@@ -105,16 +104,19 @@ public class PgConnection implements Connection {
     }
 
     private Observable<Message> sendQuery(String sql, Object[] params) {
-        return params == null || params.length == 0
-                ? stream.send(
-                    new Query(sql))
-                : stream.send(
+
+        Message[] messages = params == null || params.length == 0
+                ? new Message[]{ new Query(sql) }
+                : new Message[]{
                     new Parse(sql),
                     new Bind(dataConverter.fromParameters(params)),
                     ExtendedQuery.DESCRIBE,
                     ExtendedQuery.EXECUTE,
                     ExtendedQuery.CLOSE,
-                    ExtendedQuery.SYNC);
+                    ExtendedQuery.SYNC };
+
+        return stream.send(messages)
+                .flatMap(this::throwErrorResponses);
     }
 
     static Observable.Operator<Row,? super Message> toRow(DataConverter dataConverter) {
@@ -169,6 +171,44 @@ public class PgConnection implements Connection {
                 subscriber.onCompleted();
             }
         };
+    }
+
+    static Observable.Operator<Message,? super Object> throwErrorResponsesOnComplete() {
+        return subscriber -> new Subscriber<Object>() {
+
+            SqlException sqlException;
+
+            @Override
+            public void onNext(Object message) {
+                if (message instanceof ErrorResponse) {
+                    sqlException = toSqlException((ErrorResponse) message);
+                    return;
+                }
+                if(sqlException != null && message == ReadyForQuery.INSTANCE) {
+                    subscriber.onError(sqlException);
+                    return;
+                }
+                subscriber.onNext((Message) message);
+            }
+            @Override
+            public void onError(Throwable e) {
+                subscriber.onError(e);
+            }
+            @Override
+            public void onCompleted() {
+                subscriber.onCompleted();
+            }
+        };
+    }
+
+    private Observable<Message> throwErrorResponses(Object message) {
+        return message instanceof ErrorResponse
+                ? Observable.error(toSqlException((ErrorResponse) message))
+                : Observable.just((Message) message);
+    }
+
+    private static SqlException toSqlException(ErrorResponse error) {
+        return new SqlException(error.getLevel().name(), error.getCode(), error.getMessage());
     }
 
     static Map<String,PgColumn> getColumns(ColumnDescription[] descriptions) {

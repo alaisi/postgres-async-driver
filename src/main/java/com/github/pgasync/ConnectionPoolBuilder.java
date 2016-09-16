@@ -16,6 +16,7 @@ package com.github.pgasync;
 
 import com.github.pgasync.impl.ConnectionValidator;
 import com.github.pgasync.impl.conversion.DataConverter;
+import com.github.pgasync.impl.netty.EventLoopConnectionPool;
 import com.github.pgasync.impl.netty.NettyPgConnectionPool;
 import rx.Observable;
 import rx.functions.Func1;
@@ -31,13 +32,13 @@ import java.util.List;
  */
 public class ConnectionPoolBuilder {
 
-    final PoolProperties properties = new PoolProperties();
+    public final PoolProperties properties = new PoolProperties();
 
     /**
      * @return Pool ready for use
      */
     public ConnectionPool build() {
-        return new NettyPgConnectionPool(properties);
+        return new EventLoopConnectionPool(properties);
     }
 
     public ConnectionPoolBuilder hostname(String hostname) {
