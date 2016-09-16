@@ -1,7 +1,7 @@
 package com.github.pgasync.impl;
 
 import com.github.pgasync.ConnectionPool;
-import org.junit.AfterClass;
+import org.junit.ClassRule;
 import org.junit.Test;
 import rx.Subscription;
 
@@ -16,10 +16,12 @@ import static org.junit.Assert.*;
  */
 public class ListenNotifyTest {
 
-    static final ConnectionPool pool = DatabaseRule.createPool(5);
+    @ClassRule
+    public static DatabaseRule dbr = new DatabaseRule(DatabaseRule.createPoolBuilder(5));
 
     @Test
     public void shouldReceiveNotificationsOnListenedChannel() throws Exception {
+        ConnectionPool pool = dbr.pool;
         BlockingQueue<String> result = new LinkedBlockingQueue<>(5);
 
         Subscription subscription = pool.listen("example").subscribe(result::add, Throwable::printStackTrace);
@@ -38,10 +40,5 @@ public class ListenNotifyTest {
 
         pool.querySet("notify example, 'msg'").toBlocking().single();
         assertNull(result.poll(2, TimeUnit.SECONDS));
-    }
-
-    @AfterClass
-    public static void close() throws Exception {
-        pool.close();
     }
 }

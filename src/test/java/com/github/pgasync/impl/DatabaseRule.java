@@ -1,6 +1,7 @@
 package com.github.pgasync.impl;
 
 import static java.lang.System.getenv;
+import static java.lang.System.out;
 import static ru.yandex.qatools.embed.postgresql.distribution.Version.V9_5_0;
 
 import com.github.pgasync.ConnectionPool;
@@ -51,6 +52,8 @@ class DatabaseRule extends ExternalResource {
                         new AbstractPostgresConfig.Credentials("async-pg", "async-pg"));
                     PostgresExecutable exec = runtime.prepare(config);
                     process = exec.start();
+
+                    out.printf("Started postgres to %s:%d%n", process.getConfig().net().host(), process.getConfig().net().port());
                 }
                 catch (IOException e)
                 {
@@ -123,7 +126,6 @@ class DatabaseRule extends ExternalResource {
             database("async-pg");
             username("async-pg");
             password("async-pg");
-            port(2345);
         }
     }
 
