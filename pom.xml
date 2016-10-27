@@ -92,9 +92,10 @@
 			<scope>test</scope>
 		</dependency>
 		<dependency>
-		  <groupId>ru.yandex.qatools.embed</groupId>
-		  <artifactId>postgresql-embedded</artifactId>
-		  <version>1.15</version>
+			<groupId>ru.yandex.qatools.embed</groupId>
+			<artifactId>postgresql-embedded</artifactId>
+			<version>1.16</version>
+			<scope>test</scope>
 		</dependency>
 	</dependencies>
 
