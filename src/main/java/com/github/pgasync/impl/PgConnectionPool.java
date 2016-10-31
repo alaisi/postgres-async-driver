@@ -269,7 +269,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
             if (released.get()) {
                 return Observable.error(new SqlException("Transaction is already completed"));
             }
-            return transaction.queryRows(sql)
+            return transaction.queryRows(sql, params)
                     .doOnError(exception -> releaseConnection());
         }
 
