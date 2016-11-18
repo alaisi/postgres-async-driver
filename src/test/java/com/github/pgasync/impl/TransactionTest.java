@@ -142,4 +142,20 @@ public class TransactionTest {
         assertEquals(0, dbr.query("SELECT ID FROM TX_TEST WHERE ID = 22").size());
     }
 
+    @Test
+    public void shouldSupportNestedTransactions() throws Exception {
+        CountDownLatch sync = new CountDownLatch(1);
+
+        dbr.db().begin((transaction) ->
+                transaction.begin((nested) ->
+                            nested.query("INSERT INTO TX_TEST(ID) VALUES(19)", result -> {
+                                assertEquals(1, result.updatedRows());
+                                nested.commit(() -> transaction.commit(sync::countDown, err), err);
+                            }, err),
+                        err),
+                err);
+
+        assertTrue(sync.await(5, TimeUnit.SECONDS));
+        assertEquals(1L, dbr.query("SELECT ID FROM TX_TEST WHERE ID = 19").size());
+    }
 }

@@ -186,7 +186,7 @@ public class PgConnection implements Connection {
 
         @Override
         public Observable<Transaction> begin() {
-            return querySet("SNAPSHOT 1").map(rs -> new PgNestedConnectionTransaction(1));
+            return querySet("SAVEPOINT sp_1").map(rs -> new PgNestedConnectionTransaction(1));
         }
         @Override
         public Observable<Void> commit() {
@@ -227,17 +227,17 @@ public class PgConnection implements Connection {
         }
         @Override
         public Observable<Transaction> begin() {
-            return querySet("SNAPSHOT " + (depth+1))
+            return querySet("SAVEPOINT sp_" + (depth+1))
                     .map(rs -> new PgNestedConnectionTransaction(depth+1));
         }
         @Override
         public Observable<Void> commit() {
-            return PgConnection.this.querySet("RELEASE SNAPSHOT " + depth)
+            return PgConnection.this.querySet("RELEASE SAVEPOINT sp_" + depth)
                     .map(rs -> (Void) null);
         }
         @Override
         public Observable<Void> rollback() {
-            return PgConnection.this.querySet("ROLLBACK TO SAVEPOINT " + depth)
+            return PgConnection.this.querySet("ROLLBACK TO SAVEPOINT sp_" + depth)
                     .map(rs -> (Void) null);
         }
     }

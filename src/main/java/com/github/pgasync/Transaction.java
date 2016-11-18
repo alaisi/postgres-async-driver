@@ -28,11 +28,6 @@ import java.util.function.Consumer;
 public interface Transaction extends QueryExecutor {
 
     /**
-     * Starts a nested transaction
-     */
-    Observable<Transaction> begin();
-
-    /**
      * Commits a transaction
      */
     Observable<Void> commit();
