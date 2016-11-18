@@ -148,14 +148,55 @@ public class TransactionTest {
 
         dbr.db().begin((transaction) ->
                 transaction.begin((nested) ->
-                            nested.query("INSERT INTO TX_TEST(ID) VALUES(19)", result -> {
-                                assertEquals(1, result.updatedRows());
-                                nested.commit(() -> transaction.commit(sync::countDown, err), err);
-                            }, err),
-                        err),
-                err);
+                    nested.query("INSERT INTO TX_TEST(ID) VALUES(19)", result -> {
+                        assertEquals(1, result.updatedRows());
+                        nested.commit(() -> transaction.commit(sync::countDown, err), err);
+                    }, err),
+                err),
+            err);
 
         assertTrue(sync.await(5, TimeUnit.SECONDS));
         assertEquals(1L, dbr.query("SELECT ID FROM TX_TEST WHERE ID = 19").size());
+    }
+
+    @Test
+    public void shouldRollbackNestedTransaction() throws Exception {
+        CountDownLatch sync = new CountDownLatch(1);
+
+        dbr.db().begin((transaction) ->
+                transaction.query("INSERT INTO TX_TEST(ID) VALUES(24)", result -> {
+                    assertEquals(1, result.updatedRows());
+                    transaction.begin((nested) ->
+                        nested.query("INSERT INTO TX_TEST(ID) VALUES(23)", res2 -> {
+                            assertEquals(1, res2.updatedRows());
+                            nested.rollback(() -> transaction.commit(sync::countDown, err), err);
+                        }, err), err);
+                }, err),
+            err);
+
+        assertTrue(sync.await(5, TimeUnit.SECONDS));
+        assertEquals(1L, dbr.query("SELECT ID FROM TX_TEST WHERE ID = 24").size());
+        assertEquals(0L, dbr.query("SELECT ID FROM TX_TEST WHERE ID = 23").size());
+    }
+
+    @Test
+    public void shouldRollbackNestedTransactionOnBackendError() throws Exception {
+        CountDownLatch sync = new CountDownLatch(1);
+
+        dbr.db().begin((transaction) ->
+                transaction.query("INSERT INTO TX_TEST(ID) VALUES(25)", result -> {
+                    assertEquals(1, result.updatedRows());
+                    transaction.begin((nested) ->
+                        nested.query("INSERT INTO TX_TEST(ID) VALUES(26)", res2 -> {
+                            assertEquals(1, res2.updatedRows());
+                            nested.query("INSERT INTO TD_TEST(ID) VALUES(26)",
+                                fail, t -> transaction.commit(sync::countDown, err));
+                        }, err), err);
+                }, err),
+            err);
+
+        assertTrue(sync.await(5, TimeUnit.SECONDS));
+        assertEquals(1L, dbr.query("SELECT ID FROM TX_TEST WHERE ID = 25").size());
+        assertEquals(0L, dbr.query("SELECT ID FROM TX_TEST WHERE ID = 26").size());
     }
 }
