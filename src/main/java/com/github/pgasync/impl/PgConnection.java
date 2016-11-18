@@ -185,6 +185,10 @@ public class PgConnection implements Connection {
     class PgConnectionTransaction implements Transaction {
 
         @Override
+        public Observable<Transaction> begin() {
+            return querySet("SNAPSHOT 1").map(rs -> new PgNestedConnectionTransaction(1));
+        }
+        @Override
         public Observable<Void> commit() {
             return PgConnection.this.querySet("COMMIT")
                     .map(rs -> (Void) null)
@@ -211,4 +215,30 @@ public class PgConnection implements Connection {
         }
     }
 
+    /**
+     * Nested Transaction using savepoints.
+     */
+    class PgNestedConnectionTransaction extends PgConnectionTransaction {
+
+        final int depth;
+
+        PgNestedConnectionTransaction(int depth) {
+            this.depth = depth;
+        }
+        @Override
+        public Observable<Transaction> begin() {
+            return querySet("SNAPSHOT " + (depth+1))
+                    .map(rs -> new PgNestedConnectionTransaction(depth+1));
+        }
+        @Override
+        public Observable<Void> commit() {
+            return PgConnection.this.querySet("RELEASE SNAPSHOT " + depth)
+                    .map(rs -> (Void) null);
+        }
+        @Override
+        public Observable<Void> rollback() {
+            return PgConnection.this.querySet("ROLLBACK TO SAVEPOINT " + depth)
+                    .map(rs -> (Void) null);
+        }
+    }
 }
