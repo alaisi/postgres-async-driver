@@ -253,6 +253,12 @@ public abstract class PgConnectionPool implements ConnectionPool {
         }
 
         @Override
+        public Observable<Transaction> begin() {
+            // Nested transactions should not release things automatically.
+            return transaction.begin();
+        }
+
+        @Override
         public Observable<Void> rollback() {
             return transaction.rollback()
                     .doOnTerminate(this::releaseConnection);
