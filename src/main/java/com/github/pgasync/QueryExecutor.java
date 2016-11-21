@@ -13,6 +13,11 @@ import java.util.function.Consumer;
 public interface QueryExecutor {
 
     /**
+     * Begins a transaction.
+     */
+    Observable<Transaction> begin();
+
+    /**
      * Executes an anonymous prepared statement. Uses native PostgreSQL syntax with $arg instead of ?
      * to mark parameters. Supported parameter types are String, Character, Number, Time, Date, Timestamp
      * and byte[].
@@ -33,6 +38,16 @@ public interface QueryExecutor {
      * @return Cold observable that emits a single result set.
      */
     Observable<ResultSet> querySet(String sql, Object... params);
+
+    /**
+     * Begins a transaction.
+     *
+     * @param onTransaction Called when transaction is successfully started.
+     * @param onError Called on exception thrown
+     */
+    default void begin(Consumer<Transaction> onTransaction, Consumer<Throwable> onError) {
+        begin().subscribe(onTransaction::accept, onError::accept);
+    }
 
     /**
      * Executes a simple query.
