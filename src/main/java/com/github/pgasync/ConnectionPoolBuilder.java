@@ -95,6 +95,11 @@ public class ConnectionPoolBuilder {
         return this;
     }
 
+    public ConnectionPoolBuilder validateSocket(boolean validateSocket) {
+        properties.validateSocket = validateSocket;
+        return this;
+    }
+
     /**
      * Configuration for a pool.
      */
@@ -111,6 +116,7 @@ public class ConnectionPoolBuilder {
         boolean useSsl;
         boolean usePipelining;
         String validationQuery;
+        boolean validateSocket;
 
         public String getHostname() {
             return hostname;
@@ -140,9 +146,7 @@ public class ConnectionPoolBuilder {
             return dataConverter != null ? dataConverter : new DataConverter(converters);
         }
         public Func1<Connection,Observable<Connection>> getValidator() {
-            return validationQuery == null || validationQuery.trim().isEmpty()
-                ? Observable::just
-                : new ConnectionValidator(validationQuery)::validate;
+            return new ConnectionValidator(validationQuery, validateSocket)::validate;
         }
     }
 }
