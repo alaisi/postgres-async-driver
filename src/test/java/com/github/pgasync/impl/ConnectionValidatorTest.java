@@ -31,7 +31,7 @@ public class ConnectionValidatorTest {
     }
 
     @Test
-    public void shouldBeDifferentPidWhenValidationQueryFails() throws Exception {
+    public void shouldFailValidationQueryFailsAndReconnectAfterSuccess() throws Exception {
         String errSql =
                 "DO language plpgsql $$\n" +
                 "  BEGIN\n" +
