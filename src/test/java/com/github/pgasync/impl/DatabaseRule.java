@@ -2,7 +2,7 @@ package com.github.pgasync.impl;
 
 import static java.lang.System.getenv;
 import static java.lang.System.out;
-import static ru.yandex.qatools.embed.postgresql.distribution.Version.V9_5_0;
+import static ru.yandex.qatools.embed.postgresql.distribution.Version.V9_6_2;
 
 import com.github.pgasync.ConnectionPool;
 import com.github.pgasync.ConnectionPoolBuilder;
@@ -47,7 +47,7 @@ class DatabaseRule extends ExternalResource {
                 try
                 {
                     PostgresStarter<PostgresExecutable, PostgresProcess> runtime = PostgresStarter.getDefaultInstance();
-                    PostgresConfig config = new PostgresConfig(V9_5_0, new AbstractPostgresConfig.Net(),
+                    PostgresConfig config = new PostgresConfig(V9_6_2, new AbstractPostgresConfig.Net(),
                         new AbstractPostgresConfig.Storage("async-pg"), new AbstractPostgresConfig.Timeout(),
                         new AbstractPostgresConfig.Credentials("async-pg", "async-pg"));
                     PostgresExecutable exec = runtime.prepare(config);
