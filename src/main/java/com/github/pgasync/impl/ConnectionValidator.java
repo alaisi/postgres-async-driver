@@ -16,9 +16,7 @@ package com.github.pgasync.impl;
 
 
 import com.github.pgasync.Connection;
-import com.github.pgasync.Row;
-import rx.Observable;
-import rx.Subscriber;
+import io.reactivex.Single;
 
 /**
  * @author Antti Laisi
@@ -31,21 +29,10 @@ public class ConnectionValidator {
         this.validationQuery = validationQuery;
     }
 
-    public Observable<Connection> validate(Connection connection) {
+    public Single<Connection> validate(Connection connection) {
         return connection.queryRows(validationQuery)
-                .lift(subscriber -> new Subscriber<Row>() {
-                    @Override
-                    public void onError(Throwable e) {
-                        subscriber.onError(e);
-                    }
-                    @Override
-                    public void onCompleted() {
-                        subscriber.onNext(connection);
-                        subscriber.onCompleted();
-                    }
-                    @Override
-                    public void onNext(Row row) { }
-                });
+                .ignoreElements()
+                .toSingleDefault(connection);
     }
 
 }

@@ -83,8 +83,7 @@ public class QueryResultTest {
         List<Integer> series = dbr.db().queryRows("select generate_series(1, 5)")
                 .map(row -> row.getInt(0))
                 .toList()
-                .toBlocking()
-                .single();
+                .blockingGet();
 
         assertEquals(asList(1, 2, 3, 4, 5), series);
     }

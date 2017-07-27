@@ -14,42 +14,27 @@
 
 package com.github.pgasync.impl;
 
-import static com.github.pgasync.impl.message.RowDescription.ColumnDescription;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.logging.Logger;
-
 import com.github.pgasync.Connection;
 import com.github.pgasync.ResultSet;
 import com.github.pgasync.Row;
 import com.github.pgasync.Transaction;
 import com.github.pgasync.impl.conversion.DataConverter;
-import com.github.pgasync.impl.message.Authentication;
-import com.github.pgasync.impl.message.Bind;
-import com.github.pgasync.impl.message.CommandComplete;
-import com.github.pgasync.impl.message.DataRow;
-import com.github.pgasync.impl.message.ExtendedQuery;
-import com.github.pgasync.impl.message.Message;
-import com.github.pgasync.impl.message.Parse;
-import com.github.pgasync.impl.message.PasswordMessage;
-import com.github.pgasync.impl.message.Query;
-import com.github.pgasync.impl.message.ReadyForQuery;
-import com.github.pgasync.impl.message.RowDescription;
-import com.github.pgasync.impl.message.StartupMessage;
+import com.github.pgasync.impl.message.*;
+import io.reactivex.*;
+import io.reactivex.disposables.Disposable;
 
-import rx.Observable;
-import rx.Subscriber;
-import rx.observers.Subscribers;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+
+import static com.github.pgasync.impl.message.RowDescription.ColumnDescription;
 
 /**
  * A connection to PostgreSQL backed. The postmaster forks a backend process for
  * each connection. A connection can process only a single queryRows at a time.
- * 
+ *
  * @author Antti Laisi
  */
 public class PgConnection implements Connection {
@@ -62,10 +47,11 @@ public class PgConnection implements Connection {
         this.dataConverter = dataConverter;
     }
 
-    Observable<Connection> connect(String username, String password, String database) {
+    Single<Connection> connect(String username, String password, String database) {
        return stream.connect(new StartupMessage(username, database))
                .flatMap(message -> authenticate(username, password, message))
-               .single(message -> message == ReadyForQuery.INSTANCE)
+               .filter(message -> message == ReadyForQuery.INSTANCE)
+               .singleOrError()
                .map(ready -> this);
     }
 
@@ -80,9 +66,10 @@ public class PgConnection implements Connection {
     }
 
     @Override
-    public Observable<ResultSet> querySet(String sql, Object... params) {
+    public Single<ResultSet> querySet(String sql, Object... params) {
         return sendQuery(sql, params)
-                .lift(toResultSet(dataConverter));
+                .lift(toResultSet(dataConverter))
+                .singleOrError();
     }
 
     @Override
@@ -92,7 +79,7 @@ public class PgConnection implements Connection {
     }
 
     @Override
-    public Observable<Transaction> begin() {
+    public Single<Transaction> begin() {
         return querySet("BEGIN").map(rs -> new PgConnectionTransaction());
     }
 
@@ -100,20 +87,14 @@ public class PgConnection implements Connection {
     public Observable<String> listen(String channel) {
         // TODO: wait for commit before sending unlisten as otherwise it can be rolled back
         return querySet("LISTEN " + channel)
-                .<String>lift(subscriber -> Subscribers.create( rs -> stream.listen(channel)
-                                                                        .subscribe(subscriber),
-                                                                subscriber::onError))
-                .doOnUnsubscribe(() -> querySet("UNLISTEN " + channel).subscribe(rs -> { }));
+                .flatMapObservable(rs -> stream.listen(channel))
+                .doOnDispose(() -> querySet("UNLISTEN " + channel).subscribe(rs -> {
+                }));
     }
 
     @Override
     public void close() throws Exception {
-        CountDownLatch latch = new CountDownLatch(1);
-        stream.close().subscribe(__ -> latch.countDown(), ex -> {
-            Logger.getLogger(getClass().getName()).warning("Exception closing connection: " + ex);
-            latch.countDown();
-        });
-        latch.await(1000, TimeUnit.MILLISECONDS);
+        stream.close().blockingAwait(1000, TimeUnit.MILLISECONDS);
     }
 
     private Observable<Message> sendQuery(String sql, Object[] params) {
@@ -129,37 +110,45 @@ public class PgConnection implements Connection {
                     ExtendedQuery.SYNC);
     }
 
-    static Observable.Operator<Row,? super Message> toRow(DataConverter dataConverter) {
-        return subscriber -> new Subscriber<Message>() {
+    static ObservableOperator<Row, ? super Message> toRow(DataConverter dataConverter) {
+        return observer -> new Observer<Message>() {
 
             Map<String, PgColumn> columns;
 
+            @Override
+            public void onSubscribe(Disposable d) {
+                observer.onSubscribe(d);
+            }
             @Override
             public void onNext(Message message) {
                 if (message instanceof RowDescription) {
                     columns = getColumns(((RowDescription) message).getColumns());
                 } else if(message instanceof DataRow) {
-                    subscriber.onNext(new PgRow((DataRow) message, columns, dataConverter));
+                    observer.onNext(new PgRow((DataRow) message, columns, dataConverter));
                 }
             }
             @Override
             public void onError(Throwable e) {
-                subscriber.onError(e);
+                observer.onError(e);
             }
             @Override
-            public void onCompleted() {
-                subscriber.onCompleted();
+            public void onComplete() {
+                observer.onComplete();
             }
         };
     }
 
-    static Observable.Operator<ResultSet,? super Message> toResultSet(DataConverter dataConverter) {
-        return subscriber -> new Subscriber<Message>() {
+    static ObservableOperator<ResultSet, ? super Message> toResultSet(DataConverter dataConverter) {
+        return observer -> new Observer<Message>() {
 
             Map<String, PgColumn> columns;
             List<Row> rows = new ArrayList<>();
             int updated;
 
+            @Override
+            public void onSubscribe(Disposable d) {
+                observer.onSubscribe(d);
+            }
             @Override
             public void onNext(Message message) {
                 if (message instanceof RowDescription) {
@@ -169,16 +158,16 @@ public class PgConnection implements Connection {
                 } else if(message instanceof CommandComplete) {
                     updated = ((CommandComplete) message).getUpdatedRows();
                 } else if(message == ReadyForQuery.INSTANCE) {
-                    subscriber.onNext(new PgResultSet(columns, rows, updated));
+                    observer.onNext(new PgResultSet(columns, rows, updated));
                 }
             }
             @Override
             public void onError(Throwable e) {
-                subscriber.onError(e);
+                observer.onError(e);
             }
             @Override
-            public void onCompleted() {
-                subscriber.onCompleted();
+            public void onComplete() {
+                observer.onComplete();
             }
         };
     }
@@ -197,33 +186,30 @@ public class PgConnection implements Connection {
     class PgConnectionTransaction implements Transaction {
 
         @Override
-        public Observable<Transaction> begin() {
+        public Single<Transaction> begin() {
             return querySet("SAVEPOINT sp_1").map(rs -> new PgConnectionNestedTransaction(1));
         }
         @Override
-        public Observable<Void> commit() {
+        public Completable commit() {
             return PgConnection.this.querySet("COMMIT")
-                    .map(rs -> (Void) null)
+                    .toCompletable()
                     .doOnError(exception -> stream.close().subscribe());
         }
         @Override
-        public Observable<Void> rollback() {
+        public Completable rollback() {
             return PgConnection.this.querySet("ROLLBACK")
-                    .map(rs -> (Void) null)
+                    .toCompletable()
                     .doOnError(exception -> stream.close().subscribe());
         }
         @Override
         public Observable<Row> queryRows(String sql, Object... params) {
             return PgConnection.this.queryRows(sql, params)
-                    .onErrorResumeNext(this::doRollback);
+                    .onErrorResumeNext((Throwable t) -> rollback().andThen(Observable.error(t)));
         }
         @Override
-        public Observable<ResultSet> querySet(String sql, Object... params) {
+        public Single<ResultSet> querySet(String sql, Object... params) {
             return PgConnection.this.querySet(sql, params)
-                    .onErrorResumeNext(this::doRollback);
-        }
-        <T> Observable<T> doRollback(Throwable t) {
-            return rollback().flatMap(__ -> Observable.error(t));
+                    .onErrorResumeNext((Throwable t) -> rollback().andThen(Single.error(t)));
         }
     }
 
@@ -238,19 +224,19 @@ public class PgConnection implements Connection {
             this.depth = depth;
         }
         @Override
-        public Observable<Transaction> begin() {
+        public Single<Transaction> begin() {
             return querySet("SAVEPOINT sp_" + (depth+1))
                     .map(rs -> new PgConnectionNestedTransaction(depth+1));
         }
         @Override
-        public Observable<Void> commit() {
+        public Completable commit() {
             return PgConnection.this.querySet("RELEASE SAVEPOINT sp_" + depth)
-                    .map(rs -> (Void) null);
+                    .toCompletable();
         }
         @Override
-        public Observable<Void> rollback() {
+        public Completable rollback() {
             return PgConnection.this.querySet("ROLLBACK TO SAVEPOINT sp_" + depth)
-                    .map(rs -> (Void) null);
+                    .toCompletable();
         }
     }
 }

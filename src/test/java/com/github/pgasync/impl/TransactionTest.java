@@ -83,12 +83,12 @@ public class TransactionTest {
     @Test
     public void shouldCommitParameterizedInsertInTransaction() throws Exception {
         // Ref: https://github.com/alaisi/postgres-async-driver/issues/34
-        long id = dbr.db().begin().flatMap(txn ->
-            txn.queryRows("INSERT INTO TX_TEST (ID) VALUES ($1) RETURNING ID", "35").first().flatMap(row -> {
+        long id = dbr.db().begin().flatMapObservable(txn ->
+            txn.queryRows("INSERT INTO TX_TEST (ID) VALUES ($1) RETURNING ID", "35").flatMapSingle(row -> {
                 Long value = row.getLong(0);
-                return txn.commit().map(v -> value);
+                return txn.commit().toSingleDefault(value);
             })
-        ).toBlocking().single();
+        ).blockingSingle();
         assertEquals(35L, id);
     }
 

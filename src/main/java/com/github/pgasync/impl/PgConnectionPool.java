@@ -17,10 +17,11 @@ package com.github.pgasync.impl;
 import com.github.pgasync.*;
 import com.github.pgasync.ConnectionPoolBuilder.PoolProperties;
 import com.github.pgasync.impl.conversion.DataConverter;
-import rx.Observable;
-import rx.Subscriber;
-import rx.functions.Func1;
-import rx.observers.Subscribers;
+import io.reactivex.Completable;
+import io.reactivex.Observable;
+import io.reactivex.Single;
+import io.reactivex.SingleEmitter;
+import io.reactivex.functions.Function;
 
 import javax.annotation.concurrent.GuardedBy;
 import java.net.InetSocketAddress;
@@ -49,7 +50,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
     @GuardedBy("lock")
     boolean closed;
     @GuardedBy("lock")
-    final Queue<Subscriber<? super Connection>> subscribers = new LinkedList<>();
+    final Queue<SingleEmitter<Connection>> emitters = new LinkedList<>();
     @GuardedBy("lock")
     final Queue<Connection> connections = new LinkedList<>();
 
@@ -58,7 +59,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
     final String password;
     final String database;
     final DataConverter dataConverter;
-    final Func1<Connection, Observable<Connection>> validator;
+    final Function<Connection, Single<Connection>> validator;
     final boolean pipeline;
 
     public PgConnectionPool(PoolProperties properties) {
@@ -75,21 +76,21 @@ public abstract class PgConnectionPool implements ConnectionPool {
     @Override
     public Observable<Row> queryRows(String sql, Object... params) {
         return getConnection()
-                .doOnNext(this::releaseIfPipelining)
-                .flatMap(connection -> connection.queryRows(sql, params)
+                .doAfterSuccess(this::releaseIfPipelining)
+                .flatMapObservable(connection -> connection.queryRows(sql, params)
                                         .doOnTerminate(() -> releaseIfNotPipelining(connection)));
     }
 
     @Override
-    public Observable<ResultSet> querySet(String sql, Object... params) {
+    public Single<ResultSet> querySet(String sql, Object... params) {
         return getConnection()
-                .doOnNext(this::releaseIfPipelining)
+                .doAfterSuccess(this::releaseIfPipelining)
                 .flatMap(connection -> connection.querySet(sql, params)
-                        .doOnTerminate(() -> releaseIfNotPipelining(connection)));
+                        .doOnEvent((resultSet, throwable) -> releaseIfNotPipelining(connection)));
     }
 
     @Override
-    public Observable<Transaction> begin() {
+    public Single<Transaction> begin() {
         return getConnection()
                 .flatMap(connection -> connection.begin()
                         .doOnError(t -> release(connection))
@@ -99,13 +100,9 @@ public abstract class PgConnectionPool implements ConnectionPool {
     @Override
     public Observable<String> listen(String channel) {
         return getConnection()
-                .lift(subscriber ->
-                        Subscribers.create(
-                                connection -> connection.listen(channel)
-                                        .doOnSubscribe(() -> release(connection))
-                                        .onErrorResumeNext(exception -> listen(channel))
-                                        .subscribe(subscriber),
-                                subscriber::onError));
+                .flatMapObservable(connection -> connection.listen(channel)
+                        .doOnSubscribe(disposable -> release(connection))
+                        .onErrorResumeNext((Throwable t) -> listen(channel)));
     }
 
     @Override
@@ -114,8 +111,8 @@ public abstract class PgConnectionPool implements ConnectionPool {
         try {
             closed = true;
 
-            while(!subscribers.isEmpty()) {
-                Subscriber<? super Connection> queued = subscribers.poll();
+            while(!emitters.isEmpty()) {
+                SingleEmitter<Connection> queued = emitters.poll();
                 if(queued != null) {
                     queued.onError(new SqlException("Connection pool is closing"));
                 }
@@ -141,15 +138,15 @@ public abstract class PgConnectionPool implements ConnectionPool {
     }
 
     @Override
-    public Observable<Connection> getConnection() {
-        return Observable.<Connection>create(subscriber -> {
+    public Single<Connection> getConnection() {
+        return Single.<Connection>create(emitter -> {
             boolean locked = true;
             lock.lock();
             try {
                 if (closed) {
                     lock.unlock();
                     locked = false;
-                    subscriber.onError(new SqlException("Connection pool is closed"));
+                    emitter.onError(new SqlException("Connection pool is closed"));
                     return;
                 }
 
@@ -157,13 +154,12 @@ public abstract class PgConnectionPool implements ConnectionPool {
                 if (connection != null) {
                     lock.unlock();
                     locked = false;
-                    subscriber.onNext(connection);
-                    subscriber.onCompleted();
+                    emitter.onSuccess(connection);
                     return;
                 }
 
                 if(!tryIncreaseSize()) {
-                    subscribers.add(subscriber);
+                    emitters.add(emitter);
                     return;
                 }
                 lock.unlock();
@@ -172,13 +168,13 @@ public abstract class PgConnectionPool implements ConnectionPool {
                 new PgConnection(openStream(address), dataConverter)
                         .connect(username, password, database)
                         .doOnError(__ -> release(null))
-                        .subscribe(subscriber);
+                        .subscribe(emitter::onSuccess, emitter::onError);
             } finally {
                 if (locked) {
                     lock.unlock();
                 }
             }
-        }).flatMap(conn -> validator.call(conn).doOnError(err -> release(conn)))
+        }).flatMap(conn -> validator.apply(conn).doOnError(err -> release(conn)))
                 .retry(poolSize + 1);
     }
 
@@ -206,10 +202,10 @@ public abstract class PgConnectionPool implements ConnectionPool {
     public void release(Connection connection) {
         boolean failed = connection == null || !((PgConnection) connection).isConnected();
 
-        Subscriber<? super Connection> next;
+        SingleEmitter<Connection> next;
         lock.lock();
         try {
-            if(subscribers.isEmpty()) {
+            if(emitters.isEmpty()) {
                 if(failed) {
                     currentSize--;
                 } else {
@@ -221,13 +217,12 @@ public abstract class PgConnectionPool implements ConnectionPool {
                 return;
             }
 
-            next = subscribers.poll();
+            next = emitters.poll();
         } finally {
             lock.unlock();
         }
 
-        next.onNext(connection);
-        next.onCompleted();
+        next.onSuccess(connection);
     }
 
     /**
@@ -253,19 +248,19 @@ public abstract class PgConnectionPool implements ConnectionPool {
         }
 
         @Override
-        public Observable<Transaction> begin() {
+        public Single<Transaction> begin() {
             // Nested transactions should not release things automatically.
             return transaction.begin();
         }
 
         @Override
-        public Observable<Void> rollback() {
+        public Completable rollback() {
             return transaction.rollback()
                     .doOnTerminate(this::releaseConnection);
         }
 
         @Override
-        public Observable<Void> commit() {
+        public Completable commit() {
             return transaction.commit()
                     .doOnTerminate(this::releaseConnection);
         }
@@ -280,9 +275,9 @@ public abstract class PgConnectionPool implements ConnectionPool {
         }
 
         @Override
-        public Observable<ResultSet> querySet(String sql, Object... params) {
+        public Single<ResultSet> querySet(String sql, Object... params) {
             if (released.get()) {
-                return Observable.error(new SqlException("Transaction is already completed"));
+                return Single.error(new SqlException("Transaction is already completed"));
             }
             return transaction.querySet(sql, params)
                     .doOnError(exception -> releaseConnection());

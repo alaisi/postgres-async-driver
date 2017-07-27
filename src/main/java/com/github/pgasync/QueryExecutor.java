@@ -1,6 +1,7 @@
 package com.github.pgasync;
 
-import rx.Observable;
+import io.reactivex.Observable;
+import io.reactivex.Single;
 
 import java.util.List;
 import java.util.function.Consumer;
@@ -15,7 +16,7 @@ public interface QueryExecutor {
     /**
      * Begins a transaction.
      */
-    Observable<Transaction> begin();
+    Single<Transaction> begin();
 
     /**
      * Executes an anonymous prepared statement. Uses native PostgreSQL syntax with $arg instead of ?
@@ -37,7 +38,7 @@ public interface QueryExecutor {
      * @param params Parameter values
      * @return Cold observable that emits a single result set.
      */
-    Observable<ResultSet> querySet(String sql, Object... params);
+    Single<ResultSet> querySet(String sql, Object... params);
 
     /**
      * Begins a transaction.
@@ -70,7 +71,7 @@ public interface QueryExecutor {
      * @param onResult Called when query is completed
      * @param onError Called on exception thrown
      */
-    default void query(String sql, List/*<Object>*/ params, Consumer<ResultSet> onResult, Consumer<Throwable> onError) {
+    default void query(String sql, List<?> params, Consumer<ResultSet> onResult, Consumer<Throwable> onError) {
         querySet(sql, params != null ? params.toArray() : null).subscribe(onResult::accept, onError::accept);
     }
 }

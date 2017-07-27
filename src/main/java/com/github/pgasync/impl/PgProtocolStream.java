@@ -17,7 +17,8 @@ package com.github.pgasync.impl;
 import com.github.pgasync.impl.message.Message;
 import com.github.pgasync.impl.message.PasswordMessage;
 import com.github.pgasync.impl.message.StartupMessage;
-import rx.Observable;
+import io.reactivex.Completable;
+import io.reactivex.Observable;
 
 /**
  * Stream of messages from/to backend server.
@@ -36,6 +37,6 @@ public interface PgProtocolStream {
 
     boolean isConnected();
 
-    Observable<Void> close();
+    Completable close();
 
 }

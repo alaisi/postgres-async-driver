@@ -1,6 +1,6 @@
 package com.github.pgasync;
 
-import rx.Observable;
+import io.reactivex.Observable;
 
 /**
  * @author Antti Laisi

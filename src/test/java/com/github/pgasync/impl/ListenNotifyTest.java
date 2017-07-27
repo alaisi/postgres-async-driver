@@ -1,9 +1,9 @@
 package com.github.pgasync.impl;
 
 import com.github.pgasync.ConnectionPool;
+import io.reactivex.disposables.Disposable;
 import org.junit.ClassRule;
 import org.junit.Test;
-import rx.Subscription;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -24,21 +24,21 @@ public class ListenNotifyTest {
         ConnectionPool pool = dbr.pool;
         BlockingQueue<String> result = new LinkedBlockingQueue<>(5);
 
-        Subscription subscription = pool.listen("example").subscribe(result::add, Throwable::printStackTrace);
+        Disposable subscription = pool.listen("example").subscribe(result::add, Throwable::printStackTrace);
         TimeUnit.SECONDS.sleep(2);
 
-        pool.querySet("notify example, 'msg'").toBlocking().single();
-        pool.querySet("notify example, 'msg'").toBlocking().single();
-        pool.querySet("notify example, 'msg'").toBlocking().single();
+        pool.querySet("notify example, 'msg'").blockingGet();
+        pool.querySet("notify example, 'msg'").blockingGet();
+        pool.querySet("notify example, 'msg'").blockingGet();
 
         assertEquals("msg", result.poll(2, TimeUnit.SECONDS));
         assertEquals("msg", result.poll(2, TimeUnit.SECONDS));
         assertEquals("msg", result.poll(2, TimeUnit.SECONDS));
 
-        subscription.unsubscribe();
-        assertTrue(subscription.isUnsubscribed());
+        subscription.dispose();
+        assertTrue(subscription.isDisposed());
 
-        pool.querySet("notify example, 'msg'").toBlocking().single();
+        pool.querySet("notify example, 'msg'").blockingGet();
         assertNull(result.poll(2, TimeUnit.SECONDS));
     }
 }

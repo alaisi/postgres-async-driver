@@ -14,7 +14,7 @@
 
 package com.github.pgasync;
 
-import rx.Observable;
+import io.reactivex.Completable;
 
 import java.util.function.Consumer;
 
@@ -30,12 +30,12 @@ public interface Transaction extends QueryExecutor {
     /**
      * Commits a transaction
      */
-    Observable<Void> commit();
+    Completable commit();
 
     /**
      * Rollbacks a transaction.
      */
-    Observable<Void> rollback();
+    Completable rollback();
 
     /**
      * Commits a transaction.
@@ -44,7 +44,7 @@ public interface Transaction extends QueryExecutor {
      * @param onError Called on exception thrown
      */
     default void commit(Runnable onCompleted, Consumer<Throwable> onError) {
-        commit().subscribe(__ -> onCompleted.run(), onError::accept);
+        commit().subscribe(onCompleted::run, onError::accept);
     }
 
     /**
@@ -54,7 +54,7 @@ public interface Transaction extends QueryExecutor {
      * @param onError Called on exception thrown
      */
     default void rollback(Runnable onCompleted, Consumer<Throwable> onError) {
-        rollback().subscribe(__ -> onCompleted.run(), onError::accept);
+        rollback().subscribe(onCompleted::run, onError::accept);
     }
 
 }

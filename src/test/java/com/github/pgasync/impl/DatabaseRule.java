@@ -9,15 +9,9 @@ import com.github.pgasync.ConnectionPoolBuilder;
 import com.github.pgasync.Db;
 import com.github.pgasync.ResultSet;
 import org.junit.rules.ExternalResource;
-import rx.Observable;
 
 import java.io.IOException;
-import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.List;
-import java.util.Map.Entry;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.TimeUnit;
 
 import ru.yandex.qatools.embed.postgresql.PostgresExecutable;
 import ru.yandex.qatools.embed.postgresql.PostgresProcess;
@@ -85,35 +79,11 @@ class DatabaseRule extends ExternalResource {
     }
 
     ResultSet query(String sql) {
-        return block(db().querySet(sql, (Object[]) null));
+        return db().querySet(sql, (Object[]) null).blockingGet();
     }
     @SuppressWarnings("rawtypes")
     ResultSet query(String sql, List/*<Object>*/ params) {
-        return block(db().querySet(sql, params.toArray()));
-    }
-
-    private <T> T block(Observable<T> observable) {
-        BlockingQueue<Entry<T,Throwable>> result = new ArrayBlockingQueue<>(1);
-        observable.single().subscribe(
-                item -> result.add(new SimpleImmutableEntry<>(item, null)),
-                exception -> result.add(new SimpleImmutableEntry<>(null, exception)));
-        try {
-
-            Entry<T,Throwable> entry = result.poll(5, TimeUnit.SECONDS);
-            if(entry == null) {
-                throw new RuntimeException("Timed out waiting for result");
-            }
-            Throwable exception = entry.getValue();
-            if(exception != null) {
-                throw exception instanceof RuntimeException
-                        ? (RuntimeException) exception
-                        : new RuntimeException(exception);
-            }
-            return entry.getKey();
-
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
+        return db().querySet(sql, params.toArray()).blockingGet();
     }
 
     Db db() {

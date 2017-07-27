@@ -17,8 +17,8 @@ package com.github.pgasync;
 import com.github.pgasync.impl.ConnectionValidator;
 import com.github.pgasync.impl.conversion.DataConverter;
 import com.github.pgasync.impl.netty.NettyPgConnectionPool;
-import rx.Observable;
-import rx.functions.Func1;
+import io.reactivex.Single;
+import io.reactivex.functions.Function;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -139,9 +139,9 @@ public class ConnectionPoolBuilder {
         public DataConverter getDataConverter() {
             return dataConverter != null ? dataConverter : new DataConverter(converters);
         }
-        public Func1<Connection,Observable<Connection>> getValidator() {
+        public Function<Connection, Single<Connection>> getValidator() {
             return validationQuery == null || validationQuery.trim().isEmpty()
-                ? Observable::just
+                ? Single::just
                 : new ConnectionValidator(validationQuery)::validate;
         }
     }
