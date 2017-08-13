@@ -17,7 +17,7 @@ package com.github.pgasync.impl;
 import static com.github.pgasync.impl.message.RowDescription.ColumnDescription;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -184,7 +184,7 @@ public class PgConnection implements Connection {
     }
 
     static Map<String,PgColumn> getColumns(ColumnDescription[] descriptions) {
-        Map<String,PgColumn> columns = new HashMap<>();
+        Map<String,PgColumn> columns = new LinkedHashMap<>();
         for (int i = 0; i < descriptions.length; i++) {
             columns.put(descriptions[i].getName().toUpperCase(), new PgColumn(i, descriptions[i].getType()));
         }
