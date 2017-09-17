@@ -62,7 +62,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
     final boolean pipeline;
 
     public PgConnectionPool(PoolProperties properties) {
-        this.address = new InetSocketAddress(properties.getHostname(), properties.getPort());
+        this.address = InetSocketAddress.createUnresolved(properties.getHostname(), properties.getPort());
         this.username = properties.getUsername();
         this.password = properties.getPassword();
         this.database = properties.getDatabase();
