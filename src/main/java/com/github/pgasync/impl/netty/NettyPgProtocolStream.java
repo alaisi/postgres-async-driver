@@ -26,6 +26,7 @@ import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
+import io.netty.handler.timeout.ReadTimeoutException;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 import rx.Observable;
@@ -34,13 +35,11 @@ import rx.Subscriber;
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.*;
 
 /**
  * Netty connection to PostgreSQL backend.
- * 
+ *
  * @author Antti Laisi
  */
 public class NettyPgProtocolStream implements PgProtocolStream {
@@ -50,22 +49,26 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     final SocketAddress address;
     final boolean useSsl;
     final boolean pipeline;
+    int readTimeout;
+    int connectTimeout;
 
     final GenericFutureListener<Future<? super Object>> onError;
     final Queue<Subscriber<? super Message>> subscribers;
-    final ConcurrentMap<String,Map<String,Subscriber<? super String>>> listeners = new ConcurrentHashMap<>();
+    final ConcurrentMap<String, Map<String, Subscriber<? super String>>> listeners = new ConcurrentHashMap<>();
 
     ChannelHandlerContext ctx;
 
-    public NettyPgProtocolStream(EventLoopGroup group, SocketAddress address, boolean useSsl, boolean pipeline) {
+    public NettyPgProtocolStream(EventLoopGroup group, SocketAddress address, boolean useSsl, boolean pipeline, int readTimeout, int connectTimeout) {
         this.group = group;
         this.eventLoop = group.next();
         this.address = address;
         this.useSsl = useSsl; // TODO: refactor into SSLConfig with trust parameters
         this.pipeline = pipeline;
+        this.readTimeout = readTimeout;
+        this.connectTimeout = connectTimeout;
         this.subscribers = new LinkedBlockingDeque<>(); // TODO: limit pipeline queue depth
         this.onError = future -> {
-            if(!future.isSuccess()) {
+            if (!future.isSuccess()) {
                 subscribers.peek().onError(future.cause());
             }
         };
@@ -78,6 +81,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
             pushSubscriber(subscriber);
             new Bootstrap()
                     .group(group)
+                    .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectTimeout)
                     .channel(NioSocketChannel.class)
                     .handler(newProtocolInitializer(newStartupHandler(startup)))
                     .connect(address)
@@ -105,7 +109,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
                 return;
             }
 
-            if(pipeline && !eventLoop.inEventLoop()) {
+            if (pipeline && !eventLoop.inEventLoop()) {
                 eventLoop.submit(() -> {
                     pushSubscriber(subscriber);
                     write(messages);
@@ -115,8 +119,21 @@ public class NettyPgProtocolStream implements PgProtocolStream {
 
             pushSubscriber(subscriber);
             write(messages);
+            initReadTimeout(subscriber);
 
         }).lift(throwErrorResponsesOnComplete());
+    }
+
+    private void initReadTimeout(Subscriber subscriber) {
+        if (readTimeout != 0) {
+            Runnable onTimeout = () -> {
+                ReadTimeoutException timeoutException = ReadTimeoutException.INSTANCE;
+                subscriber.onError(timeoutException);
+                ctx.fireExceptionCaught(timeoutException);
+                ctx.close();
+            };
+            this.ctx.executor().schedule(onTimeout, readTimeout, TimeUnit.MILLISECONDS);
+        }
     }
 
     @Override
@@ -149,33 +166,33 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     @Override
     public Observable<Void> close() {
         return Observable.create(subscriber ->
-                    ctx.writeAndFlush(Terminate.INSTANCE).addListener(written ->
-                            ctx.close().addListener(closed -> {
-            if (!closed.isSuccess()) {
-                subscriber.onError(closed.cause());
-                return;
-            }
-            subscriber.onNext(null);
-            subscriber.onCompleted();
-        })));
+                ctx.writeAndFlush(Terminate.INSTANCE).addListener(written ->
+                        ctx.close().addListener(closed -> {
+                            if (!closed.isSuccess()) {
+                                subscriber.onError(closed.cause());
+                                return;
+                            }
+                            subscriber.onNext(null);
+                            subscriber.onCompleted();
+                        })));
     }
 
     private void pushSubscriber(Subscriber<? super Message> subscriber) {
-        if(!subscribers.offer(subscriber)) {
+        if (!subscribers.offer(subscriber)) {
             throw new IllegalStateException("Pipelining not enabled " + subscribers.peek());
         }
     }
 
     private void write(Message... messages) {
-        for(Message message : messages) {
+        for (Message message : messages) {
             ctx.write(message).addListener(onError);
         }
         ctx.flush();
     }
 
     private void publishNotification(NotificationResponse notification) {
-        Map<String,Subscriber<? super String>> consumers = listeners.get(notification.getChannel());
-        if(consumers != null) {
+        Map<String, Subscriber<? super String>> consumers = listeners.get(notification.getChannel());
+        if (consumers != null) {
             consumers.values().forEach(c -> c.onNext(notification.getPayload()));
         }
     }
@@ -186,7 +203,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
                 : Observable.just((Message) message);
     }
 
-    private static Observable.Operator<Message,? super Object> throwErrorResponsesOnComplete() {
+    private static Observable.Operator<Message, ? super Object> throwErrorResponsesOnComplete() {
         return subscriber -> new Subscriber<Object>() {
 
             SqlException sqlException;
@@ -197,16 +214,18 @@ public class NettyPgProtocolStream implements PgProtocolStream {
                     sqlException = toSqlException((ErrorResponse) message);
                     return;
                 }
-                if(sqlException != null && message == ReadyForQuery.INSTANCE) {
+                if (sqlException != null && message == ReadyForQuery.INSTANCE) {
                     subscriber.onError(sqlException);
                     return;
                 }
                 subscriber.onNext((Message) message);
             }
+
             @Override
             public void onError(Throwable e) {
                 subscriber.onError(e);
             }
+
             @Override
             public void onCompleted() {
                 subscriber.onCompleted();
@@ -229,13 +248,14 @@ public class NettyPgProtocolStream implements PgProtocolStream {
             public void channelActive(ChannelHandlerContext context) {
                 NettyPgProtocolStream.this.ctx = context;
 
-                if(useSsl) {
+                if (useSsl) {
                     write(SSLHandshake.INSTANCE);
                     return;
                 }
                 write(startup);
                 context.pipeline().remove(this);
             }
+
             @Override
             public void userEventTriggered(ChannelHandlerContext context, Object evt) throws Exception {
                 if (evt instanceof SslHandshakeCompletionEvent && ((SslHandshakeCompletionEvent) evt).isSuccess()) {
@@ -250,7 +270,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         return new ChannelInitializer<Channel>() {
             @Override
             protected void initChannel(Channel channel) throws Exception {
-                if(useSsl) {
+                if (useSsl) {
                     channel.pipeline().addLast(newSslInitiator());
                 }
                 channel.pipeline().addLast(new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 1, 4, -4, 0, true));
@@ -258,6 +278,19 @@ public class NettyPgProtocolStream implements PgProtocolStream {
                 channel.pipeline().addLast(new ByteBufMessageEncoder());
                 channel.pipeline().addLast(newProtocolHandler());
                 channel.pipeline().addLast(onActive);
+                channel.pipeline().addLast(newExceptionHandler());
+            }
+        };
+    }
+
+    private ChannelInboundHandlerAdapter newExceptionHandler() {
+        return new ChannelInboundHandlerAdapter() {
+            @Override
+            public void exceptionCaught(ChannelHandlerContext context, Throwable cause) throws Exception {
+                Collection<Subscriber<? super Message>> unsubscribe = subscribers;
+                if (subscribers.removeAll(unsubscribe)) {
+                    unsubscribe.forEach(subscriber -> subscriber.onError(cause));
+                }
             }
         };
     }
@@ -266,10 +299,10 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         return new ByteToMessageDecoder() {
             @Override
             protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
-                if(in.readableBytes() < 1) {
+                if (in.readableBytes() < 1) {
                     return;
                 }
-                if('S' != in.readByte()) {
+                if ('S' != in.readByte()) {
                     ctx.fireExceptionCaught(new IllegalStateException("SSL required but not supported by backend server"));
                     return;
                 }
@@ -289,12 +322,12 @@ public class NettyPgProtocolStream implements PgProtocolStream {
             @Override
             public void channelRead(ChannelHandlerContext context, Object msg) throws Exception {
 
-                if(msg instanceof NotificationResponse) {
+                if (msg instanceof NotificationResponse) {
                     publishNotification((NotificationResponse) msg);
                     return;
                 }
 
-                if(isCompleteMessage(msg)) {
+                if (isCompleteMessage(msg)) {
                     Subscriber<? super Message> subscriber = subscribers.remove();
                     subscriber.onNext((Message) msg);
                     subscriber.onCompleted();
@@ -303,17 +336,10 @@ public class NettyPgProtocolStream implements PgProtocolStream {
 
                 subscribers.peek().onNext((Message) msg);
             }
+
             @Override
             public void channelInactive(ChannelHandlerContext context) throws Exception {
                 exceptionCaught(context, new IOException("Channel state changed to inactive"));
-            }
-            @Override
-            @SuppressWarnings("MismatchedQueryAndUpdateOfCollection")
-            public void exceptionCaught(ChannelHandlerContext context, Throwable cause) throws Exception {
-                Collection<Subscriber<? super Message>> unsubscribe = new LinkedList<>();
-                if(subscribers.removeAll(unsubscribe)) {
-                    unsubscribe.forEach(subscriber -> subscriber.onError(cause));
-                }
             }
         };
     }
