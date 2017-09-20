@@ -29,6 +29,7 @@ import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.handler.timeout.ReadTimeoutException;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
+import io.netty.util.concurrent.ScheduledFuture;
 import rx.Observable;
 import rx.Subscriber;
 
@@ -53,10 +54,13 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     int connectTimeout;
 
     final GenericFutureListener<Future<? super Object>> onError;
-    final Queue<Subscriber<? super Message>> subscribers;
     final ConcurrentMap<String, Map<String, Subscriber<? super String>>> listeners = new ConcurrentHashMap<>();
 
+    Queue<Subscriber<? super Message>> subscribers;
+
     ChannelHandlerContext ctx;
+    private ScheduledFuture<?> readTimeoutScheduled;
+
 
     public NettyPgProtocolStream(EventLoopGroup group, SocketAddress address, boolean useSsl, boolean pipeline, int readTimeout, int connectTimeout) {
         this.group = group;
@@ -83,7 +87,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
                     .group(group)
                     .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectTimeout)
                     .channel(NioSocketChannel.class)
-                    .handler(newProtocolInitializer(newStartupHandler(startup)))
+                    .handler(newProtocolInitializer(newStartupHandler(startup, subscriber)))
                     .connect(address)
                     .addListener(onError);
 
@@ -119,12 +123,12 @@ public class NettyPgProtocolStream implements PgProtocolStream {
 
             pushSubscriber(subscriber);
             write(messages);
-            initReadTimeout(subscriber);
+            readTimeoutScheduled = initReadTimeout(subscriber);
 
         }).lift(throwErrorResponsesOnComplete());
     }
 
-    private void initReadTimeout(Subscriber subscriber) {
+    private ScheduledFuture<?> initReadTimeout(Subscriber subscriber) {
         if (readTimeout != 0) {
             Runnable onTimeout = () -> {
                 ReadTimeoutException timeoutException = ReadTimeoutException.INSTANCE;
@@ -132,8 +136,10 @@ public class NettyPgProtocolStream implements PgProtocolStream {
                 ctx.fireExceptionCaught(timeoutException);
                 ctx.close();
             };
-            this.ctx.executor().schedule(onTimeout, readTimeout, TimeUnit.MILLISECONDS);
+            return this.ctx.executor().schedule(onTimeout, readTimeout, TimeUnit.MILLISECONDS);
         }
+
+        return null;
     }
 
     @Override
@@ -242,7 +248,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         return new SqlException(error.getLevel().name(), error.getCode(), error.getMessage());
     }
 
-    ChannelInboundHandlerAdapter newStartupHandler(StartupMessage startup) {
+    ChannelInboundHandlerAdapter newStartupHandler(StartupMessage startup, Subscriber<? super Object> subscriber) {
         return new ChannelInboundHandlerAdapter() {
             @Override
             public void channelActive(ChannelHandlerContext context) {
@@ -253,6 +259,8 @@ public class NettyPgProtocolStream implements PgProtocolStream {
                     return;
                 }
                 write(startup);
+                readTimeoutScheduled = initReadTimeout(subscriber);
+
                 context.pipeline().remove(this);
             }
 
@@ -287,10 +295,9 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         return new ChannelInboundHandlerAdapter() {
             @Override
             public void exceptionCaught(ChannelHandlerContext context, Throwable cause) throws Exception {
-                Collection<Subscriber<? super Message>> unsubscribe = subscribers;
-                if (subscribers.removeAll(unsubscribe)) {
-                    unsubscribe.forEach(subscriber -> subscriber.onError(cause));
-                }
+                Queue<Subscriber<? super Message>> unsubscribed = subscribers;
+                subscribers = new LinkedBlockingDeque<>();
+                unsubscribed.forEach(subscriber -> subscriber.onError(cause));
             }
         };
     }
@@ -321,6 +328,9 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         return new ChannelInboundHandlerAdapter() {
             @Override
             public void channelRead(ChannelHandlerContext context, Object msg) throws Exception {
+
+                Optional.ofNullable(readTimeoutScheduled)
+                        .map(scheduledFuture -> scheduledFuture.cancel(false));
 
                 if (msg instanceof NotificationResponse) {
                     publishNotification((NotificationResponse) msg);

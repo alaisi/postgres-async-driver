@@ -178,7 +178,8 @@ public abstract class PgConnectionPool implements ConnectionPool {
                     lock.unlock();
                 }
             }
-        }).flatMap(conn -> validator.call(conn).doOnError(err -> release(conn)));
+        }).flatMap(conn -> validator.call(conn).doOnError(err -> release(conn)))
+                .retry(poolSize + 1);
     }
 
     private boolean tryIncreaseSize() {
