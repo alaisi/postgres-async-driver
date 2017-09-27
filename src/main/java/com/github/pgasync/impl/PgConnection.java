@@ -130,7 +130,7 @@ public class PgConnection implements Connection {
     }
 
     static Observable.Operator<Row,? super Message> toRow(DataConverter dataConverter) {
-        return subscriber -> new Subscriber<Message>() {
+        return subscriber -> new Subscriber<Message>(subscriber) {
 
             Map<String, PgColumn> columns;
 

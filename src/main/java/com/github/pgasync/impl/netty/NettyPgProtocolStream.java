@@ -28,6 +28,7 @@ import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
+import io.netty.util.concurrent.ScheduledFuture;
 import rx.Observable;
 import rx.Subscriber;
 
@@ -37,10 +38,11 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Netty connection to PostgreSQL backend.
- * 
+ *
  * @author Antti Laisi
  */
 public class NettyPgProtocolStream implements PgProtocolStream {
@@ -50,19 +52,22 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     final SocketAddress address;
     final boolean useSsl;
     final boolean pipeline;
+    final int connectTimeout;
 
     final GenericFutureListener<Future<? super Object>> onError;
     final Queue<Subscriber<? super Message>> subscribers;
     final ConcurrentMap<String,Map<String,Subscriber<? super String>>> listeners = new ConcurrentHashMap<>();
 
     ChannelHandlerContext ctx;
+    ScheduledFuture<?> subscriptionCleanerSchedule;
 
-    public NettyPgProtocolStream(EventLoopGroup group, SocketAddress address, boolean useSsl, boolean pipeline) {
+    public NettyPgProtocolStream(EventLoopGroup group, SocketAddress address, boolean useSsl, boolean pipeline, int connectTimeout) {
         this.group = group;
         this.eventLoop = group.next();
         this.address = address;
         this.useSsl = useSsl; // TODO: refactor into SSLConfig with trust parameters
         this.pipeline = pipeline;
+        this.connectTimeout = connectTimeout;
         this.subscribers = new LinkedBlockingDeque<>(); // TODO: limit pipeline queue depth
         this.onError = future -> {
             if(!future.isSuccess()) {
@@ -73,11 +78,11 @@ public class NettyPgProtocolStream implements PgProtocolStream {
 
     @Override
     public Observable<Message> connect(StartupMessage startup) {
-        return Observable.create(subscriber -> {
-
+        return Observable.unsafeCreate(subscriber -> {
             pushSubscriber(subscriber);
             new Bootstrap()
                     .group(group)
+                    .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectTimeout)
                     .channel(NioSocketChannel.class)
                     .handler(newProtocolInitializer(newStartupHandler(startup)))
                     .connect(address)
@@ -88,7 +93,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
 
     @Override
     public Observable<Message> authenticate(PasswordMessage password) {
-        return Observable.create(subscriber -> {
+        return Observable.unsafeCreate(subscriber -> {
 
             pushSubscriber(subscriber);
             write(password);
@@ -98,7 +103,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
 
     @Override
     public Observable<Message> send(Message... messages) {
-        return Observable.create(subscriber -> {
+        return Observable.unsafeCreate(subscriber -> {
 
             if (!isConnected()) {
                 subscriber.onError(new IllegalStateException("Channel is closed"));
@@ -117,6 +122,21 @@ public class NettyPgProtocolStream implements PgProtocolStream {
             write(messages);
 
         }).lift(throwErrorResponsesOnComplete());
+    }
+
+    private void scheduleSubscriptionCleaner() {
+        Runnable action = () ->
+                Optional.ofNullable(subscribers.peek())
+                        .filter(Subscriber::isUnsubscribed)
+                        .ifPresent(s -> {
+                            ctx.fireExceptionCaught(new IllegalStateException());
+                            ctx.close();
+                        });
+        subscriptionCleanerSchedule = ctx.executor().scheduleWithFixedDelay(action, 1, 1, TimeUnit.SECONDS);
+    }
+
+    private void cancelSubscriptionCleaner() {
+        subscriptionCleanerSchedule.cancel(true);
     }
 
     @Override
@@ -148,13 +168,14 @@ public class NettyPgProtocolStream implements PgProtocolStream {
 
     @Override
     public Observable<Void> close() {
-        return Observable.create(subscriber ->
+        return Observable.unsafeCreate(subscriber ->
                     ctx.writeAndFlush(Terminate.INSTANCE).addListener(written ->
                             ctx.close().addListener(closed -> {
             if (!closed.isSuccess()) {
                 subscriber.onError(closed.cause());
                 return;
             }
+            cancelSubscriptionCleaner();
             subscriber.onNext(null);
             subscriber.onCompleted();
         })));
@@ -187,7 +208,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     }
 
     private static Observable.Operator<Message,? super Object> throwErrorResponsesOnComplete() {
-        return subscriber -> new Subscriber<Object>() {
+        return subscriber -> new Subscriber<Object>(subscriber) {
 
             SqlException sqlException;
 
@@ -228,6 +249,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
             @Override
             public void channelActive(ChannelHandlerContext context) {
                 NettyPgProtocolStream.this.ctx = context;
+                scheduleSubscriptionCleaner();
 
                 if(useSsl) {
                     write(SSLHandshake.INSTANCE);
@@ -310,10 +332,11 @@ public class NettyPgProtocolStream implements PgProtocolStream {
             @Override
             @SuppressWarnings("MismatchedQueryAndUpdateOfCollection")
             public void exceptionCaught(ChannelHandlerContext context, Throwable cause) throws Exception {
-                Collection<Subscriber<? super Message>> unsubscribe = new LinkedList<>();
-                if(subscribers.removeAll(unsubscribe)) {
-                    unsubscribe.forEach(subscriber -> subscriber.onError(cause));
-                }
+                if (!isConnected()) {
+                    subscribers.forEach(subscriber -> subscriber.onError(cause));
+                    subscribers.clear();
+                } else
+                    Optional.ofNullable(subscribers.poll()).ifPresent(s -> s.onError(cause));
             }
         };
     }

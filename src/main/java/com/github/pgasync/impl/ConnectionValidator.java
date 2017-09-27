@@ -14,25 +14,29 @@
 
 package com.github.pgasync.impl;
 
-
 import com.github.pgasync.Connection;
 import com.github.pgasync.Row;
 import rx.Observable;
 import rx.Subscriber;
 
+import java.util.concurrent.TimeUnit;
+
 /**
  * @author Antti Laisi
  */
 public class ConnectionValidator {
+    final String query;
+    final int timeout;
 
-    final String validationQuery;
-
-    public ConnectionValidator(String validationQuery) {
-        this.validationQuery = validationQuery;
+    public ConnectionValidator(String query, int timeout) {
+        this.query = query;
+        this.timeout = timeout;
     }
 
     public Observable<Connection> validate(Connection connection) {
-        return connection.queryRows(validationQuery)
+        return connection
+                .queryRows(query)
+                .timeout(timeout, TimeUnit.MILLISECONDS)
                 .lift(subscriber -> new Subscriber<Row>() {
                     @Override
                     public void onError(Throwable e) {
