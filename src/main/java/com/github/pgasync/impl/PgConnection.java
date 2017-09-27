@@ -75,7 +75,8 @@ public class PgConnection implements Connection {
                     : Observable.just(message);
     }
 
-    boolean isConnected() {
+    @Override
+    public boolean isConnected() {
         return stream.isConnected();
     }
 

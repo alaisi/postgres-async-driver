@@ -24,8 +24,7 @@ import rx.observers.Subscribers;
 
 import javax.annotation.concurrent.GuardedBy;
 import java.net.InetSocketAddress;
-import java.util.LinkedList;
-import java.util.Queue;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
@@ -143,20 +142,17 @@ public abstract class PgConnectionPool implements ConnectionPool {
     @Override
     public Observable<Connection> getConnection() {
         return Observable.<Connection>create(subscriber -> {
-            boolean locked = true;
-            lock.lock();
             try {
+                lock.lock();
                 if (closed) {
-                    lock.unlock();
-                    locked = false;
                     subscriber.onError(new SqlException("Connection pool is closed"));
+                    subscriber.onCompleted();
                     return;
                 }
 
-                Connection connection = connections.poll();
+                Connection connection = takeConnectedConnection();
+
                 if (connection != null) {
-                    lock.unlock();
-                    locked = false;
                     subscriber.onNext(connection);
                     subscriber.onCompleted();
                     return;
@@ -166,20 +162,23 @@ public abstract class PgConnectionPool implements ConnectionPool {
                     subscribers.add(subscriber);
                     return;
                 }
-                lock.unlock();
-                locked = false;
-
                 new PgConnection(openStream(address), dataConverter)
                         .connect(username, password, database)
                         .doOnError(__ -> release(null))
                         .subscribe(subscriber);
             } finally {
-                if (locked) {
-                    lock.unlock();
-                }
+                lock.unlock();
             }
         }).flatMap(conn -> validator.call(conn).doOnError(err -> release(conn)))
                 .retry(poolSize + 1);
+    }
+
+    private Connection takeConnectedConnection() {
+        Connection connection = connections.poll();
+        while (connection !=null && !connection.isConnected()) {
+            connection = connections.poll();
+        }
+        return connection;
     }
 
     private boolean tryIncreaseSize() {
@@ -204,7 +203,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
 
     @Override
     public void release(Connection connection) {
-        boolean failed = connection == null || !((PgConnection) connection).isConnected();
+        boolean failed = connection == null || !connection.isConnected();
 
         Subscriber<? super Connection> next;
         lock.lock();

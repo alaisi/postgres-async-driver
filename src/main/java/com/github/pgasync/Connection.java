@@ -26,4 +26,6 @@ public interface Connection extends Db {
      */
     void close() throws Exception;
 
+    boolean isConnected();
+
 }

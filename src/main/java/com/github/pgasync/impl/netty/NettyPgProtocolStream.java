@@ -123,23 +123,22 @@ public class NettyPgProtocolStream implements PgProtocolStream {
 
             pushSubscriber(subscriber);
             write(messages);
-            readTimeoutScheduled = initReadTimeout(subscriber);
+            readTimeoutScheduled = initReadTimeout();
 
         }).lift(throwErrorResponsesOnComplete());
     }
 
-    private ScheduledFuture<?> initReadTimeout(Subscriber subscriber) {
-        if (readTimeout != 0) {
-            Runnable onTimeout = () -> {
-                ReadTimeoutException timeoutException = ReadTimeoutException.INSTANCE;
-                subscriber.onError(timeoutException);
-                ctx.fireExceptionCaught(timeoutException);
-                ctx.close();
-            };
-            return this.ctx.executor().schedule(onTimeout, readTimeout, TimeUnit.MILLISECONDS);
+    private ScheduledFuture<?> initReadTimeout() {
+        if (readTimeout == 0) {
+            return null;
         }
+        Runnable onTimeout = () -> {
+            ReadTimeoutException timeoutException = ReadTimeoutException.INSTANCE;
+            ctx.fireExceptionCaught(timeoutException);
+            ctx.close();
+        };
+        return this.ctx.executor().schedule(onTimeout, readTimeout, TimeUnit.MILLISECONDS);
 
-        return null;
     }
 
     @Override
@@ -259,7 +258,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
                     return;
                 }
                 write(startup);
-                readTimeoutScheduled = initReadTimeout(subscriber);
+                readTimeoutScheduled = initReadTimeout();
 
                 context.pipeline().remove(this);
             }
