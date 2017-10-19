@@ -25,6 +25,7 @@ import rx.observers.Subscribers;
 import javax.annotation.concurrent.GuardedBy;
 import java.net.InetSocketAddress;
 import java.util.LinkedList;
+import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
@@ -142,9 +143,10 @@ public abstract class PgConnectionPool implements ConnectionPool {
 
     @Override
     public Observable<Connection> getConnection() {
-        return Observable.<Connection>create(subscriber -> {
+        return Observable.<Connection>unsafeCreate(subscriber -> {
             boolean locked = true;
             lock.lock();
+            houseKeepSubscribers();
             try {
                 if (closed) {
                     lock.unlock();
@@ -169,10 +171,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
                 lock.unlock();
                 locked = false;
 
-                new PgConnection(openStream(address), dataConverter)
-                        .connect(username, password, database)
-                        .doOnError(__ -> release(null))
-                        .subscribe(subscriber);
+                createConnection(subscriber);
             } finally {
                 if (locked) {
                     lock.unlock();
@@ -180,6 +179,13 @@ public abstract class PgConnectionPool implements ConnectionPool {
             }
         }).flatMap(conn -> validator.call(conn).doOnError(err -> release(conn)))
                 .retry(poolSize + 1);
+    }
+
+    private void createConnection(Subscriber<? super Connection> subscriber) {
+        new PgConnection(openStream(address), dataConverter)
+                .connect(username, password, database)
+                .doOnError(__ -> release(null))
+                .subscribe(subscriber);
     }
 
     private boolean tryIncreaseSize() {
@@ -209,16 +215,26 @@ public abstract class PgConnectionPool implements ConnectionPool {
         Subscriber<? super Connection> next;
         lock.lock();
         try {
+            if (failed) {
+                currentSize--;
+                Optional.ofNullable(connection)
+                        .ifPresent(this::closeConnectionQuietly);
+            }
+
             if(subscribers.isEmpty()) {
-                if(failed) {
-                    currentSize--;
-                } else {
+                if (!failed) {
                     connections.add(connection);
                 }
+
                 if (closed) {
                     this.closingConnectionReleased.signalAll();
                 }
-                return;
+            } else {
+                houseKeepSubscribers();
+
+                if (currentSize == 0 && !subscribers.isEmpty()) {
+                    createConnection(subscribers.remove());
+                }
             }
 
             next = subscribers.poll();
@@ -226,8 +242,23 @@ public abstract class PgConnectionPool implements ConnectionPool {
             lock.unlock();
         }
 
-        next.onNext(connection);
-        next.onCompleted();
+        Optional.ofNullable(next)
+                .ifPresent(s -> {
+                    s.onNext(connection);
+                    s.onCompleted();
+                });
+    }
+
+    private void houseKeepSubscribers() {
+        while (!subscribers.isEmpty() && subscribers.peek().isUnsubscribed())
+            subscribers.remove();
+    }
+
+    private void closeConnectionQuietly(Connection connection) {
+        try {
+            connection.close();
+        } catch (Exception e) {
+        }
     }
 
     /**

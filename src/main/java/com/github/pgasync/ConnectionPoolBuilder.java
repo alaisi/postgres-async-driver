@@ -91,7 +91,17 @@ public class ConnectionPoolBuilder {
     }
 
     public ConnectionPoolBuilder validationQuery(String validationQuery) {
-        properties.validationQuery = validationQuery;
+        properties.validationProperties.query = validationQuery;
+        return this;
+    }
+
+    public ConnectionPoolBuilder validationTimeout(int timeout) {
+        properties.validationProperties.timeout = timeout;
+        return this;
+    }
+
+    public ConnectionPoolBuilder connectTimeout(int timeout) {
+        properties.connectTimeout = timeout;
         return this;
     }
 
@@ -110,7 +120,8 @@ public class ConnectionPoolBuilder {
         List<Converter<?>> converters = new ArrayList<>();
         boolean useSsl;
         boolean usePipelining;
-        String validationQuery;
+        int connectTimeout = 30000;
+        ValidationProperties validationProperties = new ValidationProperties();
 
         public String getHostname() {
             return hostname;
@@ -140,9 +151,26 @@ public class ConnectionPoolBuilder {
             return dataConverter != null ? dataConverter : new DataConverter(converters);
         }
         public Func1<Connection,Observable<Connection>> getValidator() {
-            return validationQuery == null || validationQuery.trim().isEmpty()
+            return validationProperties.query == null || validationProperties.query.trim().isEmpty()
                 ? Observable::just
-                : new ConnectionValidator(validationQuery)::validate;
+                : new ConnectionValidator(validationProperties.query, validationProperties.timeout)::validate;
+        }
+
+        public int getConnectTimeout() {
+            return connectTimeout;
+        }
+    }
+
+    public static class ValidationProperties {
+        String query;
+        int timeout = 30000;
+
+        public String getQuery() {
+            return query;
+        }
+
+        public long getTimeout() {
+            return timeout;
         }
     }
 }
