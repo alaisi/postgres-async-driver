@@ -62,7 +62,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
     final boolean pipeline;
 
     public PgConnectionPool(PoolProperties properties) {
-        this.address = new InetSocketAddress(properties.getHostname(), properties.getPort());
+        this.address = InetSocketAddress.createUnresolved(properties.getHostname(), properties.getPort());
         this.username = properties.getUsername();
         this.password = properties.getPassword();
         this.database = properties.getDatabase();
@@ -253,6 +253,12 @@ public abstract class PgConnectionPool implements ConnectionPool {
         }
 
         @Override
+        public Observable<Transaction> begin() {
+            // Nested transactions should not release things automatically.
+            return transaction.begin();
+        }
+
+        @Override
         public Observable<Void> rollback() {
             return transaction.rollback()
                     .doOnTerminate(this::releaseConnection);
@@ -269,7 +275,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
             if (released.get()) {
                 return Observable.error(new SqlException("Transaction is already completed"));
             }
-            return transaction.queryRows(sql)
+            return transaction.queryRows(sql, params)
                     .doOnError(exception -> releaseConnection());
         }
 

@@ -5,6 +5,7 @@ import org.junit.*;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -120,8 +121,8 @@ public class ArrayConversionsTest {
 
         assertArrayEquals(
             new Timestamp[]{
-                new Timestamp(926812800591L),
-                new Timestamp(2941353001L),
+                Timestamp.valueOf(LocalDateTime.parse("1999-05-16T00:00:00.591")),
+                Timestamp.valueOf(LocalDateTime.parse("1970-02-04T01:02:33.01")),
                 null
             },
             getRow().getArray("TIMESTAMPA", Timestamp[].class));

@@ -18,6 +18,7 @@ import com.github.pgasync.Connection;
 import com.github.pgasync.ConnectionPool;
 import com.github.pgasync.ResultSet;
 import org.junit.After;
+import org.junit.ClassRule;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -42,6 +43,9 @@ import static org.junit.Assert.assertThat;
  * @author Mikko Tiihonen
  */
 public class PipelineTest {
+    @ClassRule
+    public static DatabaseRule dbr = new DatabaseRule();
+
     final Consumer<Throwable> err = t -> { throw new AssertionError("failed", t); };
 
     Connection c;
@@ -59,7 +63,7 @@ public class PipelineTest {
 
     @Test
     public void connectionPipelinesQueries() throws InterruptedException {
-        pool = createPoolBuilder(1).pipeline(true).build();
+        pool = dbr.builder.pipeline(true).build();
 
         int count = 5;
         double sleep = 0.5;
@@ -80,7 +84,7 @@ public class PipelineTest {
     }
 
     private Connection getConnection(boolean pipeline) throws InterruptedException {
-        pool = createPoolBuilder(1).pipeline(pipeline).build();
+        pool = dbr.builder.pipeline(pipeline).build();
         SynchronousQueue<Connection> connQueue = new SynchronousQueue<>();
         pool.getConnection().subscribe(connQueue::add);
         return c = connQueue.take();
@@ -123,7 +127,7 @@ public class PipelineTest {
 
     @Test
     public void connectionPoolPipelinesQueriesWithinTransaction() throws InterruptedException {
-        pool = createPoolBuilder(1).pipeline(true).build();
+        pool = dbr.builder.pipeline(true).build();
 
         int count = 5;
         double sleep = 0.5;

@@ -23,7 +23,7 @@ import io.netty.channel.*;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.ByteToMessageDecoder;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
-import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.util.concurrent.Future;
@@ -275,7 +275,10 @@ public class NettyPgProtocolStream implements PgProtocolStream {
                 }
                 ctx.pipeline().remove(this);
                 ctx.pipeline().addFirst(
-                        SslContext.newClientContext(InsecureTrustManagerFactory.INSTANCE)
+                        SslContextBuilder
+                                .forClient()
+                                .trustManager(InsecureTrustManagerFactory.INSTANCE)
+                                .build()
                                 .newHandler(ctx.alloc()));
             }
         };

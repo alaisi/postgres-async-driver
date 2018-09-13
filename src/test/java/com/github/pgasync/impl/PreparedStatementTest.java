@@ -14,7 +14,6 @@
 
 package com.github.pgasync.impl;
 
-import com.github.pgasync.ResultSet;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
@@ -22,16 +21,15 @@ import org.junit.Test;
 
 import java.sql.Date;
 import java.sql.Time;
-import java.text.SimpleDateFormat;
-import java.util.Collections;
-import java.util.TimeZone;
+import java.sql.Timestamp;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 import static com.github.pgasync.impl.io.IO.bytes;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Tests for parameter binding.
@@ -113,15 +111,21 @@ public class PreparedStatementTest {
 
     @Test
     public void shouldBindTime() throws Exception {
-        Time time = new Time(dateFormat("yyyy-MM-dd HH:mm:ss.SSS").parse("1970-01-01 16:47:59.897")
-                .getTime());
+        Time time = Time.valueOf(LocalTime.parse("16:47:59.897"));
         dbr.query("INSERT INTO PS_TEST(TIME) VALUES ($1)", asList(time));
         assertEquals(time, dbr.query("SELECT TIME FROM PS_TEST WHERE TIME = $1", asList(time)).row(0).getTime(0));
     }
 
     @Test
+    public void shouldBindTimestamp() throws Exception {
+        Timestamp ts = Timestamp.valueOf(LocalDateTime.parse("2016-05-01T12:00:00"));
+        dbr.query("INSERT INTO PS_TEST(TS) VALUES ($1)", singletonList(ts));
+        assertEquals(ts, dbr.query("SELECT TS FROM PS_TEST WHERE TS = $1", asList(ts)).row(0).getTimestamp(0));
+    }
+
+    @Test
     public void shouldBindDate() throws Exception {
-        Date date = new Date(dateFormat("yyyy-MM-dd").parse("2014-01-19").getTime());
+        Date date = Date.valueOf(LocalDate.parse("2014-01-19"));
         dbr.query("INSERT INTO PS_TEST(DATE) VALUES ($1)", asList(date));
         assertEquals(date, dbr.query("SELECT DATE FROM PS_TEST WHERE DATE = $1", asList(date)).row(0).getDate(0));
     }
@@ -141,9 +145,4 @@ public class PreparedStatementTest {
 
     }
 
-    static SimpleDateFormat dateFormat(String pattern) {
-        SimpleDateFormat format = new SimpleDateFormat(pattern);
-        format.setTimeZone(TimeZone.getTimeZone("UTC"));
-        return format;
-    }
 }

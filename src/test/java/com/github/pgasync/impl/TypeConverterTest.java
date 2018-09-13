@@ -22,8 +22,7 @@ import java.math.BigInteger;
 import java.sql.Date;
 import java.sql.Time;
 import java.sql.Timestamp;
-import java.util.Calendar;
-import java.util.TimeZone;
+import java.time.*;
 import java.util.UUID;
 
 import static java.util.Arrays.asList;
@@ -158,32 +157,56 @@ public class TypeConverterTest {
 
     @Test
     public void shouldConvertDateToDate() {
-        assertEquals(new Date(millis(2014, 1, 31, 0, 0, 0, 0)),
+        assertEquals(Date.valueOf(LocalDate.parse("2014-01-31")),
                 dbr.query("select '2014-01-31'::DATE").row(0).getDate(0));
     }
 
     @Test
     public void shouldConvertDateToDateWithName() {
-        assertEquals(new Date(millis(2014, 2, 21, 0, 0, 0, 0)), dbr.query("select '2014-02-21'::DATE as D").row(0)
+        assertEquals(Date.valueOf(LocalDate.parse("2014-02-21")), dbr.query("select '2014-02-21'::DATE as D").row(0)
                 .getDate("D"));
     }
 
     @Test
     public void shouldConvertTimeToTime() {
-        assertEquals(new Time(millis(0, 0, 0, 10, 15, 31, 123)), dbr.query("select '10:15:31.123'::TIME").row(0)
+        assertEquals(Time.valueOf(LocalTime.parse("10:15:31.123")), dbr.query("select '10:15:31.123'::TIME").row(0)
                 .getTime(0));
     }
 
     @Test
     public void shouldConvertZonedTimeToTime() {
-        assertEquals(new Time(millis(0, 0, 0, 23, 59, 59, 999)), dbr.query("select '23:59:59.999Z'::TIMETZ as zoned")
+        assertEquals(Time.valueOf(OffsetTime.parse("23:59:59.999Z").toLocalTime()), dbr.query("select '23:59:59.999Z'::TIMETZ as zoned")
                 .row(0).getTime("zoned"));
     }
 
     @Test
     public void shouldConvertTimestampToTimestamp() {
-        assertEquals(new Timestamp(millis(2014, 2, 21, 23, 59, 59, 999)), dbr.query("select '2014-02-21 23:59:59.999'::TIMESTAMP as ts")
-                .row(0).getTimestamp("ts"));
+        assertEquals(Timestamp.valueOf(LocalDateTime.parse("2014-02-21T23:59:59.999")),
+                dbr.query("select '2014-02-21 23:59:59.999'::TIMESTAMP as ts").row(0).getTimestamp("ts"));
+    }
+
+    @Test
+    public void shouldConvertTimestampWithShortMillisToTimestamp() {
+        assertEquals(Timestamp.valueOf(LocalDateTime.parse("2014-02-21T23:59:59.990")),
+                dbr.query("select '2014-02-21 23:59:59.99'::TIMESTAMP as ts").row(0).getTimestamp("ts"));
+    }
+
+    @Test
+    public void shouldConvertTimestampWithNoMillisToTimestamp() {
+        assertEquals(Timestamp.valueOf(LocalDateTime.parse("2014-02-21T23:59:59")),
+                dbr.query("select '2014-02-21 23:59:59'::TIMESTAMP as ts").row(0).getTimestamp("ts"));
+    }
+
+    @Test
+    public void shouldConvertZonedTimestampToTimestamp() {
+        assertEquals(Timestamp.from(Instant.from(ZonedDateTime.parse("2014-02-21T23:59:59.999Z"))),
+                dbr.query("select '2014-02-21 23:59:59.999Z'::TIMESTAMPTZ as ts").row(0).getTimestamp("ts"));
+    }
+
+    @Test
+    public void shouldConvertZonedTimestampWithNanosToTimestamp() {
+        assertEquals(Timestamp.valueOf("2014-02-21 23:59:59.000999"),
+                dbr.query("select '2014-02-21 23:59:59.000999'::TIMESTAMPTZ as ts").row(0).getTimestamp("ts"));
     }
 
     @Test
@@ -212,21 +235,4 @@ public class TypeConverterTest {
         assertEquals(uuid, row.get("uuid"));
     }
 
-    static long millis(int year, int month, int day, int hour, int minute, int second, int millisecond) {
-        Calendar cal = Calendar.getInstance();
-        cal.clear();
-        cal.setTimeZone(TimeZone.getTimeZone("UTC"));
-        if (year > 0) {
-            cal.set(Calendar.YEAR, year);
-            cal.set(Calendar.MONTH, month - 1);
-            cal.set(Calendar.DAY_OF_MONTH, day);
-        }
-        if (hour > 0) {
-            cal.set(Calendar.HOUR_OF_DAY, hour);
-            cal.set(Calendar.MINUTE, minute);
-            cal.set(Calendar.SECOND, second);
-            cal.set(Calendar.MILLISECOND, millisecond);
-        }
-        return cal.getTimeInMillis();
-    }
 }

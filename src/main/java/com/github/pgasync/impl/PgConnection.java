@@ -14,15 +14,7 @@
 
 package com.github.pgasync.impl;
 
-import com.github.pgasync.Connection;
-import com.github.pgasync.ResultSet;
-import com.github.pgasync.Row;
-import com.github.pgasync.Transaction;
-import com.github.pgasync.impl.conversion.DataConverter;
-import com.github.pgasync.impl.message.*;
-import rx.Observable;
-import rx.Subscriber;
-import rx.observers.Subscribers;
+import static com.github.pgasync.impl.message.RowDescription.ColumnDescription;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -32,7 +24,27 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
-import static com.github.pgasync.impl.message.RowDescription.ColumnDescription;
+import com.github.pgasync.Connection;
+import com.github.pgasync.ResultSet;
+import com.github.pgasync.Row;
+import com.github.pgasync.Transaction;
+import com.github.pgasync.impl.conversion.DataConverter;
+import com.github.pgasync.impl.message.Authentication;
+import com.github.pgasync.impl.message.Bind;
+import com.github.pgasync.impl.message.CommandComplete;
+import com.github.pgasync.impl.message.DataRow;
+import com.github.pgasync.impl.message.ExtendedQuery;
+import com.github.pgasync.impl.message.Message;
+import com.github.pgasync.impl.message.Parse;
+import com.github.pgasync.impl.message.PasswordMessage;
+import com.github.pgasync.impl.message.Query;
+import com.github.pgasync.impl.message.ReadyForQuery;
+import com.github.pgasync.impl.message.RowDescription;
+import com.github.pgasync.impl.message.StartupMessage;
+
+import rx.Observable;
+import rx.Subscriber;
+import rx.observers.Subscribers;
 
 /**
  * A connection to PostgreSQL backed. The postmaster forks a backend process for
@@ -185,6 +197,10 @@ public class PgConnection implements Connection {
     class PgConnectionTransaction implements Transaction {
 
         @Override
+        public Observable<Transaction> begin() {
+            return querySet("SAVEPOINT sp_1").map(rs -> new PgConnectionNestedTransaction(1));
+        }
+        @Override
         public Observable<Void> commit() {
             return PgConnection.this.querySet("COMMIT")
                     .map(rs -> (Void) null)
@@ -211,4 +227,30 @@ public class PgConnection implements Connection {
         }
     }
 
+    /**
+     * Nested Transaction using savepoints.
+     */
+    class PgConnectionNestedTransaction extends PgConnectionTransaction {
+
+        final int depth;
+
+        PgConnectionNestedTransaction(int depth) {
+            this.depth = depth;
+        }
+        @Override
+        public Observable<Transaction> begin() {
+            return querySet("SAVEPOINT sp_" + (depth+1))
+                    .map(rs -> new PgConnectionNestedTransaction(depth+1));
+        }
+        @Override
+        public Observable<Void> commit() {
+            return PgConnection.this.querySet("RELEASE SAVEPOINT sp_" + depth)
+                    .map(rs -> (Void) null);
+        }
+        @Override
+        public Observable<Void> rollback() {
+            return PgConnection.this.querySet("ROLLBACK TO SAVEPOINT sp_" + depth)
+                    .map(rs -> (Void) null);
+        }
+    }
 }
