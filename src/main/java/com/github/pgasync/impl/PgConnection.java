@@ -186,7 +186,7 @@ public class PgConnection implements Connection {
     static Map<String,PgColumn> getColumns(ColumnDescription[] descriptions) {
         Map<String,PgColumn> columns = new HashMap<>();
         for (int i = 0; i < descriptions.length; i++) {
-            columns.put(descriptions[i].getName().toUpperCase(), new PgColumn(i, descriptions[i].getType()));
+            columns.put(descriptions[i].getName().toUpperCase(), new PgColumn(i, descriptions[i].getName(), descriptions[i].getType()));
         }
         return columns;
     }
