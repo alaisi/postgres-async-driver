@@ -55,7 +55,7 @@ public class TransactionTest {
     public void shouldCommitSelectInTransaction() throws Exception {
         CountDownLatch sync = new CountDownLatch(1);
 
-        dbr.db().begin((transaction) ->
+        dbr.db().begin(transaction ->
                 transaction.query("SELECT 1", result -> {
                     assertEquals(1L, result.row(0).getLong(0).longValue());
                     transaction.commit(sync::countDown, err);
@@ -96,7 +96,7 @@ public class TransactionTest {
     public void shouldRollbackTransaction() throws Exception {
         CountDownLatch sync = new CountDownLatch(1);
 
-        dbr.db().begin((transaction) ->
+        dbr.db().begin(transaction ->
                 transaction.query("INSERT INTO TX_TEST(ID) VALUES(9)", result -> {
                     assertEquals(1, result.updatedRows());
                     transaction.rollback(sync::countDown, err);

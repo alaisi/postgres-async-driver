@@ -86,7 +86,7 @@ public class PipelineTest {
     private Connection getConnection(boolean pipeline) throws InterruptedException {
         pool = dbr.builder.pipeline(pipeline).build();
         SynchronousQueue<Connection> connQueue = new SynchronousQueue<>();
-        pool.getConnection().subscribe(connQueue::add);
+        pool.getConnection().thenAccept(connQueue::add);
         return c = connQueue.take();
     }
 

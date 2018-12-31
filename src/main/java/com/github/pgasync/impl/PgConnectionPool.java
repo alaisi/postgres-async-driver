@@ -17,20 +17,15 @@ package com.github.pgasync.impl;
 import com.github.pgasync.*;
 import com.github.pgasync.ConnectionPoolBuilder.PoolProperties;
 import com.github.pgasync.impl.conversion.DataConverter;
-import rx.Observable;
-import rx.Subscriber;
-import rx.functions.Func1;
-import rx.observers.Subscribers;
 
 import javax.annotation.concurrent.GuardedBy;
 import java.net.InetSocketAddress;
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
-
-import static java.util.concurrent.TimeUnit.SECONDS;
+import java.util.function.Function;
 
 /**
  * Pool for backend connections. Callbacks are queued and executed when pool has an available
@@ -40,16 +35,14 @@ import static java.util.concurrent.TimeUnit.SECONDS;
  */
 public abstract class PgConnectionPool implements ConnectionPool {
 
-    final int poolSize;
+    final int maxSize;
     final ReentrantLock lock = new ReentrantLock();
     @GuardedBy("lock")
-    final Condition closingConnectionReleased = lock.newCondition();
-    @GuardedBy("lock")
-    int currentSize;
+    int size;
     @GuardedBy("lock")
     boolean closed;
     @GuardedBy("lock")
-    final Queue<Subscriber<? super Connection>> subscribers = new LinkedList<>();
+    final Queue<CompletableFuture<? super Connection>> subscribers = new LinkedList<>();
     @GuardedBy("lock")
     final Queue<Connection> connections = new LinkedList<>();
 
@@ -58,7 +51,6 @@ public abstract class PgConnectionPool implements ConnectionPool {
     final String password;
     final String database;
     final DataConverter dataConverter;
-    final Func1<Connection, Observable<Connection>> validator;
     final boolean pipeline;
 
     public PgConnectionPool(PoolProperties properties) {
@@ -66,46 +58,9 @@ public abstract class PgConnectionPool implements ConnectionPool {
         this.username = properties.getUsername();
         this.password = properties.getPassword();
         this.database = properties.getDatabase();
-        this.poolSize = properties.getPoolSize();
+        this.maxSize = properties.getPoolSize();
         this.dataConverter = properties.getDataConverter();
-        this.validator = properties.getValidator();
         this.pipeline = properties.getUsePipelining();
-    }
-
-    @Override
-    public Observable<Row> queryRows(String sql, Object... params) {
-        return getConnection()
-                .doOnNext(this::releaseIfPipelining)
-                .flatMap(connection -> connection.queryRows(sql, params)
-                                        .doOnTerminate(() -> releaseIfNotPipelining(connection)));
-    }
-
-    @Override
-    public Observable<ResultSet> querySet(String sql, Object... params) {
-        return getConnection()
-                .doOnNext(this::releaseIfPipelining)
-                .flatMap(connection -> connection.querySet(sql, params)
-                        .doOnTerminate(() -> releaseIfNotPipelining(connection)));
-    }
-
-    @Override
-    public Observable<Transaction> begin() {
-        return getConnection()
-                .flatMap(connection -> connection.begin()
-                        .doOnError(t -> release(connection))
-                        .map(tx -> new ReleasingTransaction(connection, tx)));
-    }
-
-    @Override
-    public Observable<String> listen(String channel) {
-        return getConnection()
-                .lift(subscriber ->
-                        Subscribers.create(
-                                connection -> connection.listen(channel)
-                                        .doOnSubscribe(() -> release(connection))
-                                        .onErrorResumeNext(exception -> listen(channel))
-                                        .subscribe(subscriber),
-                                subscriber::onError));
     }
 
     @Override
@@ -113,121 +68,108 @@ public abstract class PgConnectionPool implements ConnectionPool {
         lock.lock();
         try {
             closed = true;
-
-            while(!subscribers.isEmpty()) {
-                Subscriber<? super Connection> queued = subscribers.poll();
-                if(queued != null) {
-                    queued.onError(new SqlException("Connection pool is closing"));
-                }
+            while (!subscribers.isEmpty()) {
+                CompletableFuture<? super Connection> queued = subscribers.poll();
+                queued.completeExceptionally(new SqlException("Connection pool is closing"));
             }
-
-            try {
-                while (currentSize > 0) {
-                    Connection connection = connections.poll();
-                    if(connection == null) {
-                        if (closingConnectionReleased.await(10, SECONDS)) {
-                            break;
-                        }
-                        continue;
-                    }
-                    currentSize--;
-                    connection.close();
-                }
-            } catch (InterruptedException e) { /* ignore */ }
-
+            while (!connections.isEmpty()) {
+                Connection connection = connections.poll();
+                connection.close();
+                size--;
+            }
         } finally {
             lock.unlock();
         }
     }
 
     @Override
-    public Observable<Connection> getConnection() {
-        return Observable.<Connection>create(subscriber -> {
-            boolean locked = true;
-            lock.lock();
-            try {
-                if (closed) {
-                    lock.unlock();
-                    locked = false;
-                    subscriber.onError(new SqlException("Connection pool is closed"));
-                    return;
-                }
+    public CompletableFuture<Connection> getConnection() {
+        CompletableFuture<Connection> uponAvailable = new CompletableFuture<>();
 
+        lock.lock();
+        try {
+            if (closed) {
+                uponAvailable.completeExceptionally(new SqlException("Connection pool is closed"));
+            } else {
                 Connection connection = connections.poll();
                 if (connection != null) {
-                    lock.unlock();
-                    locked = false;
-                    subscriber.onNext(connection);
-                    subscriber.onCompleted();
-                    return;
-                }
-
-                if(!tryIncreaseSize()) {
-                    subscribers.add(subscriber);
-                    return;
-                }
-                lock.unlock();
-                locked = false;
-
-                new PgConnection(openStream(address), dataConverter)
-                        .connect(username, password, database)
-                        .doOnError(__ -> release(null))
-                        .subscribe(subscriber);
-            } finally {
-                if (locked) {
-                    lock.unlock();
+                    uponAvailable.complete(connection);
+                } else {
+                    if (tryIncreaseSize()) {
+                        new PgConnection(openStream(address), dataConverter)
+                                .connect(username, password, database)
+                                .thenAccept(uponAvailable::complete)
+                                .exceptionally(th -> {
+                                    uponAvailable.completeExceptionally(th);
+                                    return null;
+                                });
+                    } else {
+                        // Pool is full now and all connections are busy
+                        subscribers.offer(uponAvailable);
+                    }
                 }
             }
-        }).flatMap(conn -> validator.call(conn).doOnError(err -> release(conn)))
-                .retry(poolSize + 1);
+        } finally {
+            lock.unlock();
+        }
+
+        return uponAvailable;
     }
 
     private boolean tryIncreaseSize() {
-        if(currentSize >= poolSize) {
+        if (size < maxSize) {
+            size++;
+            return true;
+        } else {
             return false;
-        }
-        currentSize++;
-        return true;
-    }
-
-    private void releaseIfPipelining(Connection connection) {
-        if (pipeline) {
-            release(connection);
-        }
-    }
-
-    private void releaseIfNotPipelining(Connection connection) {
-        if (!pipeline) {
-            release(connection);
         }
     }
 
     @Override
     public void release(Connection connection) {
         boolean failed = connection == null || !((PgConnection) connection).isConnected();
-
-        Subscriber<? super Connection> next;
         lock.lock();
         try {
-            if(subscribers.isEmpty()) {
-                if(failed) {
-                    currentSize--;
+            if (closed) {
+                if (!failed) {
+                    connection.close();
+                }
+            } else {
+                if (failed) {
+                    size--;
                 } else {
-                    connections.add(connection);
+                    if (!subscribers.isEmpty()) {
+                        subscribers.poll()
+                                .complete(connection);
+                    } else {
+                        connections.add(connection);
+                    }
                 }
-                if (closed) {
-                    this.closingConnectionReleased.signalAll();
-                }
-                return;
             }
-
-            next = subscribers.poll();
         } finally {
             lock.unlock();
         }
+    }
 
-        next.onNext(connection);
-        next.onCompleted();
+    @Override
+    public CompletableFuture<Transaction> begin() {
+        return getConnection()
+                .thenApply(Connection::begin)
+                .thenCompose(Function.identity());
+    }
+
+    @Override
+    public CompletableFuture<Row> queryRows(String sql, Object... params) {
+        return getConnection()
+                .thenApply(connection -> connection.queryRows(sql, params))
+                .thenCompose(Function.identity());
+    }
+
+    @Override
+    public CompletableFuture<ResultSet> querySet(String sql, Object... params) {
+        return getConnection()
+                .thenApply(connection -> connection.querySet(sql, params))
+                .thenCompose(Function.identity());
     }
 
     /**
@@ -244,52 +186,60 @@ public abstract class PgConnectionPool implements ConnectionPool {
     class ReleasingTransaction implements Transaction {
 
         final AtomicBoolean released = new AtomicBoolean();
-        final Connection txconn;
+        final Connection connection;
         final Transaction transaction;
 
-        ReleasingTransaction(Connection txconn, Transaction transaction) {
-            this.txconn = txconn;
+        ReleasingTransaction(Connection connection, Transaction transaction) {
+            this.connection = connection;
             this.transaction = transaction;
         }
 
         @Override
-        public Observable<Transaction> begin() {
+        public CompletableFuture<Transaction> begin() {
             // Nested transactions should not release things automatically.
             return transaction.begin();
         }
 
         @Override
-        public Observable<Void> rollback() {
+        public CompletableFuture<Void> rollback() {
             return transaction.rollback()
-                    .doOnTerminate(this::releaseConnection);
+                    .thenAccept(v -> ReleasingTransaction.this.releaseConnection());
         }
 
         @Override
-        public Observable<Void> commit() {
+        public CompletableFuture<Void> commit() {
             return transaction.commit()
-                    .doOnTerminate(this::releaseConnection);
+                    .thenAccept(v -> ReleasingTransaction.this.releaseConnection());
         }
 
         @Override
-        public Observable<Row> queryRows(String sql, Object... params) {
+        public CompletableFuture<Row> queryRows(String sql, Object... params) {
             if (released.get()) {
-                return Observable.error(new SqlException("Transaction is already completed"));
+                return CompletableFuture.failedFuture(new SqlException("Transaction is already completed"));
+            } else {
+                return transaction.queryRows(sql, params)
+                        .exceptionally(th -> {
+                            releaseConnection();
+                            throw new IllegalStateException(th);
+                        });
             }
-            return transaction.queryRows(sql, params)
-                    .doOnError(exception -> releaseConnection());
         }
 
         @Override
-        public Observable<ResultSet> querySet(String sql, Object... params) {
+        public CompletableFuture<ResultSet> querySet(String sql, Object... params) {
             if (released.get()) {
-                return Observable.error(new SqlException("Transaction is already completed"));
+                return CompletableFuture.failedFuture(new SqlException("Transaction is already completed"));
+            } else {
+                return transaction.querySet(sql, params)
+                        .exceptionally(th -> {
+                            releaseConnection();
+                            throw new IllegalStateException(th);
+                        });
             }
-            return transaction.querySet(sql, params)
-                    .doOnError(exception -> releaseConnection());
         }
 
         void releaseConnection() {
-            release(txconn);
+            release(connection);
             released.set(true);
         }
     }

@@ -14,11 +14,8 @@
 
 package com.github.pgasync;
 
-import com.github.pgasync.impl.ConnectionValidator;
 import com.github.pgasync.impl.conversion.DataConverter;
 import com.github.pgasync.impl.netty.NettyPgConnectionPool;
-import rx.Observable;
-import rx.functions.Func1;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -26,7 +23,7 @@ import java.util.List;
 
 /**
  * Builder for creating {@link ConnectionPool} instances.
- * 
+ *
  * @author Antti Laisi
  */
 public class ConnectionPoolBuilder {
@@ -115,34 +112,41 @@ public class ConnectionPoolBuilder {
         public String getHostname() {
             return hostname;
         }
+
         public int getPort() {
             return port;
         }
+
         public String getUsername() {
             return username;
         }
+
         public String getPassword() {
             return password;
         }
+
         public String getDatabase() {
             return database;
         }
+
         public int getPoolSize() {
             return poolSize;
         }
+
         public boolean getUseSsl() {
             return useSsl;
         }
+
         public boolean getUsePipelining() {
             return usePipelining;
         }
+
         public DataConverter getDataConverter() {
             return dataConverter != null ? dataConverter : new DataConverter(converters);
         }
-        public Func1<Connection,Observable<Connection>> getValidator() {
-            return validationQuery == null || validationQuery.trim().isEmpty()
-                ? Observable::just
-                : new ConnectionValidator(validationQuery)::validate;
+
+        public String getValidationQuery() {
+            return validationQuery;
         }
     }
 }

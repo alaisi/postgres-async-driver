@@ -3,13 +3,13 @@ package com.github.pgasync.impl.message;
 /**
  * @author  Antti Laisi
  */
-public class NotificationResponse implements Message {
+public class Notification implements Message {
 
     final int backend;
     final String channel;
     final String payload;
 
-    public NotificationResponse(int backend, String channel, String payload) {
+    public Notification(int backend, String channel, String payload) {
         this.backend = backend;
         this.channel = channel;
         this.payload = payload;

@@ -34,7 +34,7 @@ import static org.junit.runners.MethodSorters.NAME_ASCENDING;
 @FixMethodOrder(NAME_ASCENDING)
 public class PerformanceTest {
 
-    @Parameters(name = "{index}: poolSize={0}, threads={1}, pipeline={2}")
+    @Parameters(name = "{index}: maxSize={0}, threads={1}, pipeline={2}")
     public static Iterable<Object[]> data() {
         results = new TreeMap<>();
         ArrayList<Object[]> testData = new ArrayList<>();
@@ -84,7 +84,7 @@ public class PerformanceTest {
     public void t1_preAllocatePool() throws InterruptedException {
         Queue<Connection> connections = new ArrayBlockingQueue<>(poolSize);
         for (int i = 0; i < poolSize; ++i) {
-            dbPool.getConnection().subscribe(connections::add);
+            dbPool.getConnection().thenAccept(connections::add);
         }
         while (connections.size() < poolSize) {
             MILLISECONDS.sleep(5);

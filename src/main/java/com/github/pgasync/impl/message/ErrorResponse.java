@@ -20,7 +20,7 @@ package com.github.pgasync.impl.message;
 public class ErrorResponse implements Message {
 
     public enum Level {
-        ERROR, FATAL, PANIC, WARNING, NOTICE, DEBUG, INFO, LOG;
+        ERROR, FATAL, PANIC, WARNING, NOTICE, DEBUG, INFO, LOG
     }
 
     final Level level;

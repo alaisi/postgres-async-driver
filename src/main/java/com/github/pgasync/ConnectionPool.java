@@ -14,7 +14,7 @@
 
 package com.github.pgasync;
 
-import rx.Observable;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Pool of backend {@link Connection}s. Pools implement {@link Db} so
@@ -30,7 +30,7 @@ public interface ConnectionPool extends Db {
      * available. Connection passed to callback must be freed with
      * {@link com.github.pgasync.ConnectionPool#release(Connection)}
      */
-    Observable<Connection> getConnection();
+    CompletableFuture<Connection> getConnection();
 
     /**
      * Releases a connection back to the pool.

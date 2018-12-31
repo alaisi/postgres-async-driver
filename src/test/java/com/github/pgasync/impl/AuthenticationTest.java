@@ -17,7 +17,7 @@ public class AuthenticationTest {
     @Test
     public void shouldThrowExceptionOnInvalidCredentials() throws Exception {
         try (ConnectionPool pool = dbr.builder.password("_invalid_").build()) {
-            pool.queryRows("SELECT 1").toBlocking().first();
+            pool.queryRows("SELECT 1").get();
             fail();
         } catch (SqlException sqle) {
             assertEquals("28P01", sqle.getCode());

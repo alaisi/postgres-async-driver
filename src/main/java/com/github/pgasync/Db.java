@@ -5,7 +5,7 @@ package com.github.pgasync;
  *
  * @author Antti Laisi
  */
-public interface Db extends QueryExecutor, Listenable, AutoCloseable {
+public interface Db extends QueryExecutor, AutoCloseable {
 
     /**
      * Closes the pool, blocks the calling thread until connections are closed.

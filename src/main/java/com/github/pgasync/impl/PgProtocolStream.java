@@ -17,7 +17,8 @@ package com.github.pgasync.impl;
 import com.github.pgasync.impl.message.Message;
 import com.github.pgasync.impl.message.PasswordMessage;
 import com.github.pgasync.impl.message.StartupMessage;
-import rx.Observable;
+
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Stream of messages from/to backend server.
@@ -26,16 +27,16 @@ import rx.Observable;
  */
 public interface PgProtocolStream {
 
-    Observable<Message> connect(StartupMessage startup);
+    CompletableFuture<Message> connect(StartupMessage startup);
 
-    Observable<Message> authenticate(PasswordMessage password);
+    CompletableFuture<Message> authenticate(PasswordMessage password);
 
-    Observable<Message> send(Message... messages);
+    CompletableFuture<Message> send(Message... message);
 
-    Observable<String> listen(String channel);
+    // CompletableFuture<String> listen(String channel);
 
     boolean isConnected();
 
-    Observable<Void> close();
+    CompletableFuture<Void> close();
 
 }

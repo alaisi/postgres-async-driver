@@ -1,6 +1,6 @@
 package com.github.pgasync.impl.io;
 
-import com.github.pgasync.impl.message.NotificationResponse;
+import com.github.pgasync.impl.message.Notification;
 
 import java.nio.ByteBuffer;
 
@@ -10,7 +10,7 @@ import static com.github.pgasync.impl.io.IO.getCString;
  * See <a href="www.postgresql.org/docs/9.3/static/protocol-message-formats.html">PostgreSQL message formats</a>
  *
  * <pre>
- * NotificationResponse (B)
+ * Notification (B)
  *  Byte1('A')
  *      Identifies the message as a notification response.
  *  Int32
@@ -25,12 +25,12 @@ import static com.github.pgasync.impl.io.IO.getCString;
  *
  * @author Antti Laisi
  */
-public class NotificationResponseDecoder implements Decoder<NotificationResponse> {
+public class NotificationDecoder implements Decoder<Notification> {
 
     @Override
-    public NotificationResponse read(ByteBuffer buffer) {
+    public Notification read(ByteBuffer buffer) {
         byte[] chars = new byte[255];
-        return new NotificationResponse(buffer.getInt(), getCString(buffer, chars), getCString(buffer, chars));
+        return new Notification(buffer.getInt(), getCString(buffer, chars), getCString(buffer, chars));
     }
 
     @Override

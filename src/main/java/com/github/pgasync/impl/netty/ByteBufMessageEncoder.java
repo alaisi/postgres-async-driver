@@ -47,7 +47,7 @@ public class ByteBufMessageEncoder extends MessageToByteEncoder<Message> {
         }
     }
 
-    final ByteBuffer buffer = ByteBuffer.allocate(4096);
+    final ByteBuffer buffer = ByteBuffer.allocate(4096); // TODO: Get the value from a system property
 
     @Override
     @SuppressWarnings("unchecked")

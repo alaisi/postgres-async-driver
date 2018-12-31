@@ -16,14 +16,14 @@ package com.github.pgasync;
 
 /**
  * A single physical connection to PostgreSQL backend.
- * 
+ *
  * @author Antti Laisi
  */
 public interface Connection extends Db {
 
     /**
-     * Closes the connection, blocks the calling thread until the connection is closed.
+     * Closes the connection. Doesn't block current thread.
      */
-    void close() throws Exception;
+    void close();
 
 }
