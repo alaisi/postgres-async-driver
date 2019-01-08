@@ -14,42 +14,108 @@
 
 package com.github.pgasync.impl;
 
-import static com.github.pgasync.impl.message.RowDescription.ColumnDescription;
+import static com.github.pgasync.impl.message.b.RowDescription.ColumnDescription;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import com.github.pgasync.Connection;
+import com.github.pgasync.Listening;
+import com.github.pgasync.PreparedStatement;
 import com.github.pgasync.ResultSet;
 import com.github.pgasync.Row;
 import com.github.pgasync.Transaction;
 import com.github.pgasync.impl.conversion.DataConverter;
-import com.github.pgasync.impl.message.Authentication;
-import com.github.pgasync.impl.message.Bind;
-import com.github.pgasync.impl.message.CommandComplete;
-import com.github.pgasync.impl.message.DataRow;
-import com.github.pgasync.impl.message.ExtendedQuery;
+import com.github.pgasync.impl.message.b.Authentication;
+import com.github.pgasync.impl.message.b.RowDescription;
+import com.github.pgasync.impl.message.f.Bind;
+import com.github.pgasync.impl.message.f.Close;
+import com.github.pgasync.impl.message.f.Describe;
+import com.github.pgasync.impl.message.f.Execute;
 import com.github.pgasync.impl.message.Message;
-import com.github.pgasync.impl.message.Parse;
-import com.github.pgasync.impl.message.PasswordMessage;
-import com.github.pgasync.impl.message.Query;
-import com.github.pgasync.impl.message.ReadyForQuery;
-import com.github.pgasync.impl.message.RowDescription;
-import com.github.pgasync.impl.message.StartupMessage;
+import com.github.pgasync.impl.message.f.Parse;
+import com.github.pgasync.impl.message.f.PasswordMessage;
+import com.github.pgasync.impl.message.f.Query;
+import com.github.pgasync.impl.message.f.StartupMessage;
 
 /**
- * A connection to PostgreSQL backed. The postmaster forks a backend process for
- * each connection. A connection can process only a single queryRows at a time.
+ * A connection to Postgres backend. The postmaster forks a backend process for
+ * each connection. A connection can process only a single query at a time.
  *
  * @author Antti Laisi
  */
 public class PgConnection implements Connection {
+
+    /**
+     * Uses named server side prepared statement and named portal.
+     */
+    public class PgPreparedStatement implements PreparedStatement {
+
+        private final String sname;
+        private final String pname;
+
+        public PgPreparedStatement(String sname, String pname) {
+            this.sname = sname;
+            this.pname = pname;
+        }
+
+        @Override
+        public CompletableFuture<ResultSet> query(Object... params) {
+            AtomicReference<Map<String, PgColumn>> columnsRef = new AtomicReference<>();
+            List<Row> rows = new ArrayList<>();
+            return fetch(columnsRef::set, rows::add, params)
+                    .thenApply(v -> new PgResultSet(columnsRef.get(), rows, 0));
+        }
+
+        @Override
+        public CompletableFuture<Integer> fetch(Consumer<Map<String, PgColumn>> onColumns, Consumer<Row> processor, Object... params) {
+            return stream
+                    .send(new Bind(sname, pname, dataConverter.fromParameters(params)))
+                    .thenApply(bindComplete -> stream.send(Describe.portal(pname)))
+                    .thenCompose(Function.identity())
+                    .thenApply(rowDescription -> calcColumns(((RowDescription) rowDescription).getColumns()))
+                    .thenApply(columns -> {
+                        onColumns.accept(columns);
+                        return stream.send(new Execute(pname), dataRow -> processor.accept(new PgRow(dataRow, columns, dataConverter)));
+                    })
+                    .thenCompose(Function.identity());
+        }
+
+        @Override
+        public CompletableFuture<Void> close() {
+            return stream.send(Close.statement(sname)).thenAccept(closeComplete -> {
+            });
+        }
+    }
+
+    private static class NameSequence {
+
+        private long counter;
+        private String prefix;
+
+        NameSequence(final String prefix) {
+            this.prefix = prefix;
+        }
+
+        private String next() {
+            if (counter == Long.MAX_VALUE) {
+                counter = 0;
+                prefix = "_" + prefix;
+            }
+            return prefix + ++counter;
+        }
+    }
+
+    private static final NameSequence preparedStatementNames = new NameSequence("s-");
+    private static final NameSequence portalNames = new NameSequence("p-");
 
     final PgProtocolStream stream;
     final DataConverter dataConverter;
@@ -61,15 +127,9 @@ public class PgConnection implements Connection {
 
     CompletableFuture<Connection> connect(String username, String password, String database) {
         return stream.connect(new StartupMessage(username, database))
-                .thenApply(message -> authenticate(username, password, message))
+                .thenApply(authentication -> authenticate(username, password, authentication))
                 .thenCompose(Function.identity())
-                .thenApply(message -> {
-                    if (message == ReadyForQuery.INSTANCE) {
-                        return this;
-                    } else {
-                        throw new IllegalStateException("Unexpected Postgres message detected");
-                    }
-                });
+                .thenApply(authenticationOk -> PgConnection.this);
     }
 
     CompletableFuture<? extends Message> authenticate(String username, String password, Message message) {
@@ -83,104 +143,81 @@ public class PgConnection implements Connection {
     }
 
     @Override
-    public CompletableFuture<ResultSet> querySet(String sql, Object... params) {
-        return sendQuery(sql, params)
-                .thenApply(toResultSet(dataConverter));
+    public CompletableFuture<PreparedStatement> prepareStatement(String sql, Oid... parametersTypes) {
+        return preparedStatementOf(sql, parametersTypes).thenApply(pgStmt -> pgStmt);
+    }
+
+    CompletableFuture<PgPreparedStatement> preparedStatementOf(String sql, Oid... parametersTypes) {
+        if (sql == null || sql.isBlank()) {
+            throw new IllegalArgumentException("'sql' shouldn't be null or empty or blank string");
+        }
+        if (parametersTypes == null) {
+            throw new IllegalArgumentException("'parametersTypes' shouldn't be null, atr least it should be empty");
+        }
+        String statementName = preparedStatementNames.next();
+        return stream
+                .send(new Parse(sql, statementName, parametersTypes))
+                .thenApply(parseComplete -> new PgPreparedStatement(statementName, portalNames.next()));
     }
 
     @Override
-    public CompletableFuture<Row> queryRows(String sql, Object... params) {
-        return sendQuery(sql, params)
-                .thenApply(toRow(dataConverter));
+    public CompletableFuture<Void> script(Consumer<Map<String, PgColumn>> onColumns, Consumer<Row> onRow, Consumer<Integer> onAffected, String sql) {
+        if (sql == null || sql.isBlank()) {
+            throw new IllegalArgumentException("'sql' shouldn't be null or empty or blank string");
+        }
+        AtomicReference<Map<String, PgColumn>> columnsRef = new AtomicReference<>();
+        return stream.send(
+                new Query(sql),
+                columnDescriptions -> {
+                    Map<String, PgColumn> columns = calcColumns(columnDescriptions);
+                    onColumns.accept(columns);
+                    columnsRef.set(columns);
+                },
+                message -> onRow.accept(new PgRow(message, columnsRef.get(), dataConverter)),
+                message -> onAffected.accept(message.getAffectedRows())
+        );
+    }
+
+    @Override
+    public CompletableFuture<Integer> query(Consumer<Map<String, PgColumn>> onColumns, Consumer<Row> onRow, String sql, Object... params) {
+        return prepareStatement(sql/* TODO: Add parameters types inferring */)
+                .thenApply(ps -> ps.fetch(onColumns, onRow, params)
+                        .handle((rs, th) -> ps.close()
+                                .thenApply(v -> {
+                                    if (th != null)
+                                        throw new RuntimeException(th);
+                                    else
+                                        return rs;
+                                })
+                        )
+                        .thenCompose(Function.identity())
+                )
+                .thenCompose(Function.identity());
     }
 
     @Override
     public CompletableFuture<Transaction> begin() {
-        return querySet("BEGIN")
+        return completeScript("BEGIN")
                 .thenApply(rs -> new PgConnectionTransaction());
     }
 
-    /*
-        @Override
-        public CompletableFuture<String> listen(String channel) {
-            // TODO: wait for commit before sending unlisten as otherwise it can be rolled back
-            return querySet("LISTEN " + channel)
-                    .<String>lift(subscriber -> Subscribers.create(rs -> stream.listen(channel)
-                                    .subscribe(subscriber),
-                            subscriber::onError))
-                    .doOnUnsubscribe(() -> querySet("UNLISTEN " + channel).subscribe(rs -> {
-                    }));
-        }
-    */
-    @Override
-    public void close() {
-        stream.close()
-                .exceptionally(th -> {
-                    Logger.getLogger(PgConnection.class.getName()).log(Level.SEVERE, null, th);
-                    return null;
+    public CompletableFuture<Listening> subscribe(String channel, Consumer<String> onNotification) {
+        // TODO: wait for commit before sending unlisten as otherwise it can be rolled back
+        return completeScript("LISTEN " + channel)
+                .thenApply(results -> {
+                    Runnable unsubscribe = stream.subscribe(channel, onNotification);
+                    return () -> completeScript("UNLISTEN " + channel)
+                            .thenAccept(res -> unsubscribe.run());
                 });
     }
 
-    private CompletableFuture<Message> sendQuery(String sql, Object[] params) {
-        return params == null || params.length == 0
-                ? stream.send(new Query(sql))
-                : stream.send(new Parse(sql), new Bind(dataConverter.fromParameters(params)),
-                ExtendedQuery.DESCRIBE,
-                ExtendedQuery.EXECUTE,
-                ExtendedQuery.CLOSE,
-                ExtendedQuery.SYNC);
-    }
-    static Function<? super Message, Row> toRow(DataConverter dataConverter) {
-        return null;
-/*
-        return (message) -> {
-            Map<String, PgColumn> columns;
-            if (message instanceof RowDescription) {
-                columns = getColumns(((RowDescription) message).getColumns());
-            } else if (message instanceof DataRow) {
-                return new PgRow((DataRow) message, columns, dataConverter);
-            }
-        };
-        */
+    @Override
+    public CompletableFuture<Void> close() {
+        return stream.close();
     }
 
-    static Function<? super Message, ResultSet> toResultSet(DataConverter dataConverter) {
-        return null;
-        /*
-        return subscriber -> new Subscriber<Message>() {
-
-            Map<String, PgColumn> columns;
-            List<Row> rows = new ArrayList<>();
-            int updated;
-
-            @Override
-            public void onNext(Message message) {
-                if (message instanceof RowDescription) {
-                    columns = getColumns(((RowDescription) message).getColumns());
-                } else if (message instanceof DataRow) {
-                    rows.add(new PgRow((DataRow) message, columns, dataConverter));
-                } else if (message instanceof CommandComplete) {
-                    updated = ((CommandComplete) message).getUpdatedRows();
-                } else if (message == ReadyForQuery.INSTANCE) {
-                    subscriber.onNext(new PgResultSet(columns, rows, updated));
-                }
-            }
-
-            @Override
-            public void onError(Throwable e) {
-                subscriber.onError(e);
-            }
-
-            @Override
-            public void onCompleted() {
-                subscriber.onCompleted();
-            }
-        };
-        */
-    }
-
-    static Map<String, PgColumn> getColumns(ColumnDescription[] descriptions) {
-        Map<String, PgColumn> columns = new HashMap<>();
+    static Map<String, PgColumn> calcColumns(ColumnDescription[] descriptions) {
+        Map<String, PgColumn> columns = new LinkedHashMap<>();
         for (int i = 0; i < descriptions.length; i++) {
             columns.put(descriptions[i].getName().toUpperCase(), new PgColumn(i, descriptions[i].getName(), descriptions[i].getType()));
         }
@@ -194,51 +231,62 @@ public class PgConnection implements Connection {
 
         @Override
         public CompletableFuture<Transaction> begin() {
-            return querySet("SAVEPOINT sp_1")
+            return completeScript("SAVEPOINT sp_1")
                     .thenApply(rs -> new PgConnectionNestedTransaction(1));
+        }
+
+        CompletableFuture<Void> sendCommit() {
+            return PgConnection.this.completeScript("COMMIT").thenAccept(readyForQuery -> {
+            });
+        }
+
+        CompletableFuture<Void> sendRollback() {
+            return PgConnection.this.completeScript("ROLLBACK").thenAccept(readyForQuery -> {
+            });
         }
 
         @Override
         public CompletableFuture<Void> commit() {
-            return PgConnection.this.querySet("COMMIT")
-                    .thenAccept(rs -> {
-                    })
-                    .exceptionally(th -> {
-                        // TODO: Add logs
-                        stream.close();
-                        return null;
-                    });
+            return sendCommit().thenAccept(rs -> {
+            });
         }
 
         @Override
         public CompletableFuture<Void> rollback() {
-            return PgConnection.this.querySet("ROLLBACK")
-                    .thenAccept(rs -> {
+            return sendRollback();
+        }
+
+        @Override
+        public CompletableFuture<Void> close() {
+            return sendCommit()
+                    .handle((v, th) -> {
+                        if (th != null) {
+                            Logger.getLogger(PgConnectionTransaction.class.getName()).log(Level.SEVERE, null, th);
+                            return sendRollback();
+                        } else {
+                            return CompletableFuture.completedFuture(v);
+                        }
                     })
-                    .exceptionally(th -> {
-                        // TODO: Add logs
-                        stream.close();
-                        return null;
-                    });
+                    .thenCompose(Function.identity());
         }
 
         @Override
-        public CompletableFuture<Row> queryRows(String sql, Object... params) {
-            return PgConnection.this.queryRows(sql, params)
+        public CompletableFuture<Void> script(Consumer<Map<String, PgColumn>> onColumns, Consumer<Row> onRow, Consumer<Integer> onAffected, String sql) {
+            return PgConnection.this.script(onColumns, onRow, onAffected, sql)
                     .exceptionally(th -> {
                         rollback();
-                        throw new IllegalStateException(th);
+                        throw new RuntimeException(th);
                     });
         }
 
-        @Override
-        public CompletableFuture<ResultSet> querySet(String sql, Object... params) {
-            return PgConnection.this.querySet(sql, params)
+        public CompletableFuture<Integer> query(Consumer<Map<String, PgColumn>> onColumns, Consumer<Row> onRow, String sql, Object... params) {
+            return PgConnection.this.query(onColumns, onRow, sql, params)
                     .exceptionally(th -> {
                         rollback();
-                        throw new IllegalStateException(th);
+                        throw new RuntimeException(th);
                     });
         }
+
     }
 
     /**
@@ -254,20 +302,22 @@ public class PgConnection implements Connection {
 
         @Override
         public CompletableFuture<Transaction> begin() {
-            return querySet("SAVEPOINT sp_" + (depth + 1))
+            return completeScript("SAVEPOINT sp_" + (depth + 1))
                     .thenApply(rs -> new PgConnectionNestedTransaction(depth + 1));
         }
 
         @Override
         public CompletableFuture<Void> commit() {
-            return PgConnection.this.querySet("RELEASE SAVEPOINT sp_" + depth)
-                    .thenApply(rs -> null);
+            return PgConnection.this.completeScript("RELEASE SAVEPOINT sp_" + depth)
+                    .thenAccept(rs -> {
+                    });
         }
 
         @Override
         public CompletableFuture<Void> rollback() {
-            return PgConnection.this.querySet("ROLLBACK TO SAVEPOINT sp_" + depth)
-                    .thenApply(rs -> null);
+            return PgConnection.this.completeScript("ROLLBACK TO SAVEPOINT sp_" + depth)
+                    .thenAccept(rs -> {
+                    });
         }
     }
 }

@@ -87,6 +87,10 @@ public enum Oid {
         this.id = id;
     }
 
+    public int getId() {
+        return id;
+    }
+
     public static Oid valueOfId(int id) {
         for (Oid oid : values()) {
             if (oid.id == id) {

@@ -25,7 +25,7 @@ public class ListenNotifyTest {
         ConnectionPool pool = dbr.pool;
         BlockingQueue<String> result = new LinkedBlockingQueue<>(5);
 
-        Subscription subscription = pool.listen("example").subscribe(result::add, Throwable::printStackTrace);
+        Subscription subscription = pool.subscribe("example").subscribe(result::add, Throwable::printStackTrace);
         TimeUnit.SECONDS.sleep(2);
 
         pool.querySet("notify example, 'msg'").toBlocking().single();

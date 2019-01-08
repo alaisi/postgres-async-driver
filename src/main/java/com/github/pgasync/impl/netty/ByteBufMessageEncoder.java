@@ -15,6 +15,17 @@
 package com.github.pgasync.impl.netty;
 
 import com.github.pgasync.impl.io.*;
+import com.github.pgasync.impl.io.f.BindEncoder;
+import com.github.pgasync.impl.io.f.CloseEncoder;
+import com.github.pgasync.impl.io.f.DescribeEncoder;
+import com.github.pgasync.impl.io.f.ExecuteEncoder;
+import com.github.pgasync.impl.io.f.FIndicatorsEncoder;
+import com.github.pgasync.impl.io.f.ParseEncoder;
+import com.github.pgasync.impl.io.f.PasswordMessageEncoder;
+import com.github.pgasync.impl.io.f.QueryEncoder;
+import com.github.pgasync.impl.io.f.SSLHandshakeEncoder;
+import com.github.pgasync.impl.io.f.StartupMessageEncoder;
+import com.github.pgasync.impl.io.f.TerminateEncoder;
 import com.github.pgasync.impl.message.Message;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
@@ -22,36 +33,36 @@ import io.netty.handler.codec.MessageToByteEncoder;
 
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
- * Encodes PostgreSQL protocol V3 messages to bytes.
- * 
+ * Encodes Postgres protocol V3 messages to bytes.
+ *
  * @author Antti Laisi
  */
 public class ByteBufMessageEncoder extends MessageToByteEncoder<Message> {
 
-    static final Map<Class<?>,Encoder<?>> ENCODERS = new HashMap<>();
-    static {
-        for (Encoder<?> encoder : new Encoder<?>[] {
-                new SSLHandshakeEncoder(),
-                new StartupMessageEncoder(),
-                new PasswordMessageEncoder(),
-                new QueryEncoder(), 
-                new ParseEncoder(), 
-                new BindEncoder(), 
-                new ExtendedQueryEncoder(),
-                new TerminateEncoder() }) {
-            ENCODERS.put(encoder.getMessageType(), encoder);
-        }
-    }
+    static final Map<Class<?>, Encoder<?>> ENCODERS = Set.of(
+            new SSLHandshakeEncoder(),
+            new StartupMessageEncoder(),
+            new PasswordMessageEncoder(),
+            new QueryEncoder(),
+            new ParseEncoder(),
+            new BindEncoder(),
+            new DescribeEncoder(),
+            new ExecuteEncoder(),
+            new CloseEncoder(),
+            new FIndicatorsEncoder(),
+            new TerminateEncoder()
+    ).stream().collect(Collectors.toMap(Encoder::getMessageType, encoder -> encoder));
 
-    final ByteBuffer buffer = ByteBuffer.allocate(4096); // TODO: Get the value from a system property
+    final ByteBuffer buffer = ByteBuffer.allocate(Integer.valueOf(System.getProperty("pg.io.buffer.length", "4096")));
 
     @Override
     @SuppressWarnings("unchecked")
-    protected void encode(ChannelHandlerContext ctx, Message msg, ByteBuf out) throws Exception {
+    protected void encode(ChannelHandlerContext ctx, Message msg, ByteBuf out) {
         Encoder<Message> encoder = (Encoder<Message>) ENCODERS.get(msg.getClass());
 
         buffer.clear();
@@ -64,7 +75,7 @@ public class ByteBufMessageEncoder extends MessageToByteEncoder<Message> {
                 } catch (BufferOverflowException overflow) {
                     // large clob/blob, resize buffer aggressively
                     msgbuf = ByteBuffer.allocate(msgbuf.capacity() * 4);
-                } 
+                }
             }
 
             msgbuf.flip();

@@ -14,28 +14,29 @@
 
 package com.github.pgasync.impl.io;
 
+import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * Static utility methods for input/output.
- * 
+ *
  * @author Antti Laisi
  */
-public enum IO {
-    ;
+public class IO {
+
 
     public static byte[] bytes(String s) {
         return s.getBytes(UTF_8);
     }
 
-    public static String getCString(ByteBuffer buffer, byte[] store) {
-        int i = 0;
-        for (byte c = buffer.get(); c != 0; c = buffer.get()) {
-            store[i++] = c;
+    public static String getCString(ByteBuffer buffer) {
+        ByteArrayOutputStream readBuffer = new ByteArrayOutputStream(255);
+        for (int c = buffer.get(); c != 0; c = buffer.get()) {
+            readBuffer.write(c);
         }
-        return new String(store, 0, i, UTF_8);
+        return new String(readBuffer.toByteArray(), UTF_8);
     }
 
     public static void putCString(ByteBuffer buffer, String string) {

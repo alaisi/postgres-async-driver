@@ -34,7 +34,7 @@ import static org.junit.runners.MethodSorters.NAME_ASCENDING;
 @FixMethodOrder(NAME_ASCENDING)
 public class PerformanceTest {
 
-    @Parameters(name = "{index}: maxSize={0}, threads={1}, pipeline={2}")
+    @Parameters(name = "{index}: maxConnections={0}, threads={1}, pipeline={2}")
     public static Iterable<Object[]> data() {
         results = new TreeMap<>();
         ArrayList<Object[]> testData = new ArrayList<>();
@@ -102,7 +102,7 @@ public class PerformanceTest {
 
                 @Override
                 public Long call() throws Exception {
-                    dbPool.query("select 42", r -> {
+                    dbPool.completeQuery("select 42", r -> {
                         try {
                             swap.exchange(currentTimeMillis());
                         } catch (Exception e) {

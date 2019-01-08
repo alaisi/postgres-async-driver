@@ -14,16 +14,19 @@
 
 package com.github.pgasync;
 
+import com.github.pgasync.impl.Oid;
+
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
+
 /**
- * A single physical connection to PostgreSQL backend.
+ * A single physical connection to Postgres backend.
  *
  * @author Antti Laisi
  */
 public interface Connection extends Db {
 
-    /**
-     * Closes the connection. Doesn't block current thread.
-     */
-    void close();
+    CompletableFuture<PreparedStatement> prepareStatement(String sql, Oid... parametersTypes);
 
+    CompletableFuture<Listening> subscribe(String channel, Consumer<String> onNotification);
 }

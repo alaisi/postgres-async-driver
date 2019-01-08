@@ -17,6 +17,21 @@ package com.github.pgasync.impl.netty;
 import com.github.pgasync.SqlException;
 import com.github.pgasync.impl.PgProtocolStream;
 import com.github.pgasync.impl.message.*;
+import com.github.pgasync.impl.message.b.Authentication;
+import com.github.pgasync.impl.message.b.CommandComplete;
+import com.github.pgasync.impl.message.b.DataRow;
+import com.github.pgasync.impl.message.b.ErrorResponse;
+import com.github.pgasync.impl.message.b.NoticeResponse;
+import com.github.pgasync.impl.message.b.NotificationResponse;
+import com.github.pgasync.impl.message.b.ReadyForQuery;
+import com.github.pgasync.impl.message.b.RowDescription;
+import com.github.pgasync.impl.message.f.Execute;
+import com.github.pgasync.impl.message.f.FIndicatorss;
+import com.github.pgasync.impl.message.f.PasswordMessage;
+import com.github.pgasync.impl.message.f.Query;
+import com.github.pgasync.impl.message.f.SSLHandshake;
+import com.github.pgasync.impl.message.f.StartupMessage;
+import com.github.pgasync.impl.message.f.Terminate;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.*;
@@ -34,9 +49,12 @@ import java.net.SocketAddress;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.function.Consumer;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
- * Netty connection to PostgreSQL backend.
+ * Netty connection to Postgres backend.
  *
  * @author Antti Laisi
  */
@@ -46,25 +64,29 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     final EventLoop eventLoop;
     final SocketAddress address;
     final boolean useSsl;
-    final boolean pipeline;
     final Bootstrap channelPipeline;
+
+    ChannelHandlerContext ctx;
 
     final GenericFutureListener<Future<? super Object>> outboundErrorListener = written -> {
         if (!written.isSuccess()) {
             respondWithException(written.cause());
         }
     };
-    final Queue<CompletableFuture<? super Message>> uponResponses = new LinkedBlockingDeque<>(); // TODO: limit pipeline queue depth;
-    // final ConcurrentMap<String, Map<String, Subscriber<? super String>>> listeners = new ConcurrentHashMap<>();
+    final Queue<CompletableFuture<? super Message>> uponResponses = new LinkedBlockingDeque<>(Integer.valueOf(System.getProperty("pg.request.pipeline.length", "1")));
+    final Map<String, Set<Consumer<String>>> subscriptions = new HashMap<>();
 
-    ChannelHandlerContext ctx;
+    Consumer<RowDescription.ColumnDescription[]> onColumns;
+    Consumer<DataRow> onRow;
+    Consumer<CommandComplete> onAffected;
 
-    public NettyPgProtocolStream(EventLoopGroup group, SocketAddress address, boolean useSsl, boolean pipeline) {
+    Message readyForQueryPendingMessage;
+
+    public NettyPgProtocolStream(EventLoopGroup group, SocketAddress address, boolean useSsl) {
         this.group = group;
         this.eventLoop = group.next();
         this.address = address;
         this.useSsl = useSsl; // TODO: refactor into SSLConfig with trust parameters
-        this.pipeline = pipeline;
         this.channelPipeline = new Bootstrap()
                 .group(group)
                 .channel(NioSocketChannel.class)
@@ -78,9 +100,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
                     if (connected.isSuccess()) {
                         if (useSsl) {
                             send(SSLRequest.INSTANCE)
-                                    .thenAccept(message -> {
-                                        write(startup);
-                                    })
+                                    .thenAccept(sslHandshake -> write(startup))
                                     .exceptionally(th -> {
                                         respondWithException(th);
                                         return null;
@@ -97,12 +117,28 @@ public class NettyPgProtocolStream implements PgProtocolStream {
 
     @Override
     public CompletableFuture<Message> authenticate(PasswordMessage password) {
-        return offerRoundTrip(() -> write(password));
+        return send(password);
     }
 
     @Override
-    public CompletableFuture<Message> send(Message... messages) {
-        return offerRoundTrip(() -> write(messages));
+    public CompletableFuture<Message> send(Message message) {
+        return offerRoundTrip(() -> write(message));
+    }
+
+    @Override
+    public CompletableFuture<Void> send(Query query, Consumer<RowDescription.ColumnDescription[]> onColumns, Consumer<DataRow> onRow, Consumer<CommandComplete> onAffected) {
+        this.onColumns = onColumns;
+        this.onRow = onRow;
+        this.onAffected = onAffected;
+        return send(query).thenAccept(readyForQuery -> {});
+    }
+
+    @Override
+    public CompletableFuture<Integer> send(Execute execute, Consumer<DataRow> onRow) {
+        this.onColumns = null;
+        this.onRow = onRow;
+        this.onAffected = null;
+        return send(execute).thenApply(commandComplete -> ((CommandComplete) commandComplete).getAffectedRows());
     }
 
     @Override
@@ -110,29 +146,20 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         return ctx.channel().isOpen();
     }
 
-    /*
-        @Override
-        public Observable<String> listen(String channel) {
-
-            String subscriptionId = UUID.randomUUID().toString();
-
-            return Observable.<String>create(subscriber -> {
-
-                Map<String, Subscriber<? super String>> consumers = new ConcurrentHashMap<>();
-                Map<String, Subscriber<? super String>> old = listeners.putIfAbsent(channel, consumers);
-                consumers = old != null ? old : consumers;
-
-                consumers.put(subscriptionId, subscriber);
-
-            }).doOnUnsubscribe(() -> {
-
-                Map<String, Subscriber<? super String>> consumers = listeners.get(channel);
-                if (consumers == null || consumers.remove(subscriptionId) == null) {
-                    throw new IllegalStateException("No consumers on channel " + channel + " with id " + subscriptionId);
-                }
-            });
-        }
-    */
+    @Override
+    public Runnable subscribe(String channel, Consumer<String> onNotification) {
+        subscriptions
+                .computeIfAbsent(channel, ch -> new HashSet<>())
+                .add(onNotification);
+        return () -> subscriptions.computeIfPresent(channel, (ch, subscription) -> {
+            subscription.remove(onNotification);
+            if (subscription.isEmpty()) {
+                return null;
+            } else {
+                return subscription;
+            }
+        });
+    }
 
     @Override
     public CompletableFuture<Void> close() {
@@ -154,14 +181,46 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     }
 
     private void respondWithException(Throwable th) {
+        onColumns = null;
+        onRow = null;
+        onAffected = null;
         uponResponses.remove().completeExceptionally(th);
     }
 
     private void respondWithMessage(Message message) {
-        if (message instanceof ErrorResponse) {
-            respondWithException(toSqlException((ErrorResponse) message));
-        } else {
-            uponResponses.remove().complete(message);
+        if (message instanceof NotificationResponse) {
+            publish((NotificationResponse) message);
+        } else if (message instanceof NoticeResponse) {
+            Logger.getLogger(NettyPgProtocolStream.class.getName()).log(Level.WARNING, message.toString());
+        } else if (message instanceof RowDescription) {
+            if (isSimpleQueryInProgress()) {
+                onColumns.accept(((RowDescription) message).getColumns());
+            } else {
+                uponResponses.remove().complete(message);
+            }
+        } else if (message instanceof DataRow) {
+            onRow.accept((DataRow) message);
+        } else if (message instanceof CommandComplete && isSimpleQueryInProgress()) {
+            onAffected.accept((CommandComplete) message);
+        } else if (message instanceof ErrorResponse) {
+            readyForQueryPendingMessage = message;
+        } else if (message instanceof CommandComplete) {
+            // assert !isSimpleQueryInProgress() :
+            // "During simple query message flow, CommandComplete message should be consumed only by dedicated callback, due to possibility of multiple CommandComplete messages, one per sql clause.";
+            readyForQueryPendingMessage = message;
+            write(FIndicatorss.SYNC);
+        } else if (message instanceof Authentication && ((Authentication) message).isAuthenticationOk()) {
+            readyForQueryPendingMessage = message;
+        } else if (message == ReadyForQuery.INSTANCE) {
+            if (readyForQueryPendingMessage instanceof ErrorResponse) {
+                respondWithException(toSqlException((ErrorResponse) readyForQueryPendingMessage));
+            } else {
+                onColumns = null;
+                onRow = null;
+                onAffected = null;
+                uponResponses.remove().complete(readyForQueryPendingMessage != null ? readyForQueryPendingMessage : message);
+            }
+            readyForQueryPendingMessage = null;
         }
     }
 
@@ -184,34 +243,21 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     }
 
     private void write(Message... messages) {
-        Queue<Message> queue = new LinkedList<>(Arrays.asList(messages));
-        GenericFutureListener<Future<Void>> listener = new GenericFutureListener<>() {
-            @Override
-            public void operationComplete(Future<Void> written) {
-                if (written.isSuccess()) {
-                    Message message = queue.poll();
-                    if (message != null) {
-                        ctx.writeAndFlush(message).addListener(this);
-                    }
-                } else {
-                    respondWithException(written.cause());
-                }
-            }
-        };
-        ctx.writeAndFlush(queue.poll()).addListener(listener);
+        for (Message message : messages) {
+            ctx.write(message).addListener(outboundErrorListener);
+        }
+        ctx.flush();
     }
 
-    /*
-    private void publishNotification(Notification notification) {
-        Map<String, Subscriber<? super String>> consumers = listeners.get(notification.getChannel());
+    private void publish(NotificationResponse notification) {
+        Set<Consumer<String>> consumers = subscriptions.get(notification.getChannel());
         if (consumers != null) {
-            consumers.values().forEach(c -> c.onNext(notification.getPayload()));
+            consumers.forEach(c -> c.accept(notification.getPayload()));
         }
     }
-    */
-    private static boolean isCompleteMessage(Object msg) {
-        return msg == ReadyForQuery.INSTANCE
-                || (msg instanceof Authentication && !((Authentication) msg).isAuthenticationOk());
+
+    private boolean isSimpleQueryInProgress() {
+        return onColumns != null;
     }
 
     private static SqlException toSqlException(ErrorResponse error) {
@@ -219,7 +265,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     }
 
     ChannelInitializer<Channel> newProtocolInitializer() {
-        return new ChannelInitializer<Channel>() {
+        return new ChannelInitializer<>() {
             @Override
             protected void initChannel(Channel channel) {
                 if (useSsl) {
@@ -257,6 +303,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     ChannelHandler newProtocolHandler() {
         return new ChannelInboundHandlerAdapter() {
 
+
             @Override
             public void channelActive(ChannelHandlerContext context) {
                 NettyPgProtocolStream.this.ctx = context;
@@ -270,13 +317,9 @@ public class NettyPgProtocolStream implements PgProtocolStream {
             }
 
             @Override
-            public void channelRead(ChannelHandlerContext context, Object msg) {
-                if (msg instanceof Notification) {
-                    // publishNotification((Notification) msg);
-                } else if (isCompleteMessage(msg)) {
-                    respondWithMessage((Message) msg);
-                } else {
-                    // No op, since incomplete message from the network
+            public void channelRead(ChannelHandlerContext context, Object message) {
+                if (message instanceof Message) {
+                    respondWithMessage((Message) message);
                 }
             }
 
@@ -286,7 +329,6 @@ public class NettyPgProtocolStream implements PgProtocolStream {
             }
 
             @Override
-            @SuppressWarnings("MismatchedQueryAndUpdateOfCollection")
             public void exceptionCaught(ChannelHandlerContext context, Throwable cause) {
                 while (!uponResponses.isEmpty()) {
                     respondWithException(cause);

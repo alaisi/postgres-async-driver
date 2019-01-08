@@ -20,23 +20,15 @@ import java.util.concurrent.CompletableFuture;
  * Pool of backend {@link Connection}s. Pools implement {@link Db} so
  * queries can be issued directly to the pool if using the same connection
  * is not required.
- * 
+ *
  * @author Antti Laisi
  */
 public interface ConnectionPool extends Db {
 
     /**
-     * Executes a {@link java.util.function.Consumer} callback when a connection is
-     * available. Connection passed to callback must be freed with
-     * {@link com.github.pgasync.ConnectionPool#release(Connection)}
+     * Gets a connection when available.
+     * {@link Connection#close()} method will return the connection into this pool instead of closing it.
      */
     CompletableFuture<Connection> getConnection();
-
-    /**
-     * Releases a connection back to the pool.
-     * 
-     * @param connection Connection fetched with getConnection
-     */
-    void release(Connection connection);
 
 }

@@ -19,13 +19,13 @@ package com.github.pgasync.impl;
  *
  * @author Antti Laisi
  */
-class PgColumn{
+public class PgColumn {
 
     final int index;
     final String name;
     final Oid type;
 
-    public PgColumn(int index, String name, Oid type){
+    public PgColumn(int index, String name, Oid type) {
         this.index = index;
         this.name = name;
         this.type = type;

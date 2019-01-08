@@ -51,7 +51,7 @@ public class QueryResultTest {
 
     @Test
     public void shouldReturnResultSetSize() {
-        assertEquals(2, dbr.query("INSERT INTO CONN_TEST (ID) VALUES (1),(2)").updatedRows());
+        assertEquals(2, dbr.query("INSERT INTO CONN_TEST (ID) VALUES (1),(2)").affectedRows());
         ResultSet result = dbr.query("SELECT * FROM CONN_TEST WHERE ID <= 2 ORDER BY ID");
         assertEquals(2, result.size());
         assertEquals("ID", result.getColumns().iterator().next());
@@ -63,14 +63,14 @@ public class QueryResultTest {
 
     @Test
     public void shouldReturnDeletedRowsCount() {
-        assertEquals(1, dbr.query("INSERT INTO CONN_TEST (ID) VALUES (3)").updatedRows());
-        assertEquals(1, dbr.query("DELETE FROM CONN_TEST WHERE ID = 3").updatedRows());
+        assertEquals(1, dbr.query("INSERT INTO CONN_TEST (ID) VALUES (3)").affectedRows());
+        assertEquals(1, dbr.query("DELETE FROM CONN_TEST WHERE ID = 3").affectedRows());
     }
 
     @Test
     public void shouldReturnUpdatedRowsCount() {
-        assertEquals(3, dbr.query("INSERT INTO CONN_TEST (ID) VALUES (9),(10),(11)").updatedRows());
-        assertEquals(3, dbr.query("UPDATE CONN_TEST SET ID = NULL WHERE ID IN (9,10,11)").updatedRows());
+        assertEquals(3, dbr.query("INSERT INTO CONN_TEST (ID) VALUES (9),(10),(11)").affectedRows());
+        assertEquals(3, dbr.query("UPDATE CONN_TEST SET ID = NULL WHERE ID IN (9,10,11)").affectedRows());
     }
 
     @Test(expected = SqlException.class)

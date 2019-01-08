@@ -17,34 +17,32 @@ package com.github.pgasync.impl;
 import com.github.pgasync.Row;
 import com.github.pgasync.SqlException;
 import com.github.pgasync.impl.conversion.DataConverter;
-import com.github.pgasync.impl.message.DataRow;
+import com.github.pgasync.impl.message.b.DataRow;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Date;
 import java.sql.Time;
 import java.sql.Timestamp;
-import java.util.Collection;
 import java.util.Map;
 
 /**
  * Result row, uses {@link DataConverter} for all conversions.
- * 
+ *
  * @author Antti Laisi
  */
 public class PgRow implements Row {
 
     final DataRow data;
     final DataConverter dataConverter;
-    final Map<String,PgColumn> columns;
+    final Map<String, PgColumn> columns;
     final PgColumn[] pgColumns;
 
-    public PgRow(DataRow data, Map<String,PgColumn> columns, DataConverter dataConverter) {
+    public PgRow(DataRow data, Map<String, PgColumn> columns, DataConverter dataConverter) {
         this.data = data;
         this.dataConverter = dataConverter;
         this.columns = columns;
-        Collection<PgColumn> values = columns.values();
-        this.pgColumns = values.toArray(new PgColumn[values.size()]);
+        this.pgColumns = columns.values().toArray(new PgColumn[]{});
     }
 
     @Override

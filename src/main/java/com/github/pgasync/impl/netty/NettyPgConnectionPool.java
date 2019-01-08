@@ -21,34 +21,33 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 
 import java.net.InetSocketAddress;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
  * {@link PgConnectionPool} that uses {@link NettyPgProtocolStream}. Each pool
  * starts a single Netty IO thread.
- * 
+ *
  * @author Antti Laisi
  */
 public class NettyPgConnectionPool extends PgConnectionPool {
 
     final EventLoopGroup group = new NioEventLoopGroup(1);
     final boolean useSsl;
-    final boolean pipeline;
 
     public NettyPgConnectionPool(PoolProperties properties) {
         super(properties);
         useSsl = properties.getUseSsl();
-        pipeline = properties.getUsePipelining();
     }
 
     @Override
     protected PgProtocolStream openStream(InetSocketAddress address) {
-        return new NettyPgProtocolStream(group, address, useSsl, pipeline);
+        return new NettyPgProtocolStream(group, address, useSsl);
     }
 
     @Override
-    public void close() throws Exception {
-        super.close();
-        group.shutdownGracefully().await(10, TimeUnit.SECONDS);
+    public CompletableFuture<Void> close() {
+        return super.close()
+                .thenAccept(v -> group.shutdownGracefully().awaitUninterruptibly(10, TimeUnit.SECONDS));
     }
 }

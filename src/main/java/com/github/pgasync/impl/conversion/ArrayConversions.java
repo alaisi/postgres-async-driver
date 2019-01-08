@@ -12,8 +12,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 // TODO: change internal value format from byte[] to PgValue(TEXT|BINARY)
 @SuppressWarnings({"unchecked","rawtypes"})
-enum ArrayConversions  {
-    ;
+class ArrayConversions  {
 
     public static byte[] fromArray(final Object elements, final Function<Object,byte[]> printFn) {
         return appendArray(new StringBuilder(), elements, printFn).toString().getBytes(UTF_8);

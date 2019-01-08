@@ -77,7 +77,7 @@ public class TransactionTest {
             err);
 
         assertTrue(sync.await(5, TimeUnit.SECONDS));
-        assertEquals(10L, dbr.query("SELECT ID FROM TX_TEST WHERE ID = 10").row(0).getLong(0).longValue());
+        assertEquals(10L, dbr.query("SELECT ID FROM TX_TEST WHERE ID = 10").at(0).getLong(0).longValue());
     }
 
     @Test

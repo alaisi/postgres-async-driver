@@ -15,14 +15,20 @@
 package com.github.pgasync.impl;
 
 import com.github.pgasync.impl.message.Message;
-import com.github.pgasync.impl.message.PasswordMessage;
-import com.github.pgasync.impl.message.StartupMessage;
+import com.github.pgasync.impl.message.b.CommandComplete;
+import com.github.pgasync.impl.message.b.DataRow;
+import com.github.pgasync.impl.message.b.RowDescription;
+import com.github.pgasync.impl.message.f.Execute;
+import com.github.pgasync.impl.message.f.PasswordMessage;
+import com.github.pgasync.impl.message.f.Query;
+import com.github.pgasync.impl.message.f.StartupMessage;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 /**
  * Stream of messages from/to backend server.
- * 
+ *
  * @author Antti Laisi
  */
 public interface PgProtocolStream {
@@ -31,9 +37,13 @@ public interface PgProtocolStream {
 
     CompletableFuture<Message> authenticate(PasswordMessage password);
 
-    CompletableFuture<Message> send(Message... message);
+    CompletableFuture<Message> send(Message message);
 
-    // CompletableFuture<String> listen(String channel);
+    CompletableFuture<Void> send(Query query, Consumer<RowDescription.ColumnDescription[]> onColumns, Consumer<DataRow> onRow, Consumer<CommandComplete> onAffected);
+
+    CompletableFuture<Integer> send(Execute execute, Consumer<DataRow> onRow);
+
+    Runnable subscribe(String channel, Consumer<String> onNotification);
 
     boolean isConnected();
 

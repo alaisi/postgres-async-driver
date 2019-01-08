@@ -63,7 +63,7 @@ public class ConnectionPoolBuilder {
     }
 
     public ConnectionPoolBuilder poolSize(int poolSize) {
-        properties.poolSize = poolSize;
+        properties.maxConnections = poolSize;
         return this;
     }
 
@@ -82,11 +82,6 @@ public class ConnectionPoolBuilder {
         return this;
     }
 
-    public ConnectionPoolBuilder pipeline(boolean pipeline) {
-        properties.usePipelining = pipeline;
-        return this;
-    }
-
     public ConnectionPoolBuilder validationQuery(String validationQuery) {
         properties.validationQuery = validationQuery;
         return this;
@@ -102,11 +97,11 @@ public class ConnectionPoolBuilder {
         String username;
         String password;
         String database;
-        int poolSize = 20;
+        int maxConnections = 20;
+        int maxStatements = 20;
         DataConverter dataConverter = null;
         List<Converter<?>> converters = new ArrayList<>();
         boolean useSsl;
-        boolean usePipelining;
         String validationQuery;
 
         public String getHostname() {
@@ -129,16 +124,16 @@ public class ConnectionPoolBuilder {
             return database;
         }
 
-        public int getPoolSize() {
-            return poolSize;
+        public int getMaxConnections() {
+            return maxConnections;
+        }
+
+        public int getMaxStatements() {
+            return maxStatements;
         }
 
         public boolean getUseSsl() {
             return useSsl;
-        }
-
-        public boolean getUsePipelining() {
-            return usePipelining;
         }
 
         public DataConverter getDataConverter() {

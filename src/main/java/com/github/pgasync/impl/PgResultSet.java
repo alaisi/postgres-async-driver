@@ -28,12 +28,12 @@ public class PgResultSet implements ResultSet {
 
     final List<Row> rows;
     final Map<String, PgColumn> columns;
-    final int updatedRows;
+    final int affectedRows;
 
-    public PgResultSet(Map<String, PgColumn> columns, List<Row> rows, int updatedRows) {
+    public PgResultSet(Map<String, PgColumn> columns, List<Row> rows, int affectedRows) {
         this.columns = columns;
         this.rows = rows;
-        this.updatedRows = updatedRows;
+        this.affectedRows = affectedRows;
     }
 
     @Override
@@ -43,11 +43,11 @@ public class PgResultSet implements ResultSet {
 
     @Override
     public Iterator<Row> iterator() {
-        return rows != null ? rows.iterator() : Collections.<Row> emptyIterator();
+        return rows != null ? rows.iterator() : Collections.emptyIterator();
     }
 
     @Override
-    public Row row(int index) {
+    public Row at(int index) {
         if (rows == null) {
             throw new IndexOutOfBoundsException();
         }
@@ -60,8 +60,8 @@ public class PgResultSet implements ResultSet {
     }
 
     @Override
-    public int updatedRows() {
-        return updatedRows;
+    public int affectedRows() {
+        return affectedRows;
     }
 
 }

@@ -61,7 +61,7 @@ public class ConnectionPoolingTest {
         ExecutorService executor = Executors.newFixedThreadPool(20);
         executor.invokeAll(tasks).stream().map(this::await);
 
-        assertEquals(count, dbr.query("SELECT COUNT(*) FROM CP_TEST").row(0).getLong(0).longValue());
+        assertEquals(count, dbr.query("SELECT COUNT(*) FROM CP_TEST").at(0).getLong(0).longValue());
     }
 
     <T> T await(Future<T> future) {

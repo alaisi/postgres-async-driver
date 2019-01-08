@@ -1,16 +1,13 @@
 package com.github.pgasync;
 
+import java.util.concurrent.CompletableFuture;
+
 /**
- * Main interface to PostgreSQL backend.
+ * Main interface to Postgres backend.
  *
  * @author Antti Laisi
  */
-public interface Db extends QueryExecutor, AutoCloseable {
+public interface Db extends QueryExecutor {
 
-    /**
-     * Closes the pool, blocks the calling thread until connections are closed.
-     */
-    @Override
-    void close() throws Exception;
-
+    CompletableFuture<Void> close();
 }

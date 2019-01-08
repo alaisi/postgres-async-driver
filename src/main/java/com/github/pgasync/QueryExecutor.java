@@ -1,7 +1,14 @@
 package com.github.pgasync;
 
+import com.github.pgasync.impl.PgColumn;
+import com.github.pgasync.impl.PgResultSet;
+
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /**
@@ -17,69 +24,79 @@ public interface QueryExecutor {
     CompletableFuture<Transaction> begin();
 
     /**
-     * Executes an anonymous prepared statement. Uses native PostgreSQL syntax with $arg instead of ?
-     * to mark parameters. Supported parameter types are String, Character, Number, Time, Date, Timestamp
-     * and byte[].
+     * Sends parameter less query script. The script may be multi query. Queries are separated with semicolons.
+     * Accumulates fetched columns, rows and affected rows counts into memory and transforms them into a ResultSet when each {@link ResultSet} is fetched.
+     * Completes returned {@link CompletableFuture} when the whole process of multiple {@link ResultSet}s fetching ends.
      *
-     * @param sql    SQL to execute
-     * @param params Parameter values
-     * @return Cold observable that emits 0-n rows.
+     * @param sql Sql Script text.
+     * @return CompletableFuture that is completed with a collection of fetched {@link ResultSet}s.
      */
-    CompletableFuture<Row> queryRows(String sql, Object... params);
+    default CompletableFuture<Collection<ResultSet>> completeScript(String sql) {
+        List<ResultSet> results = new ArrayList<>();
+        AtomicReference<Map<String, PgColumn>> columnsRef = new AtomicReference<>();
+        AtomicReference<List<Row>> rowsRef = new AtomicReference<>();
+        return script(
+                columns -> {
+                    columnsRef.set(columns);
+                    rowsRef.set(new ArrayList<>());
+                },
+                rowsRef.get()::add,
+                affected -> results.add(new PgResultSet(columnsRef.get(), rowsRef.get(), affected)),
+                sql
+        )
+                .thenApply(v -> results);
 
-    /**
-     * Executes an anonymous prepared statement. Uses native PostgreSQL syntax with $arg instead of ?
-     * to mark parameters. Supported parameter types are String, Character, Number, Time, Date, Timestamp
-     * and byte[].
-     *
-     * @param sql    SQL to execute
-     * @param params Parameter values
-     * @return Cold observable that emits a single result set.
-     */
-    CompletableFuture<ResultSet> querySet(String sql, Object... params);
-
-    /**
-     * Begins a transaction.
-     *
-     * @param onTransaction Called when transaction is successfully started.
-     * @param onError       Called on exception thrown
-     */
-    default void begin(Consumer<Transaction> onTransaction, Consumer<Throwable> onError) {
-        begin()
-                .thenAccept(onTransaction)
-                .exceptionally(th -> {
-                    onError.accept(th);
-                    return null;
-                });
     }
 
     /**
-     * Executes a simple query.
+     * Sends parameter less query script. The script may be multi query. Queries are separated with semicolons.
+     * Unlike {@link #completeScript(String)} doesn't accumulate fetched columns, rows and affected rows counts into memory.
+     * Instead it calls passed in consumers, when columns, or particular row or an affected rows count is fetched from Postgres.
+     * Completes returned {@link CompletableFuture} when the whole process of multiple {@link ResultSet}s fetching ends.
      *
-     * @param sql      SQL to execute.
-     * @param onResult Called when query is completed
-     * @param onError  Called on exception thrown
+     * @param onColumns  Columns fetched callback consumer.
+     * @param onRow      A row fetched callback consumer.
+     * @param onAffected An affected rows callback consumer. It is called when a particular {@link ResultSet} is completely fetched with its affected rows count. This callback should be used to create a {@link ResultSet} instance from already fetched columns, rows and affected rows count.
+     * @param sql        Sql Script text.
+     * @return CompletableFuture that is completed when the whole process of multiple {@link ResultSet}s fetching ends.
      */
-    default void query(String sql, Consumer<ResultSet> onResult, Consumer<Throwable> onError) {
-        query(sql, null, onResult, onError);
+    CompletableFuture<Void> script(Consumer<Map<String, PgColumn>> onColumns, Consumer<Row> onRow, Consumer<Integer> onAffected, String sql);
+
+    /**
+     * Sends single query with parameters. Uses extended query protocol of Postgres.
+     * Accumulates fetched columns, rows and affected rows count into memory and transforms them into ResultSet when it is fetched.
+     * Completes returned {@link CompletableFuture} when the whole process of {@link ResultSet} fetching ends.
+     *
+     * @param sql    Sql query text with parameters substituted with ?.
+     * @param params Parameters of the query.
+     * @return CompletableFuture of {@link ResultSet}.
+     */
+    default CompletableFuture<ResultSet> completeQuery(String sql, Object... params) {
+        AtomicReference<Map<String, PgColumn>> columnsRef = new AtomicReference<>();
+        List<Row> rows = new ArrayList<>();
+        return query(
+                columnsRef::set,
+                rows::add,
+                sql,
+                params
+        )
+                .thenApply(affected -> new PgResultSet(columnsRef.get(), rows, affected));
+
     }
 
     /**
-     * Executes an anonymous prepared statement. Uses native PostgreSQL syntax with $arg instead of ?
-     * to mark parameters. Supported parameter types are String, Character, Number, Time, Date, Timestamp
-     * and byte[].
+     * Sends single query with parameters. Uses extended query protocol of Postgres.
+     * Unlike {@link #completeQuery(String, Object...)} doesn't accumulate columns, rows and affected rows counts into memory.
+     * Instead it calls passed in consumers, when columns, or particular row is fetched from Postgres.
+     * Completes returned {@link CompletableFuture} when the process of single {@link ResultSet}s fetching ends.
      *
-     * @param sql      SQL to execute
-     * @param params   List of parameters
-     * @param onResult Called when query is completed
-     * @param onError  Called on exception thrown
+     * @param onColumns Columns fetched callback consumer.
+     * @param onRow     A row fetched callback consumer.
+     * @param sql       Sql query text with parameters substituted with ?.
+     * @param params    Parameters of the query
+     * @return CompletableFuture of affected rows count.
+     * This future is used by implementation to create a {@link ResultSet} instance from already fetched columns, rows and affected rows count.
+     * Affected rows count is this future's completion value.
      */
-    default void query(String sql, List/*<Object>*/ params, Consumer<ResultSet> onResult, Consumer<Throwable> onError) {
-        querySet(sql, params != null ? params.toArray() : null)
-                .thenAccept(onResult)
-                .exceptionally(th -> {
-                    onError.accept(th);
-                    return null;
-                });
-    }
+    CompletableFuture<Integer> query(Consumer<Map<String, PgColumn>> onColumns, Consumer<Row> onRow, String sql, Object... params);
 }

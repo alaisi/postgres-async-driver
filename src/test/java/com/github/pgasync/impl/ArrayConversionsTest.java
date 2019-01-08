@@ -37,7 +37,7 @@ public class ArrayConversionsTest {
     }
 
     public Row getRow() {
-        return dbr.query("SELECT * FROM CA_TEST").row(0);
+        return dbr.query("SELECT * FROM CA_TEST").at(0);
     }
 
     @Test
@@ -146,7 +146,7 @@ public class ArrayConversionsTest {
             a,
             dbr.query(
                 "SELECT INTA FROM CA_TEST WHERE INTA = $1",
-                asList(new Object[]{a})).row(0).getArray("INTA", Integer[].class));
+                asList(new Object[]{a})).at(0).getArray("INTA", Integer[].class));
     }
 
     @Test
@@ -157,7 +157,7 @@ public class ArrayConversionsTest {
             a,
             dbr.query(
                 "SELECT TEXTA FROM CA_TEST WHERE TEXTA = $1",
-                asList(new Object[]{a})).row(0).getArray("TEXTA", String[].class));
+                asList(new Object[]{a})).at(0).getArray("TEXTA", String[].class));
     }
 
     @Test
@@ -174,7 +174,7 @@ public class ArrayConversionsTest {
     @Test
     public void implicitGet() {
         dbr.query("INSERT INTO CA_TEST (INTA) VALUES ('{1, 2, 3}')");
-        PgRow row = (PgRow)dbr.query("SELECT * FROM CA_TEST").row(0);
+        PgRow row = (PgRow)dbr.query("SELECT * FROM CA_TEST").at(0);
         assertArrayEquals(new Integer[]{1, 2, 3}, (Object[])row.get("INTA"));
     }
 
@@ -183,7 +183,7 @@ public class ArrayConversionsTest {
         List<Timestamp[]> params = new ArrayList<>(1);
         params.add(new Timestamp[]{ new Timestamp(12345679), new Timestamp(12345678) });
         dbr.query("INSERT INTO CA_TEST (TIMESTAMPA) VALUES ($1)", params);
-        Row row = dbr.query("SELECT TIMESTAMPA FROM CA_TEST WHERE TIMESTAMPA = $1", params).row(0);
+        Row row = dbr.query("SELECT TIMESTAMPA FROM CA_TEST WHERE TIMESTAMPA = $1", params).at(0);
         assertArrayEquals(params.get(0), row.getArray(0, Timestamp[].class));
     }
 
@@ -207,7 +207,7 @@ public class ArrayConversionsTest {
     public void shouldParseUnquotedStringsCorrectly() {
         String[] values = new String[] {"NotNull", "NULLA", "string", null};
         dbr.query("INSERT INTO CA_TEST (TEXTA) VALUES($1)", Collections.singletonList(values));
-        Row row = dbr.query("SELECT * FROM CA_TEST").row(0);
+        Row row = dbr.query("SELECT * FROM CA_TEST").at(0);
         assertArrayEquals(values, row.getArray("TEXTA", String[].class));
     }
 
@@ -215,7 +215,7 @@ public class ArrayConversionsTest {
     public void shouldParseNullTextCorrectly() {
         String[] values = new String[] {"NULL", null, "string"};
         dbr.query("INSERT INTO CA_TEST (TEXTA) VALUES($1)", Collections.singletonList(values));
-        Row row = dbr.query("SELECT * FROM CA_TEST").row(0);
+        Row row = dbr.query("SELECT * FROM CA_TEST").at(0);
         assertArrayEquals(values, row.getArray("TEXTA", String[].class));
     }
 }

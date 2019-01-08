@@ -30,7 +30,6 @@ import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
-import static com.github.pgasync.impl.DatabaseRule.createPoolBuilder;
 import static java.lang.System.currentTimeMillis;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -70,7 +69,7 @@ public class PipelineTest {
         Deque<Long> results = new LinkedBlockingDeque<>();
         long startWrite = currentTimeMillis();
         for (int i = 0; i < count; ++i) {
-            pool.query("select " + i + ", pg_sleep(" + sleep + ")", r -> results.add(currentTimeMillis()), err);
+            pool.completeQuery("select " + i + ", pg_sleep(" + sleep + ")", r -> results.add(currentTimeMillis()), err);
         }
         long writeTime = currentTimeMillis() - startWrite;
 
@@ -97,7 +96,7 @@ public class PipelineTest {
         BlockingQueue<ResultSet> rs = new LinkedBlockingDeque<>();
         BlockingQueue<Throwable> err = new LinkedBlockingDeque<>();
         for (int i = 0; i < 2; ++i) {
-            c.query("select " + i + ", pg_sleep(0.5)", rs::add, err::add);
+            c.completeQuery("select " + i + ", pg_sleep(0.5)", rs::add, err::add);
         }
         assertThat(err.take().getMessage(), containsString("Pipelining not enabled"));
         assertThat(rs.take(), isA(ResultSet.class));
@@ -112,7 +111,7 @@ public class PipelineTest {
         Deque<Long> results = new LinkedBlockingDeque<>();
         long startWrite = currentTimeMillis();
         for (int i = 0; i < count; ++i) {
-            c.query("select " + i + ", pg_sleep(" + sleep + ")", r -> results.add(currentTimeMillis()), err);
+            c.completeQuery("select " + i + ", pg_sleep(" + sleep + ")", r -> results.add(currentTimeMillis()), err);
         }
         long writeTime = currentTimeMillis() - startWrite;
 

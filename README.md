@@ -66,7 +66,7 @@ Prepared statements use native PostgreSQL syntax `$index`. Supported parameter t
 
 ```java
 db.querySet("insert into message(id, body) values($1, $2)", 123, "hello")
-    .subscribe(result -> out.printf("Inserted %d rows", result.updatedRows() ));
+    .subscribe(result -> out.printf("Inserted %d rows", result.affectedRows() ));
 ```
 
 ### Transactions
