@@ -9,6 +9,8 @@ import java.sql.Date;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
@@ -17,14 +19,15 @@ import static java.nio.charset.StandardCharsets.UTF_8;
  */
 public class DataConverter {
 
-    final Map<Class<?>, Converter<?>> typeToConverter = new HashMap<>();
+    final Map<Class<?>, Converter<?>> typeToConverter;
 
     public DataConverter(List<Converter<?>> converters) {
-        converters.forEach(c -> typeToConverter.put(c.type(), c));
+        typeToConverter = converters.stream()
+                .collect(Collectors.toMap(Converter::type, Function.identity()));
     }
 
     public DataConverter() {
-        this(Collections.emptyList());
+        this(List.of());
     }
 
     public String toString(Oid oid, byte[] value) {

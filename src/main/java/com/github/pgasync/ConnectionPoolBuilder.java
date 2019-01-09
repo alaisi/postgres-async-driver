@@ -62,8 +62,13 @@ public class ConnectionPoolBuilder {
         return this;
     }
 
-    public ConnectionPoolBuilder poolSize(int poolSize) {
-        properties.maxConnections = poolSize;
+    public ConnectionPoolBuilder maxConnections(int maxConnections) {
+        properties.maxConnections = maxConnections;
+        return this;
+    }
+
+    public ConnectionPoolBuilder maxStatements(int maxStatements) {
+        properties.maxStatements = maxStatements;
         return this;
     }
 

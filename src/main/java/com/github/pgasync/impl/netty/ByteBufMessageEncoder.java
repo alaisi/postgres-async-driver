@@ -15,17 +15,17 @@
 package com.github.pgasync.impl.netty;
 
 import com.github.pgasync.impl.io.*;
-import com.github.pgasync.impl.io.f.BindEncoder;
-import com.github.pgasync.impl.io.f.CloseEncoder;
-import com.github.pgasync.impl.io.f.DescribeEncoder;
-import com.github.pgasync.impl.io.f.ExecuteEncoder;
-import com.github.pgasync.impl.io.f.FIndicatorsEncoder;
-import com.github.pgasync.impl.io.f.ParseEncoder;
-import com.github.pgasync.impl.io.f.PasswordMessageEncoder;
-import com.github.pgasync.impl.io.f.QueryEncoder;
-import com.github.pgasync.impl.io.f.SSLHandshakeEncoder;
-import com.github.pgasync.impl.io.f.StartupMessageEncoder;
-import com.github.pgasync.impl.io.f.TerminateEncoder;
+import com.github.pgasync.impl.io.frontend.BindEncoder;
+import com.github.pgasync.impl.io.frontend.CloseEncoder;
+import com.github.pgasync.impl.io.frontend.DescribeEncoder;
+import com.github.pgasync.impl.io.frontend.ExecuteEncoder;
+import com.github.pgasync.impl.io.frontend.FIndicatorsEncoder;
+import com.github.pgasync.impl.io.frontend.ParseEncoder;
+import com.github.pgasync.impl.io.frontend.PasswordMessageEncoder;
+import com.github.pgasync.impl.io.frontend.QueryEncoder;
+import com.github.pgasync.impl.io.frontend.SSLRequestEncoder;
+import com.github.pgasync.impl.io.frontend.StartupMessageEncoder;
+import com.github.pgasync.impl.io.frontend.TerminateEncoder;
 import com.github.pgasync.impl.message.Message;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
@@ -38,14 +38,14 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Encodes Postgres protocol V3 messages to bytes.
+ * Encodes Postgres protocol V11 messages to bytes.
  *
  * @author Antti Laisi
  */
 public class ByteBufMessageEncoder extends MessageToByteEncoder<Message> {
 
     static final Map<Class<?>, Encoder<?>> ENCODERS = Set.of(
-            new SSLHandshakeEncoder(),
+            new SSLRequestEncoder(),
             new StartupMessageEncoder(),
             new PasswordMessageEncoder(),
             new QueryEncoder(),

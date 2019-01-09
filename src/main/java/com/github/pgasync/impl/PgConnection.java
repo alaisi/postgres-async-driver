@@ -14,7 +14,7 @@
 
 package com.github.pgasync.impl;
 
-import static com.github.pgasync.impl.message.b.RowDescription.ColumnDescription;
+import static com.github.pgasync.impl.message.backend.RowDescription.ColumnDescription;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -34,17 +34,17 @@ import com.github.pgasync.ResultSet;
 import com.github.pgasync.Row;
 import com.github.pgasync.Transaction;
 import com.github.pgasync.impl.conversion.DataConverter;
-import com.github.pgasync.impl.message.b.Authentication;
-import com.github.pgasync.impl.message.b.RowDescription;
-import com.github.pgasync.impl.message.f.Bind;
-import com.github.pgasync.impl.message.f.Close;
-import com.github.pgasync.impl.message.f.Describe;
-import com.github.pgasync.impl.message.f.Execute;
+import com.github.pgasync.impl.message.backend.Authentication;
+import com.github.pgasync.impl.message.backend.RowDescription;
+import com.github.pgasync.impl.message.frontend.Bind;
+import com.github.pgasync.impl.message.frontend.Close;
+import com.github.pgasync.impl.message.frontend.Describe;
+import com.github.pgasync.impl.message.frontend.Execute;
 import com.github.pgasync.impl.message.Message;
-import com.github.pgasync.impl.message.f.Parse;
-import com.github.pgasync.impl.message.f.PasswordMessage;
-import com.github.pgasync.impl.message.f.Query;
-import com.github.pgasync.impl.message.f.StartupMessage;
+import com.github.pgasync.impl.message.frontend.Parse;
+import com.github.pgasync.impl.message.frontend.PasswordMessage;
+import com.github.pgasync.impl.message.frontend.Query;
+import com.github.pgasync.impl.message.frontend.StartupMessage;
 
 /**
  * A connection to Postgres backend. The postmaster forks a backend process for
@@ -290,7 +290,7 @@ public class PgConnection implements Connection {
     }
 
     /**
-     * Nested Transaction using savepoints.
+     * Nested transaction using savepoints.
      */
     class PgConnectionNestedTransaction extends PgConnectionTransaction {
 

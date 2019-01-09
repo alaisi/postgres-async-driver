@@ -15,13 +15,13 @@
 package com.github.pgasync.impl;
 
 import com.github.pgasync.impl.message.Message;
-import com.github.pgasync.impl.message.b.CommandComplete;
-import com.github.pgasync.impl.message.b.DataRow;
-import com.github.pgasync.impl.message.b.RowDescription;
-import com.github.pgasync.impl.message.f.Execute;
-import com.github.pgasync.impl.message.f.PasswordMessage;
-import com.github.pgasync.impl.message.f.Query;
-import com.github.pgasync.impl.message.f.StartupMessage;
+import com.github.pgasync.impl.message.backend.CommandComplete;
+import com.github.pgasync.impl.message.backend.DataRow;
+import com.github.pgasync.impl.message.backend.RowDescription;
+import com.github.pgasync.impl.message.frontend.Execute;
+import com.github.pgasync.impl.message.frontend.PasswordMessage;
+import com.github.pgasync.impl.message.frontend.Query;
+import com.github.pgasync.impl.message.frontend.StartupMessage;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;

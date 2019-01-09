@@ -25,8 +25,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
- * {@link PgConnectionPool} that uses {@link NettyPgProtocolStream}. Each pool
- * starts a single Netty IO thread.
+ * {@link PgConnectionPool} that uses {@link NettyPgProtocolStream}.
+ * Each pool starts a single Netty IO thread.
  *
  * @author Antti Laisi
  */

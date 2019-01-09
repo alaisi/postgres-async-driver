@@ -115,14 +115,14 @@ class DatabaseRule extends ExternalResource {
         String pass = getenv("PG_PASSWORD");
 
         if (db == null && user == null && pass == null) {
-            return new EmbeddedConnectionPoolBuilder().poolSize(size);
+            return new EmbeddedConnectionPoolBuilder().maxConnections(size);
         }
         return new EmbeddedConnectionPoolBuilder()
                 .database(envOrDefault("PG_DATABASE", "postgres"))
                 .username(envOrDefault("PG_USERNAME", "postgres"))
                 .password(envOrDefault("PG_PASSWORD", "postgres"))
                 .ssl(true)
-                .poolSize(size);
+                .maxConnections(size);
     }
 
 

@@ -30,8 +30,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
- * Pool for backend connections. {@link CompletableFuture}s are queued and completed when pool has an available
- * connection.
+ * Pool for backend connections.
  *
  * @author Antti Laisi
  */

@@ -15,17 +15,17 @@
 package com.github.pgasync.impl.netty;
 
 import com.github.pgasync.impl.io.*;
-import com.github.pgasync.impl.io.b.AuthenticationDecoder;
-import com.github.pgasync.impl.io.b.BindCompleteDecoder;
-import com.github.pgasync.impl.io.b.CloseCompleteDecoder;
-import com.github.pgasync.impl.io.b.CommandCompleteDecoder;
-import com.github.pgasync.impl.io.b.DataRowDecoder;
-import com.github.pgasync.impl.io.b.ErrorResponseDecoder;
-import com.github.pgasync.impl.io.b.NoticeResponseDecoder;
-import com.github.pgasync.impl.io.b.NotificationResponseDecoder;
-import com.github.pgasync.impl.io.b.ParseCompleteDecoder;
-import com.github.pgasync.impl.io.b.ReadyForQueryDecoder;
-import com.github.pgasync.impl.io.b.RowDescriptionDecoder;
+import com.github.pgasync.impl.io.backend.AuthenticationDecoder;
+import com.github.pgasync.impl.io.backend.BindCompleteDecoder;
+import com.github.pgasync.impl.io.backend.CloseCompleteDecoder;
+import com.github.pgasync.impl.io.backend.CommandCompleteDecoder;
+import com.github.pgasync.impl.io.backend.DataRowDecoder;
+import com.github.pgasync.impl.io.backend.ErrorResponseDecoder;
+import com.github.pgasync.impl.io.backend.NoticeResponseDecoder;
+import com.github.pgasync.impl.io.backend.NotificationResponseDecoder;
+import com.github.pgasync.impl.io.backend.ParseCompleteDecoder;
+import com.github.pgasync.impl.io.backend.ReadyForQueryDecoder;
+import com.github.pgasync.impl.io.backend.RowDescriptionDecoder;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
@@ -38,7 +38,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Decodes incoming bytes to Postgres V3 protocol message instances.
+ * Decodes incoming bytes to Postgres V11 protocol message instances.
  *
  * @author Antti Laisi
  */

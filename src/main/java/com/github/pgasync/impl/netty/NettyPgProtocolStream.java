@@ -17,21 +17,22 @@ package com.github.pgasync.impl.netty;
 import com.github.pgasync.SqlException;
 import com.github.pgasync.impl.PgProtocolStream;
 import com.github.pgasync.impl.message.*;
-import com.github.pgasync.impl.message.b.Authentication;
-import com.github.pgasync.impl.message.b.CommandComplete;
-import com.github.pgasync.impl.message.b.DataRow;
-import com.github.pgasync.impl.message.b.ErrorResponse;
-import com.github.pgasync.impl.message.b.NoticeResponse;
-import com.github.pgasync.impl.message.b.NotificationResponse;
-import com.github.pgasync.impl.message.b.ReadyForQuery;
-import com.github.pgasync.impl.message.b.RowDescription;
-import com.github.pgasync.impl.message.f.Execute;
-import com.github.pgasync.impl.message.f.FIndicatorss;
-import com.github.pgasync.impl.message.f.PasswordMessage;
-import com.github.pgasync.impl.message.f.Query;
-import com.github.pgasync.impl.message.f.SSLHandshake;
-import com.github.pgasync.impl.message.f.StartupMessage;
-import com.github.pgasync.impl.message.f.Terminate;
+import com.github.pgasync.impl.message.backend.Authentication;
+import com.github.pgasync.impl.message.backend.CommandComplete;
+import com.github.pgasync.impl.message.backend.DataRow;
+import com.github.pgasync.impl.message.backend.ErrorResponse;
+import com.github.pgasync.impl.message.backend.NoticeResponse;
+import com.github.pgasync.impl.message.backend.NotificationResponse;
+import com.github.pgasync.impl.message.backend.ReadyForQuery;
+import com.github.pgasync.impl.message.backend.RowDescription;
+import com.github.pgasync.impl.message.frontend.Execute;
+import com.github.pgasync.impl.message.frontend.FIndicatorss;
+import com.github.pgasync.impl.message.frontend.PasswordMessage;
+import com.github.pgasync.impl.message.frontend.Query;
+import com.github.pgasync.impl.message.backend.SSLHandshake;
+import com.github.pgasync.impl.message.frontend.SSLRequest;
+import com.github.pgasync.impl.message.frontend.StartupMessage;
+import com.github.pgasync.impl.message.frontend.Terminate;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.*;
@@ -54,7 +55,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Netty connection to Postgres backend.
+ * Netty messages stream to Postgres backend.
  *
  * @author Antti Laisi
  */

@@ -28,6 +28,8 @@ public interface ConnectionPool extends Db {
     /**
      * Gets a connection when available.
      * {@link Connection#close()} method will return the connection into this pool instead of closing it.
+     *
+     * @return {@link CompletableFuture} that is queued and completed when pool has an available connection.
      */
     CompletableFuture<Connection> getConnection();
 

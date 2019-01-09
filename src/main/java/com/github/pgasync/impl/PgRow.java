@@ -17,7 +17,7 @@ package com.github.pgasync.impl;
 import com.github.pgasync.Row;
 import com.github.pgasync.SqlException;
 import com.github.pgasync.impl.conversion.DataConverter;
-import com.github.pgasync.impl.message.b.DataRow;
+import com.github.pgasync.impl.message.backend.DataRow;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;

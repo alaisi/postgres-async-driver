@@ -56,7 +56,9 @@ public interface QueryExecutor {
      *
      * @param onColumns  Columns fetched callback consumer.
      * @param onRow      A row fetched callback consumer.
-     * @param onAffected An affected rows callback consumer. It is called when a particular {@link ResultSet} is completely fetched with its affected rows count. This callback should be used to create a {@link ResultSet} instance from already fetched columns, rows and affected rows count.
+     * @param onAffected An affected rows callback consumer.
+     *                   It is called when a particular {@link ResultSet} is completely fetched with its affected rows count.
+     *                   This callback should be used to create a {@link ResultSet} instance from already fetched columns, rows and affected rows count.
      * @param sql        Sql Script text.
      * @return CompletableFuture that is completed when the whole process of multiple {@link ResultSet}s fetching ends.
      */
@@ -64,7 +66,7 @@ public interface QueryExecutor {
 
     /**
      * Sends single query with parameters. Uses extended query protocol of Postgres.
-     * Accumulates fetched columns, rows and affected rows count into memory and transforms them into ResultSet when it is fetched.
+     * Accumulates fetched columns, rows and affected rows count into memory and transforms them into a {@link ResultSet} when it is fetched.
      * Completes returned {@link CompletableFuture} when the whole process of {@link ResultSet} fetching ends.
      *
      * @param sql    Sql query text with parameters substituted with ?.
@@ -88,7 +90,7 @@ public interface QueryExecutor {
      * Sends single query with parameters. Uses extended query protocol of Postgres.
      * Unlike {@link #completeQuery(String, Object...)} doesn't accumulate columns, rows and affected rows counts into memory.
      * Instead it calls passed in consumers, when columns, or particular row is fetched from Postgres.
-     * Completes returned {@link CompletableFuture} when the process of single {@link ResultSet}s fetching ends.
+     * Completes returned {@link CompletableFuture} with affected rows count when the process of single {@link ResultSet}s fetching ends.
      *
      * @param onColumns Columns fetched callback consumer.
      * @param onRow     A row fetched callback consumer.
