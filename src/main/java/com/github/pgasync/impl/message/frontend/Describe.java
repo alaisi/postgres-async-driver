@@ -36,10 +36,10 @@ public class Describe implements Message {
         }
     }
 
-    final Kind kind;
-    final String name;
+    private final Kind kind;
+    private final String name;
 
-    public Describe(String name, Kind kind) {
+    Describe(String name, Kind kind) {
         this.name = name;
         this.kind = kind;
     }

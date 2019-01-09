@@ -26,7 +26,7 @@ import com.github.pgasync.impl.message.backend.NotificationResponse;
 import com.github.pgasync.impl.message.backend.ReadyForQuery;
 import com.github.pgasync.impl.message.backend.RowDescription;
 import com.github.pgasync.impl.message.frontend.Execute;
-import com.github.pgasync.impl.message.frontend.FIndicatorss;
+import com.github.pgasync.impl.message.frontend.FIndicators;
 import com.github.pgasync.impl.message.frontend.PasswordMessage;
 import com.github.pgasync.impl.message.frontend.Query;
 import com.github.pgasync.impl.message.backend.SSLHandshake;
@@ -61,29 +61,29 @@ import java.util.logging.Logger;
  */
 public class NettyPgProtocolStream implements PgProtocolStream {
 
-    final EventLoopGroup group;
-    final EventLoop eventLoop;
-    final SocketAddress address;
-    final boolean useSsl;
-    final Bootstrap channelPipeline;
+    private final EventLoopGroup group;
+    private final EventLoop eventLoop;
+    private  final SocketAddress address;
+    private final boolean useSsl;
+    private final Bootstrap channelPipeline;
 
-    ChannelHandlerContext ctx;
+    private ChannelHandlerContext ctx;
 
-    final GenericFutureListener<Future<? super Object>> outboundErrorListener = written -> {
+    private final GenericFutureListener<Future<? super Object>> outboundErrorListener = written -> {
         if (!written.isSuccess()) {
             respondWithException(written.cause());
         }
     };
-    final Queue<CompletableFuture<? super Message>> uponResponses = new LinkedBlockingDeque<>(Integer.valueOf(System.getProperty("pg.request.pipeline.length", "1")));
-    final Map<String, Set<Consumer<String>>> subscriptions = new HashMap<>();
+    private final Queue<CompletableFuture<? super Message>> uponResponses = new LinkedBlockingDeque<>(Integer.valueOf(System.getProperty("pg.request.pipeline.length", "1")));
+    private final Map<String, Set<Consumer<String>>> subscriptions = new HashMap<>();
 
-    Consumer<RowDescription.ColumnDescription[]> onColumns;
-    Consumer<DataRow> onRow;
-    Consumer<CommandComplete> onAffected;
+    private Consumer<RowDescription.ColumnDescription[]> onColumns;
+    private Consumer<DataRow> onRow;
+    private Consumer<CommandComplete> onAffected;
 
-    Message readyForQueryPendingMessage;
+    private Message readyForQueryPendingMessage;
 
-    public NettyPgProtocolStream(EventLoopGroup group, SocketAddress address, boolean useSsl) {
+    NettyPgProtocolStream(EventLoopGroup group, SocketAddress address, boolean useSsl) {
         this.group = group;
         this.eventLoop = group.next();
         this.address = address;
@@ -209,7 +209,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
             // assert !isSimpleQueryInProgress() :
             // "During simple query message flow, CommandComplete message should be consumed only by dedicated callback, due to possibility of multiple CommandComplete messages, one per sql clause.";
             readyForQueryPendingMessage = message;
-            write(FIndicatorss.SYNC);
+            write(FIndicators.SYNC);
         } else if (message instanceof Authentication && ((Authentication) message).isAuthenticationOk()) {
             readyForQueryPendingMessage = message;
         } else if (message == ReadyForQuery.INSTANCE) {
@@ -265,7 +265,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         return new SqlException(error.getLevel().name(), error.getCode(), error.getMessage());
     }
 
-    ChannelInitializer<Channel> newProtocolInitializer() {
+    private ChannelInitializer<Channel> newProtocolInitializer() {
         return new ChannelInitializer<>() {
             @Override
             protected void initChannel(Channel channel) {
@@ -280,7 +280,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         };
     }
 
-    ChannelHandler newSslInitiator() {
+    private ChannelHandler newSslInitiator() {
         return new ByteToMessageDecoder() {
             @Override
             protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
@@ -301,7 +301,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         };
     }
 
-    ChannelHandler newProtocolHandler() {
+    private ChannelHandler newProtocolHandler() {
         return new ChannelInboundHandlerAdapter() {
 
 

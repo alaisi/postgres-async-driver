@@ -20,16 +20,16 @@ import static java.time.format.DateTimeFormatter.ISO_LOCAL_TIME;
  *
  * TODO: Add support for Java 8 temporal types.
  */
-enum TemporalConversions {
-    ;
-    static final DateTimeFormatter TIMESTAMP_FORMAT = new DateTimeFormatterBuilder()
+class TemporalConversions {
+
+    private static final DateTimeFormatter TIMESTAMP_FORMAT = new DateTimeFormatterBuilder()
             .parseCaseInsensitive()
             .append(ISO_LOCAL_DATE)
             .appendLiteral(' ')
             .append(ISO_LOCAL_TIME)
             .toFormatter();
 
-    static final DateTimeFormatter TIMESTAMPZ_FORMAT = new DateTimeFormatterBuilder()
+    private static final DateTimeFormatter TIMESTAMPZ_FORMAT = new DateTimeFormatterBuilder()
             .parseCaseInsensitive()
             .append(ISO_LOCAL_DATE)
             .appendLiteral(' ')
@@ -37,7 +37,7 @@ enum TemporalConversions {
             .appendOffset("+HH:mm", "")
             .toFormatter();
 
-    static final DateTimeFormatter TIMEZ_FORMAT = new DateTimeFormatterBuilder()
+    private static final DateTimeFormatter TIMEZ_FORMAT = new DateTimeFormatterBuilder()
             .parseCaseInsensitive()
             .append(ISO_LOCAL_TIME)
             .appendOffset("+HH:mm", "")

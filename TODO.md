@@ -1,6 +1,7 @@
 ## Refactoring
 * Make futures completable through arbitrary executor.
-* Make maximum number of all variables private.
+
+##Review
 * Review all round trips.
 
 ## Tests

@@ -17,13 +17,13 @@ package com.github.pgasync.impl.message.frontend;
 import com.github.pgasync.impl.message.Message;
 
 /**
- * @author  Antti Laisi
+ * @author Antti Laisi
  */
 public class StartupMessage implements Message {
 
-    final int protocol = 196608;
-    final String username;
-    final String database;
+    private final int protocol = 196608;
+    private final String username;
+    private final String database;
 
     public StartupMessage(String username, String database) {
         this.username = username;

@@ -19,6 +19,6 @@ import com.github.pgasync.impl.message.Message;
 /**
  * @author Marat Gainullin
  */
-public enum FIndicatorss implements Message {
+public enum FIndicators implements Message {
     SYNC
 }

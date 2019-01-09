@@ -27,8 +27,8 @@ import static javax.xml.bind.DatatypeConverter.printHexBinary;
  */
 public class PasswordMessage implements Message {
 
-    final String password;
-    final byte[] passwordHash;
+    private final String password;
+    private final byte[] passwordHash;
 
     public PasswordMessage(String username, String password, byte[] md5salt) {
         this.password = password;
@@ -43,7 +43,7 @@ public class PasswordMessage implements Message {
         return password;
     }
 
-    static byte[] md5(String username, String password, byte[] md5salt) {
+    private static byte[] md5(String username, String password, byte[] md5salt) {
         MessageDigest md5 = md5();
         md5.update(bytes(password));
         md5.update(bytes(username));
@@ -61,7 +61,7 @@ public class PasswordMessage implements Message {
         return prefixed;
     }
 
-    static MessageDigest md5() {
+    private static MessageDigest md5() {
         try {
             return MessageDigest.getInstance("MD5");
         } catch (NoSuchAlgorithmException ex) {

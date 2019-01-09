@@ -21,7 +21,7 @@ import com.github.pgasync.impl.message.Message;
  */
 public class Query implements Message {
 
-    final String sql;
+    private final String sql;
 
     public Query(String sql) {
         this.sql = sql;

@@ -21,7 +21,7 @@ import com.github.pgasync.impl.message.Message;
  */
 public class CommandComplete implements Message {
 
-    final int affectedRows;
+    private final int affectedRows;
 
     public CommandComplete(String tag) {
         if (tag.contains("INSERT") || tag.contains("UPDATE") || tag.contains("DELETE")) {

@@ -28,7 +28,7 @@ import java.util.List;
  */
 public class ConnectionPoolBuilder {
 
-    final PoolProperties properties = new PoolProperties();
+    private final PoolProperties properties = new PoolProperties();
 
     /**
      * @return Pool ready for use

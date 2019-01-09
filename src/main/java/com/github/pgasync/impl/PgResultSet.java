@@ -26,9 +26,9 @@ import java.util.*;
  */
 public class PgResultSet implements ResultSet {
 
-    final List<Row> rows;
-    final Map<String, PgColumn> columns;
-    final int affectedRows;
+    private final List<Row> rows;
+    private final Map<String, PgColumn> columns;
+    private final int affectedRows;
 
     public PgResultSet(Map<String, PgColumn> columns, List<Row> rows, int affectedRows) {
         this.columns = columns;

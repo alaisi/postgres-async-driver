@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
  */
 public class ByteBufMessageEncoder extends MessageToByteEncoder<Message> {
 
-    static final Map<Class<?>, Encoder<?>> ENCODERS = Set.of(
+    private static final Map<Class<?>, Encoder<?>> ENCODERS = Set.of(
             new SSLRequestEncoder(),
             new StartupMessageEncoder(),
             new PasswordMessageEncoder(),
@@ -58,7 +58,7 @@ public class ByteBufMessageEncoder extends MessageToByteEncoder<Message> {
             new TerminateEncoder()
     ).stream().collect(Collectors.toMap(Encoder::getMessageType, encoder -> encoder));
 
-    final ByteBuffer buffer = ByteBuffer.allocate(Integer.valueOf(System.getProperty("pg.io.buffer.length", "4096")));
+    private final ByteBuffer buffer = ByteBuffer.allocate(Integer.valueOf(System.getProperty("pg.io.buffer.length", "4096")));
 
     @Override
     @SuppressWarnings("unchecked")

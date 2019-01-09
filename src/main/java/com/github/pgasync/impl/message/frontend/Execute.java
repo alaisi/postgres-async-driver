@@ -21,7 +21,7 @@ import com.github.pgasync.impl.message.Message;
  */
 public class Execute implements Message {
 
-    final String pname;
+    private final String pname;
 
     public Execute(String pname) {
         this.pname = pname;

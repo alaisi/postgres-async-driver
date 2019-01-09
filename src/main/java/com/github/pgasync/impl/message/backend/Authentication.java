@@ -17,12 +17,12 @@ package com.github.pgasync.impl.message.backend;
 import com.github.pgasync.impl.message.Message;
 
 /**
- * @author  Antti Laisi
+ * @author Antti Laisi
  */
 public class Authentication implements Message {
 
-    final boolean success;
-    final byte[] md5salt;
+    private final boolean success;
+    private final byte[] md5salt;
 
     public Authentication(boolean success, byte[] md5salt) {
         this.success = success;
@@ -39,6 +39,6 @@ public class Authentication implements Message {
 
     @Override
     public String toString() {
-        return String.format("Authentication(success=%s, md5salt=%s)", success, md5salt);
+        return String.format("Authentication(success=%s, md5salt=%s)", success, md5salt.toString());
     }
 }

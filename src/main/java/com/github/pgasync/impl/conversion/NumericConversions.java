@@ -11,8 +11,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 /**
  * @author Antti Laisi
  */
-enum NumericConversions {
-    ;
+class NumericConversions {
 
     static Long toLong(Oid oid, byte[] value) {
         switch (oid) {

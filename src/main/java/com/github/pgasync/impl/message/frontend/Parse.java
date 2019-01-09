@@ -22,9 +22,9 @@ import com.github.pgasync.impl.message.Message;
  */
 public class Parse implements Message {
 
-    final String sql;
-    final String sname;
-    final Oid[] types;
+    private final String sql;
+    private final String sname;
+    private final Oid[] types;
 
     public Parse(String sql, String sname, Oid[] types) {
         this.sql = sql;

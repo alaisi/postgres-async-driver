@@ -6,7 +6,7 @@ import com.github.pgasync.impl.Oid;
 /**
  * @author Antti Laisi
  */
-public class BooleanConversions {
+class BooleanConversions {
 
     static final byte[] TRUE  = new byte[]{ 't' };
     static final byte[] FALSE = new byte[]{ 'f' };

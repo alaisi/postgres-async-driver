@@ -10,8 +10,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 /**
  * @author Antti Laisi
  */
-enum StringConversions {
-    ;
+class StringConversions {
 
     static String toString(Oid oid, byte[] value) {
         switch (oid) {

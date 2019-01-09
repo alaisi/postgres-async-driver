@@ -46,9 +46,9 @@ import java.nio.ByteBuffer;
  */
 public class AuthenticationDecoder implements Decoder<Authentication> {
 
-    static final int OK = 0;
-    static final int PASSWORD_MD5_CHALLENGE = 5;
-    static final int CLEARTEXT_PASSWORD = 3;
+    private static final int OK = 0;
+    private static final int PASSWORD_MD5_CHALLENGE = 5;
+    private static final int CLEARTEXT_PASSWORD = 3;
 
     @Override
     public byte getMessageId() {

@@ -36,10 +36,10 @@ public class Close implements Message {
         }
     }
 
-    final Kind kind;
+    private final Kind kind;
     private final String name;
 
-    public Close(String name, Kind kind) {
+    private Close(String name, Kind kind) {
         this.name = name;
         this.kind = kind;
     }

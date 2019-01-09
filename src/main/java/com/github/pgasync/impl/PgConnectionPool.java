@@ -142,23 +142,23 @@ public abstract class PgConnectionPool implements ConnectionPool {
         }
     }
 
-    final int maxConnections;
-    final int maxStatements;
-    final ReentrantLock lock = new ReentrantLock();
+    private final int maxConnections;
+    private final int maxStatements;
+    private final ReentrantLock lock = new ReentrantLock();
     @GuardedBy("lock")
-    int size;
+    private int size;
     @GuardedBy("lock")
-    boolean closed;
+    private boolean closed;
     @GuardedBy("lock")
-    final Queue<CompletableFuture<? super Connection>> subscribers = new LinkedList<>();
+    private final Queue<CompletableFuture<? super Connection>> subscribers = new LinkedList<>();
     @GuardedBy("lock")
-    final Queue<PooledPgConnection> connections = new LinkedList<>();
+    private final Queue<PooledPgConnection> connections = new LinkedList<>();
 
-    final InetSocketAddress address;
-    final String username;
-    final String password;
-    final String database;
-    final DataConverter dataConverter;
+    private final InetSocketAddress address;
+    private final String username;
+    private final String password;
+    private final String database;
+    private final DataConverter dataConverter;
 
     public PgConnectionPool(PoolProperties properties) {
         this.address = InetSocketAddress.createUnresolved(properties.getHostname(), properties.getPort());

@@ -14,11 +14,11 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 @SuppressWarnings({"unchecked","rawtypes"})
 class ArrayConversions  {
 
-    public static byte[] fromArray(final Object elements, final Function<Object,byte[]> printFn) {
+    static byte[] fromArray(final Object elements, final Function<Object,byte[]> printFn) {
         return appendArray(new StringBuilder(), elements, printFn).toString().getBytes(UTF_8);
     }
 
-    static StringBuilder appendArray(StringBuilder sb, final Object elements, final Function<Object,byte[]> printFn) {
+    private static StringBuilder appendArray(StringBuilder sb, final Object elements, final Function<Object,byte[]> printFn) {
         sb.append('{');
 
         int nElements = Array.getLength(elements);
@@ -40,7 +40,7 @@ class ArrayConversions  {
         return sb.append('}');
     }
 
-    static StringBuilder appendEscaped(final StringBuilder b, final String s) {
+    private static StringBuilder appendEscaped(final StringBuilder b, final String s) {
         b.append('"');
         for (int j = 0; j < s.length(); j++) {
             char c = s.charAt(j);
@@ -53,7 +53,7 @@ class ArrayConversions  {
         return b.append('"');
     }
 
-    public static <T> T toArray(Class<T> type, Oid oid, byte[] value, BiFunction<Oid,byte[],Object> parse) {
+    static <T> T toArray(Class<T> type, Oid oid, byte[] value, BiFunction<Oid,byte[],Object> parse) {
         Class elementType = getElementType(type);
         if(elementType.isPrimitive()) {
             throw new IllegalArgumentException("Primitive arrays are not supported due to possible NULL values");
@@ -73,7 +73,7 @@ class ArrayConversions  {
         return (T) toNestedArrays(holder.get(0), elementType, getElementOid(oid), parse);
     }
 
-    static int skipBounds(final char[] text, final int start) {
+    private static int skipBounds(final char[] text, final int start) {
         if(text[start] != '[') {
             return start;
         }
@@ -84,7 +84,7 @@ class ArrayConversions  {
         }
     }
 
-    static int readArray(final char[] text, final int start, List<Object> result) {
+    private static int readArray(final char[] text, final int start, List<Object> result) {
         List<Object> values = new ArrayList<>();
         for(int i = start + 1;;) {
             final char c = text[i];
@@ -107,7 +107,7 @@ class ArrayConversions  {
         }
     }
 
-    static int readValue(final char[] text, final int start, List<Object> result) {
+    private static int readValue(final char[] text, final int start, List<Object> result) {
         StringBuilder str = new StringBuilder();
         for(int i = start;; i++) {
             char c = text[i];
@@ -119,12 +119,12 @@ class ArrayConversions  {
         }
     }
 
-    static int readNull(final int i, final List<Object> result) {
+    private static int readNull(final int i, final List<Object> result) {
         result.add(null);
         return i + 4;
     }
 
-    static int readString(final char[] text, final int start, final List<Object> result) {
+    private static int readString(final char[] text, final int start, final List<Object> result) {
         StringBuilder str = new StringBuilder();
         for(int i = start + 1;;) {
             char c = text[i++];
@@ -139,7 +139,7 @@ class ArrayConversions  {
         }
     }
 
-    static Oid getElementOid(final Oid oid) {
+    private static Oid getElementOid(final Oid oid) {
         try {
             return Oid.valueOf(oid.name().replaceFirst("_ARRAY", ""));
         } catch (IllegalArgumentException e) {
@@ -147,14 +147,14 @@ class ArrayConversions  {
         }
     }
 
-    static Class getElementType(Class arrayType) {
+    private static Class getElementType(Class arrayType) {
         while(arrayType.getComponentType() != null) {
             arrayType = arrayType.getComponentType();
         }
         return arrayType;
     }
 
-    static <T> T[] toNestedArrays(List<Object> result, Class<?> type, Oid oid, BiFunction<Oid, byte[], Object> parse) {
+    private static <T> T[] toNestedArrays(List<Object> result, Class<?> type, Oid oid, BiFunction<Oid, byte[], Object> parse) {
         Object[] arr = (Object[]) Array.newInstance(type, getNestedDimensions(result));
         for(int i = 0; i < result.size(); i++) {
             Object elem = result.get(i);
@@ -169,7 +169,7 @@ class ArrayConversions  {
         return (T[]) arr;
     }
 
-    static int[] getNestedDimensions(List<Object> result) {
+    private static int[] getNestedDimensions(List<Object> result) {
         if(result.isEmpty()) {
             return new int[]{0};
         }
@@ -190,7 +190,7 @@ class ArrayConversions  {
         return toIntArray(dimensions);
     }
 
-    static int[] toIntArray(List<Integer> list) {
+    private static int[] toIntArray(List<Integer> list) {
         int[] arr = new int[list.size()];
         for(int i = 0; i < arr.length; i++) {
             arr[i] = list.get(i);

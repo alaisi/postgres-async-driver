@@ -21,9 +21,9 @@ import com.github.pgasync.impl.message.Message;
  */
 public class Bind implements Message {
 
-    final String sname;
-    final String pname;
-    final byte[][] params;
+    private final String sname;
+    private final String pname;
+    private final byte[][] params;
 
     public Bind(String sname, String pname, byte[][] params) {
         this.sname = sname;

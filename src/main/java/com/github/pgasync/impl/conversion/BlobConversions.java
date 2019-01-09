@@ -10,8 +10,7 @@ import static javax.xml.bind.DatatypeConverter.printHexBinary;
 /**
  * @author Antti Laisi
  */
-enum BlobConversions {
-    ;
+class BlobConversions {
 
     static byte[] toBytes(Oid oid, byte[] value) {
         switch (oid) {

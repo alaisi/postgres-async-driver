@@ -32,8 +32,8 @@ import java.util.concurrent.TimeUnit;
  */
 public class NettyPgConnectionPool extends PgConnectionPool {
 
-    final EventLoopGroup group = new NioEventLoopGroup(1);
-    final boolean useSsl;
+    private final EventLoopGroup group = new NioEventLoopGroup(1);
+    private final boolean useSsl;
 
     public NettyPgConnectionPool(PoolProperties properties) {
         super(properties);

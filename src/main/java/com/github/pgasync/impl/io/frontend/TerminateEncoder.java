@@ -34,6 +34,6 @@ public class TerminateEncoder extends SkipableEncoder<Terminate> {
 
     @Override
     public void writeBody(Terminate msg, ByteBuffer buffer) {
-        // No op, since Terminate message is bodyless message
+        // No op, since Terminate message is body less message
     }
 }

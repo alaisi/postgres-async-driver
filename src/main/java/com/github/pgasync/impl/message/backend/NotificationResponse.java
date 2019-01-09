@@ -7,9 +7,9 @@ import com.github.pgasync.impl.message.Message;
  */
 public class NotificationResponse implements Message {
 
-    final int backend;
-    final String channel;
-    final String payload;
+    private final int backend;
+    private final String channel;
+    private final String payload;
 
     public NotificationResponse(int backend, String channel, String payload) {
         this.backend = backend;

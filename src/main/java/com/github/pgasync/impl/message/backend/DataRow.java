@@ -21,7 +21,7 @@ import com.github.pgasync.impl.message.Message;
  */
 public class DataRow implements Message {
 
-    final byte[][] values;
+    private final byte[][] values;
 
     public DataRow(byte[][] values) {
         this.values = values;

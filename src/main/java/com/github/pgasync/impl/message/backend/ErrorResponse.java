@@ -17,7 +17,7 @@ package com.github.pgasync.impl.message.backend;
 import com.github.pgasync.impl.message.Message;
 
 /**
- * @author  Antti Laisi
+ * @author Antti Laisi
  */
 public class ErrorResponse implements Message {
 
@@ -25,9 +25,9 @@ public class ErrorResponse implements Message {
         ERROR, FATAL, PANIC, WARNING, NOTICE, DEBUG, INFO, LOG
     }
 
-    final Level level;
-    final String code;
-    final String message;
+    private final Level level;
+    private final String code;
+    private final String message;
 
     public ErrorResponse(String levelName, String code, String message) {
         this.level = Level.valueOf(levelName);
@@ -38,9 +38,11 @@ public class ErrorResponse implements Message {
     public Level getLevel() {
         return level;
     }
+
     public String getCode() {
         return code;
     }
+
     public String getMessage() {
         return message;
     }

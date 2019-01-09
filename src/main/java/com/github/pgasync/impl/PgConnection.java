@@ -62,7 +62,7 @@ public class PgConnection implements Connection {
         private final String sname;
         private final String pname;
 
-        public PgPreparedStatement(String sname, String pname) {
+        PgPreparedStatement(String sname, String pname) {
             this.sname = sname;
             this.pname = pname;
         }
@@ -117,10 +117,10 @@ public class PgConnection implements Connection {
     private static final NameSequence preparedStatementNames = new NameSequence("s-");
     private static final NameSequence portalNames = new NameSequence("p-");
 
-    final PgProtocolStream stream;
-    final DataConverter dataConverter;
+    private final PgProtocolStream stream;
+    private final DataConverter dataConverter;
 
-    public PgConnection(PgProtocolStream stream, DataConverter dataConverter) {
+    PgConnection(PgProtocolStream stream, DataConverter dataConverter) {
         this.stream = stream;
         this.dataConverter = dataConverter;
     }
@@ -132,7 +132,7 @@ public class PgConnection implements Connection {
                 .thenApply(authenticationOk -> PgConnection.this);
     }
 
-    CompletableFuture<? extends Message> authenticate(String username, String password, Message message) {
+    private CompletableFuture<? extends Message> authenticate(String username, String password, Message message) {
         return message instanceof Authentication && !((Authentication) message).isAuthenticationOk()
                 ? stream.authenticate(new PasswordMessage(username, password, ((Authentication) message).getMd5Salt()))
                 : CompletableFuture.completedFuture(message);
@@ -216,7 +216,7 @@ public class PgConnection implements Connection {
         return stream.close();
     }
 
-    static Map<String, PgColumn> calcColumns(ColumnDescription[] descriptions) {
+    private static Map<String, PgColumn> calcColumns(ColumnDescription[] descriptions) {
         Map<String, PgColumn> columns = new LinkedHashMap<>();
         for (int i = 0; i < descriptions.length; i++) {
             columns.put(descriptions[i].getName().toUpperCase(), new PgColumn(i, descriptions[i].getName(), descriptions[i].getType()));

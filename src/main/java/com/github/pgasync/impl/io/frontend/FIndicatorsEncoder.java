@@ -15,7 +15,7 @@
 package com.github.pgasync.impl.io.frontend;
 
 import com.github.pgasync.impl.io.Encoder;
-import com.github.pgasync.impl.message.frontend.FIndicatorss;
+import com.github.pgasync.impl.message.frontend.FIndicators;
 
 import java.nio.ByteBuffer;
 
@@ -32,15 +32,15 @@ import java.nio.ByteBuffer;
  *
  * @author Antti Laisi
  */
-public class FIndicatorsEncoder implements Encoder<FIndicatorss> {
+public class FIndicatorsEncoder implements Encoder<FIndicators> {
 
     @Override
-    public Class<FIndicatorss> getMessageType() {
-        return FIndicatorss.class;
+    public Class<FIndicators> getMessageType() {
+        return FIndicators.class;
     }
 
     @Override
-    public void write(FIndicatorss msg, ByteBuffer buffer) {
+    public void write(FIndicators msg, ByteBuffer buffer) {
         switch (msg) {
             case SYNC:
                 sync(buffer);

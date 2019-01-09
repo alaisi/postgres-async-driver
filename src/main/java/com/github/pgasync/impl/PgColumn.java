@@ -21,13 +21,25 @@ package com.github.pgasync.impl;
  */
 public class PgColumn {
 
-    final int index;
-    final String name;
-    final Oid type;
+    private final int index;
+    private final String name;
+    private final Oid type;
 
     public PgColumn(int index, String name, Oid type) {
         this.index = index;
         this.name = name;
         this.type = type;
+    }
+
+    public Oid getType() {
+        return type;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public int at() {
+        return index;
     }
 }

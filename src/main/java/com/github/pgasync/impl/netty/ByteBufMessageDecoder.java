@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
  */
 class ByteBufMessageDecoder extends ByteToMessageDecoder {
 
-    static final Map<Byte, Decoder<?>> DECODERS = Set.of(new ErrorResponseDecoder(),
+    private static final Map<Byte, Decoder<?>> DECODERS = Set.of(new ErrorResponseDecoder(),
             new AuthenticationDecoder(),
             new ReadyForQueryDecoder(),
             new RowDescriptionDecoder(),

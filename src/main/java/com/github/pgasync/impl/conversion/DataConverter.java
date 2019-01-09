@@ -19,7 +19,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
  */
 public class DataConverter {
 
-    final Map<Class<?>, Converter<?>> typeToConverter;
+    private final Map<Class<?>, Converter<?>> typeToConverter;
 
     public DataConverter(List<Converter<?>> converters) {
         typeToConverter = converters.stream()
@@ -133,7 +133,7 @@ public class DataConverter {
         return (T) converter.to(oid, value);
     }
 
-    public byte[] fromObject(Object o) {
+    private byte[] fromObject(Object o) {
         if (o == null) {
             return null;
         }
@@ -162,7 +162,7 @@ public class DataConverter {
     }
 
     @SuppressWarnings("unchecked")
-    protected byte[] fromConvertable(Object value) {
+    private byte[] fromConvertable(Object value) {
         Converter converter = typeToConverter.get(value.getClass());
         if (converter == null) {
             throw new IllegalArgumentException("Unknown conversion target: " + value.getClass());
@@ -171,7 +171,7 @@ public class DataConverter {
     }
 
     public byte[][] fromParameters(List<Object> parameters) {
-        return fromParameters(parameters.toArray(new Object[parameters.size()]));
+        return fromParameters(parameters.toArray(new Object[]{}));
     }
 
     public byte[][] fromParameters(Object[] parameters) {
@@ -239,7 +239,7 @@ public class DataConverter {
         }
     }
 
-    protected Object toConvertable(Oid oid, byte[] value) {
+    private Object toConvertable(Oid oid, byte[] value) {
         throw new IllegalStateException("Unknown conversion source: " + oid);
     }
 

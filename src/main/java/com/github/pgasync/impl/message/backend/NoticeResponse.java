@@ -8,8 +8,8 @@ import com.github.pgasync.impl.message.Message;
 public class NoticeResponse implements Message {
 
     public static class Field {
-        final byte type;
-        final String value;
+        private final byte type;
+        private final String value;
 
         private Field(byte type, String value) {
             this.type = type;
@@ -34,7 +34,7 @@ public class NoticeResponse implements Message {
         }
     }
 
-    final Field[] fields;
+    private final Field[] fields;
 
     public NoticeResponse(Field[] fields) {
         this.fields = fields;
