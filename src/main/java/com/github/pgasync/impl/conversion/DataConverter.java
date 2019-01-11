@@ -8,6 +8,11 @@ import java.math.BigInteger;
 import java.sql.Date;
 import java.sql.Time;
 import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.OffsetTime;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -158,11 +163,11 @@ public class DataConverter {
         if (o instanceof String || o instanceof Number || o instanceof Character || o instanceof UUID) {
             return o.toString().getBytes(UTF_8);
         }
-        return fromConvertable(o);
+        return fromConvertible(o);
     }
 
     @SuppressWarnings("unchecked")
-    private byte[] fromConvertable(Object value) {
+    private byte[] fromConvertible(Object value) {
         Converter converter = typeToConverter.get(value.getClass());
         if (converter == null) {
             throw new IllegalArgumentException("Unknown conversion target: " + value.getClass());
@@ -235,12 +240,80 @@ public class DataConverter {
             case BOOL_ARRAY:
                 return toArray(Object[].class, oid, value);
             default:
-                return toConvertable(oid, value);
+                return toConvertible(oid, value);
         }
     }
 
-    private Object toConvertable(Oid oid, byte[] value) {
+    private Object toConvertible(Oid oid, byte[] value) {
         throw new IllegalStateException("Unknown conversion source: " + oid);
+    }
+
+    public Oid[] assumeTypes(Object... params) {
+        Oid[] types = new Oid[params.length];
+        for (int i = 0; i < params.length; i++) {
+            if (params[i] instanceof Double) {
+                types[i] = Oid.FLOAT8;
+            } else if (params[i] instanceof double[]) {
+                types[i] = Oid.FLOAT8_ARRAY;
+            } else if (params[i] instanceof Float) {
+                types[i] = Oid.FLOAT4;
+            } else if (params[i] instanceof float[]) {
+                types[i] = Oid.FLOAT4_ARRAY;
+            } else if (params[i] instanceof Long) {
+                types[i] = Oid.INT8;
+            } else if (params[i] instanceof long[]) {
+                types[i] = Oid.INT8_ARRAY;
+            } else if (params[i] instanceof Integer) {
+                types[i] = Oid.INT4;
+            } else if (params[i] instanceof int[]) {
+                types[i] = Oid.INT4_ARRAY;
+            } else if (params[i] instanceof Short) {
+                types[i] = Oid.INT2;
+            } else if (params[i] instanceof short[]) {
+                types[i] = Oid.INT2_ARRAY;
+            } else if (params[i] instanceof Byte) {
+                types[i] = Oid.INT2;
+            } else if (params[i] instanceof byte[]) {
+                types[i] = Oid.INT2_ARRAY;
+            } else if (params[i] instanceof BigInteger) {
+                types[i] = Oid.NUMERIC;
+            } else if (params[i] instanceof BigInteger[]) {
+                types[i] = Oid.NUMERIC_ARRAY;
+            } else if (params[i] instanceof BigDecimal) {
+                types[i] = Oid.NUMERIC;
+            } else if (params[i] instanceof BigDecimal[]) {
+                types[i] = Oid.NUMERIC_ARRAY;
+            } else if (params[i] instanceof Boolean) {
+                types[i] = Oid.BIT;
+            } else if (params[i] instanceof Boolean[]) {
+                types[i] = Oid.BIT_ARRAY;
+            } else if (params[i] instanceof CharSequence) {
+                types[i] = Oid.VARCHAR;
+            } else if (params[i] instanceof Character) {
+                types[i] = Oid.VARCHAR;
+            } else if (params[i] instanceof Date) {
+                types[i] = Oid.TIMESTAMP;
+            } else if (params[i] instanceof Timestamp) {
+                types[i] = Oid.TIMESTAMP;
+            } else if (params[i] instanceof Instant) {
+                types[i] = Oid.TIMESTAMP;
+            } else if (params[i] instanceof OffsetDateTime) {
+                types[i] = Oid.TIMESTAMP;
+            } else if (params[i] instanceof LocalDateTime) {
+                types[i] = Oid.TIMESTAMPTZ;
+            } else if (params[i] instanceof Time) {
+                types[i] = Oid.TIME;
+            } else if (params[i] instanceof OffsetTime) {
+                types[i] = Oid.TIME;
+            } else if (params[i] instanceof LocalTime) {
+                types[i] = Oid.TIMETZ;
+            } else if (params[i] instanceof UUID) {
+                types[i] = Oid.UUID;
+            } else {
+                types[i] = Oid.UNSPECIFIED;
+            }
+        }
+        return types;
     }
 
 }

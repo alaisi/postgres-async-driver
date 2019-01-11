@@ -22,6 +22,8 @@ import io.netty.channel.nio.NioEventLoopGroup;
 
 import java.net.InetSocketAddress;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -36,13 +38,17 @@ public class NettyPgConnectionPool extends PgConnectionPool {
     private final boolean useSsl;
 
     public NettyPgConnectionPool(PoolProperties properties) {
-        super(properties);
+        this(properties, ForkJoinPool.commonPool());
+    }
+
+    public NettyPgConnectionPool(PoolProperties properties, Executor futuresExecutor) {
+        super(properties, futuresExecutor);
         useSsl = properties.getUseSsl();
     }
 
     @Override
     protected PgProtocolStream openStream(InetSocketAddress address) {
-        return new NettyPgProtocolStream(group, address, useSsl);
+        return new NettyPgProtocolStream(group, address, useSsl, futuresExecutor);
     }
 
     @Override

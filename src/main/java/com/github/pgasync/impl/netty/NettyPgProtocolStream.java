@@ -49,6 +49,7 @@ import java.io.IOException;
 import java.net.SocketAddress;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.function.Consumer;
 import java.util.logging.Level;
@@ -61,11 +62,10 @@ import java.util.logging.Logger;
  */
 public class NettyPgProtocolStream implements PgProtocolStream {
 
-    private final EventLoopGroup group;
-    private final EventLoop eventLoop;
-    private  final SocketAddress address;
+    private final SocketAddress address;
     private final boolean useSsl;
     private final Bootstrap channelPipeline;
+    private final Executor futuresExecutor;
 
     private ChannelHandlerContext ctx;
 
@@ -83,15 +83,14 @@ public class NettyPgProtocolStream implements PgProtocolStream {
 
     private Message readyForQueryPendingMessage;
 
-    NettyPgProtocolStream(EventLoopGroup group, SocketAddress address, boolean useSsl) {
-        this.group = group;
-        this.eventLoop = group.next();
+    NettyPgProtocolStream(EventLoopGroup group, SocketAddress address, boolean useSsl, Executor futuresExecutor) {
         this.address = address;
         this.useSsl = useSsl; // TODO: refactor into SSLConfig with trust parameters
         this.channelPipeline = new Bootstrap()
                 .group(group)
                 .channel(NioSocketChannel.class)
                 .handler(newProtocolInitializer());
+        this.futuresExecutor = futuresExecutor;
     }
 
     @Override
@@ -131,7 +130,8 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         this.onColumns = onColumns;
         this.onRow = onRow;
         this.onAffected = onAffected;
-        return send(query).thenAccept(readyForQuery -> {});
+        return send(query).thenAccept(readyForQuery -> {
+        });
     }
 
     @Override
@@ -169,13 +169,15 @@ public class NettyPgProtocolStream implements PgProtocolStream {
             if (written.isSuccess()) {
                 ctx.close().addListener(closed -> {
                     if (closed.isSuccess()) {
-                        uponClose.complete(null);
+                        uponClose.completeAsync(() -> null, futuresExecutor);
                     } else {
-                        uponClose.completeExceptionally(closed.cause());
+                        Throwable th = closed.cause();
+                        futuresExecutor.execute(() -> uponClose.completeExceptionally(th));
                     }
                 });
             } else {
-                uponClose.completeExceptionally(written.cause());
+                Throwable th = written.cause();
+                futuresExecutor.execute(() -> uponClose.completeExceptionally(th));
             }
         });
         return uponClose;
@@ -185,7 +187,9 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         onColumns = null;
         onRow = null;
         onAffected = null;
-        uponResponses.remove().completeExceptionally(th);
+        readyForQueryPendingMessage = null;
+        CompletableFuture<? super Message> uponResponse = uponResponses.remove();
+        futuresExecutor.execute(() -> uponResponse.completeExceptionally(th));
     }
 
     private void respondWithMessage(Message message) {
@@ -197,19 +201,25 @@ public class NettyPgProtocolStream implements PgProtocolStream {
             if (isSimpleQueryInProgress()) {
                 onColumns.accept(((RowDescription) message).getColumns());
             } else {
-                uponResponses.remove().complete(message);
+                uponResponses.remove().completeAsync(() -> message, futuresExecutor);
             }
         } else if (message instanceof DataRow) {
             onRow.accept((DataRow) message);
-        } else if (message instanceof CommandComplete && isSimpleQueryInProgress()) {
-            onAffected.accept((CommandComplete) message);
         } else if (message instanceof ErrorResponse) {
             readyForQueryPendingMessage = message;
+            if (isExtendedQueryInProgress()) {
+                write(FIndicators.SYNC);
+            }
         } else if (message instanceof CommandComplete) {
-            // assert !isSimpleQueryInProgress() :
-            // "During simple query message flow, CommandComplete message should be consumed only by dedicated callback, due to possibility of multiple CommandComplete messages, one per sql clause.";
-            readyForQueryPendingMessage = message;
-            write(FIndicators.SYNC);
+            if (isSimpleQueryInProgress()) {
+                onAffected.accept((CommandComplete) message);
+            } else {
+                // assert !isSimpleQueryInProgress() :
+                // "During simple query message flow, CommandComplete message should be consumed only by dedicated callback,
+                // due to possibility of multiple CommandComplete messages, one per sql clause.";
+                readyForQueryPendingMessage = message;
+                write(FIndicators.SYNC);
+            }
         } else if (message instanceof Authentication && ((Authentication) message).isAuthenticationOk()) {
             readyForQueryPendingMessage = message;
         } else if (message == ReadyForQuery.INSTANCE) {
@@ -219,7 +229,8 @@ public class NettyPgProtocolStream implements PgProtocolStream {
                 onColumns = null;
                 onRow = null;
                 onAffected = null;
-                uponResponses.remove().complete(readyForQueryPendingMessage != null ? readyForQueryPendingMessage : message);
+                Message response = readyForQueryPendingMessage != null ? readyForQueryPendingMessage : message;
+                uponResponses.remove().completeAsync(() -> response, futuresExecutor);
             }
             readyForQueryPendingMessage = null;
         }
@@ -235,10 +246,10 @@ public class NettyPgProtocolStream implements PgProtocolStream {
                     respondWithException(th);
                 }
             } else {
-                uponResponse.completeExceptionally(new IllegalStateException("Postgres requests queue is full"));
+                futuresExecutor.execute(() -> uponResponse.completeExceptionally(new IllegalStateException("Postgres requests queue is full")));
             }
         } else {
-            uponResponse.completeExceptionally(new IllegalStateException("Channel is closed"));
+            futuresExecutor.execute(() -> uponResponse.completeExceptionally(new IllegalStateException("Channel is closed")));
         }
         return uponResponse;
     }
@@ -259,6 +270,10 @@ public class NettyPgProtocolStream implements PgProtocolStream {
 
     private boolean isSimpleQueryInProgress() {
         return onColumns != null;
+    }
+
+    private boolean isExtendedQueryInProgress() {
+        return onColumns == null && onRow != null;
     }
 
     private static SqlException toSqlException(ErrorResponse error) {

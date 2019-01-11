@@ -1,8 +1,8 @@
 package com.github.pgasync.impl;
 
 import com.github.pgasync.ConnectionPool;
+import com.github.pgasync.Listening;
 import org.junit.ClassRule;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.concurrent.BlockingQueue;
@@ -14,33 +14,32 @@ import static org.junit.Assert.*;
 /**
  * @author Antti Laisi
  */
-@Ignore("Until subscription addition")
 public class ListenNotifyTest {
 
     @ClassRule
     public static DatabaseRule dbr = new DatabaseRule(DatabaseRule.createPoolBuilder(5));
-/*
+
     @Test
     public void shouldReceiveNotificationsOnListenedChannel() throws Exception {
         ConnectionPool pool = dbr.pool;
         BlockingQueue<String> result = new LinkedBlockingQueue<>(5);
 
-        Subscription subscription = pool.subscribe("example").subscribe(result::add, Throwable::printStackTrace);
+        Listening subscription = pool.getConnection().get().subscribe("example", result::offer).get();
+
         TimeUnit.SECONDS.sleep(2);
 
-        pool.querySet("notify example, 'msg'").toBlocking().single();
-        pool.querySet("notify example, 'msg'").toBlocking().single();
-        pool.querySet("notify example, 'msg'").toBlocking().single();
+        pool.completeScript("notify example, 'msg-1'").get();
+        pool.completeScript("notify example, 'msg-2'").get();
+        pool.completeScript("notify example, 'msg-3'").get();
 
-        assertEquals("msg", result.poll(2, TimeUnit.SECONDS));
-        assertEquals("msg", result.poll(2, TimeUnit.SECONDS));
-        assertEquals("msg", result.poll(2, TimeUnit.SECONDS));
+        assertEquals("msg-1", result.poll(2, TimeUnit.SECONDS));
+        assertEquals("msg-2", result.poll(2, TimeUnit.SECONDS));
+        assertEquals("msg-3", result.poll(2, TimeUnit.SECONDS));
 
-        subscription.unsubscribe();
-        assertTrue(subscription.isUnsubscribed());
+        subscription.unlisten();
 
-        pool.querySet("notify example, 'msg'").toBlocking().single();
+        pool.completeQuery("notify example, 'msg'").get();
         assertNull(result.poll(2, TimeUnit.SECONDS));
     }
-    */
+
 }

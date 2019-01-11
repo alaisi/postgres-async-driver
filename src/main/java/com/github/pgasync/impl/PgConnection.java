@@ -180,7 +180,7 @@ public class PgConnection implements Connection {
 
     @Override
     public CompletableFuture<Integer> query(Consumer<Map<String, PgColumn>> onColumns, Consumer<Row> onRow, String sql, Object... params) {
-        return prepareStatement(sql/* TODO: Add parameters types inferring */)
+        return prepareStatement(sql, dataConverter.assumeTypes(params))
                 .thenApply(ps -> ps.fetch(onColumns, onRow, params)
                         .handle((rs, th) -> ps.close()
                                 .thenApply(v -> {

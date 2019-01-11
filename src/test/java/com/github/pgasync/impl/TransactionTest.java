@@ -20,22 +20,21 @@ import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
 
-import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 /**
  * Tests for BEGIN/COMMIT/ROLLBACK.
- * 
+ *
  * @author Antti Laisi
  */
 public class TransactionTest {
 
-    final Consumer<Throwable> err = Throwable::printStackTrace;
-    final Consumer<ResultSet> fail = result -> new AssertionError("Failure expected").printStackTrace();
+    private final Consumer<ResultSet> fail = result -> new AssertionError("Failure expected").printStackTrace();
 
     @ClassRule
     public static DatabaseRule dbr = new DatabaseRule();
@@ -53,149 +52,193 @@ public class TransactionTest {
 
     @Test
     public void shouldCommitSelectInTransaction() throws Exception {
-        CountDownLatch sync = new CountDownLatch(1);
-
-        dbr.db().begin(transaction ->
-                transaction.query("SELECT 1", result -> {
-                    assertEquals(1L, result.row(0).getLong(0).longValue());
-                    transaction.commit(sync::countDown, err);
-                }, err),
-            err);
-
-        assertTrue(sync.await(5, TimeUnit.SECONDS));
+        dbr.db().begin()
+                .thenApply(transaction -> transaction.completeQuery("SELECT 1")
+                        .thenApply(result -> {
+                            assertEquals(1L, result.at(0).getLong(0).longValue());
+                            return transaction.commit();
+                        })
+                        .thenCompose(Function.identity()))
+                .thenCompose(Function.identity())
+                .get(5, TimeUnit.SECONDS);
     }
 
     @Test
     public void shouldCommitInsertInTransaction() throws Exception {
-        CountDownLatch sync = new CountDownLatch(1);
+        dbr.db().begin().thenApply(transaction ->
+                transaction.completeQuery("INSERT INTO TX_TEST(ID) VALUES(10)")
+                        .thenApply(result -> {
+                            assertEquals(1, result.affectedRows());
+                            return transaction.commit();
+                        })
+                        .thenCompose(Function.identity()))
+                .thenCompose(Function.identity())
+                .get(5, TimeUnit.SECONDS);
 
-        dbr.db().begin((transaction) ->
-                transaction.query("INSERT INTO TX_TEST(ID) VALUES(10)", result -> {
-                    assertEquals(1, result.updatedRows());
-                    transaction.commit(sync::countDown, err);
-                }, err),
-            err);
-
-        assertTrue(sync.await(5, TimeUnit.SECONDS));
         assertEquals(10L, dbr.query("SELECT ID FROM TX_TEST WHERE ID = 10").at(0).getLong(0).longValue());
     }
 
     @Test
     public void shouldCommitParameterizedInsertInTransaction() throws Exception {
         // Ref: https://github.com/alaisi/postgres-async-driver/issues/34
-        long id = dbr.db().begin().flatMap(txn ->
-            txn.queryRows("INSERT INTO TX_TEST (ID) VALUES ($1) RETURNING ID", "35").first().flatMap(row -> {
-                Long value = row.getLong(0);
-                return txn.commit().map(v -> value);
-            })
-        ).toBlocking().single();
+        long id = dbr.db().begin()
+                .thenApply(txn ->
+                        txn.completeQuery("INSERT INTO TX_TEST (ID) VALUES ($1) RETURNING ID", "35")
+                                .thenApply(rs -> rs.at(0))
+                                .thenApply(row -> {
+                                    Long value = row.getLong(0);
+                                    return txn.commit().thenApply(v -> value);
+                                })
+                                .thenCompose(Function.identity())
+
+                )
+                .thenCompose(Function.identity())
+                .get();
         assertEquals(35L, id);
     }
 
     @Test
     public void shouldRollbackTransaction() throws Exception {
-        CountDownLatch sync = new CountDownLatch(1);
+        dbr.db().begin()
+                .thenApply(transaction ->
+                        transaction.completeQuery("INSERT INTO TX_TEST(ID) VALUES(9)")
+                                .thenApply(result -> {
+                                    assertEquals(1, result.affectedRows());
+                                    return transaction.rollback();
+                                })
+                                .thenCompose(Function.identity()))
+                .thenCompose(Function.identity())
+                .get(5, TimeUnit.SECONDS);
 
-        dbr.db().begin(transaction ->
-                transaction.query("INSERT INTO TX_TEST(ID) VALUES(9)", result -> {
-                    assertEquals(1, result.updatedRows());
-                    transaction.rollback(sync::countDown, err);
-                }, err),
-            err);
-
-        assertTrue(sync.await(5, TimeUnit.SECONDS));
         assertEquals(0L, dbr.query("SELECT ID FROM TX_TEST WHERE ID = 9").size());
     }
 
 
     @Test
     public void shouldRollbackTransactionOnBackendError() throws Exception {
-        CountDownLatch sync = new CountDownLatch(1);
-
-        dbr.db().begin(transaction ->
-                transaction.query("INSERT INTO TX_TEST(ID) VALUES(11)", result -> {
-                    assertEquals(1, result.updatedRows());
-                    transaction.query("INSERT INTO TX_TEST(ID) VALUES(11)", fail, t -> sync.countDown());
-                }, err),
-            err);
-
-        assertTrue(sync.await(5, TimeUnit.SECONDS));
+        dbr.db().begin()
+                .thenApply(transaction ->
+                        transaction.completeQuery("INSERT INTO TX_TEST(ID) VALUES(11)")
+                                .thenApply(result -> {
+                                    assertEquals(1, result.affectedRows());
+                                    return transaction.completeQuery("INSERT INTO TX_TEST(ID) VALUES(11)");
+                                })
+                                .thenCompose(Function.identity())
+                                .thenAccept(fail)
+                                .exceptionally(th -> null)
+                )
+                .thenCompose(Function.identity())
+                .get(5, TimeUnit.SECONDS);
         assertEquals(0, dbr.query("SELECT ID FROM TX_TEST WHERE ID = 11").size());
     }
 
     @Test
     public void shouldInvalidateTxConnAfterError() throws Exception {
-        CountDownLatch sync = new CountDownLatch(1);
-
-        dbr.db().begin((transaction) ->
-                transaction.query("INSERT INTO TX_TEST(ID) VALUES(22)", result -> {
-                    assertEquals(1, result.updatedRows());
-                    transaction.query("INSERT INTO TX_TEST(ID) VALUES(22)", fail, t ->
-                            transaction.query("SELECT 1", fail, t1 -> {
-                                assertEquals("Transaction is already completed", t1.getMessage());
-                                sync.countDown();
-                            }));
-                }, err),
-            err);
-
-        assertTrue(sync.await(5, TimeUnit.SECONDS));
+        dbr.db().begin()
+                .thenApply(transaction ->
+                        transaction.completeQuery("INSERT INTO TX_TEST(ID) VALUES(22)")
+                                .thenAccept(result -> {
+                                    assertEquals(1, result.affectedRows());
+                                    transaction.completeQuery("INSERT INTO TX_TEST(ID) VALUES(22)")
+                                            .thenApply(rs -> {
+                                                fail.accept(rs);
+                                                return CompletableFuture.completedFuture(rs);
+                                            })
+                                            .exceptionally(th ->
+                                                    transaction.completeQuery("SELECT 1")
+                                                            .thenApply(rs -> {
+                                                                fail.accept(rs);
+                                                                return rs;
+                                                            })
+                                                            .exceptionally(t1 -> {
+                                                                assertEquals("Transaction is already completed", t1.getMessage());
+                                                                return null;
+                                                            })
+                                            )
+                                            .thenCompose(Function.identity());
+                                })
+                )
+                .thenCompose(Function.identity())
+                .get(5, TimeUnit.SECONDS);
         assertEquals(0, dbr.query("SELECT ID FROM TX_TEST WHERE ID = 22").size());
     }
 
     @Test
     public void shouldSupportNestedTransactions() throws Exception {
-        CountDownLatch sync = new CountDownLatch(1);
-
-        dbr.db().begin((transaction) ->
-                transaction.begin((nested) ->
-                    nested.query("INSERT INTO TX_TEST(ID) VALUES(19)", result -> {
-                        assertEquals(1, result.updatedRows());
-                        nested.commit(() -> transaction.commit(sync::countDown, err), err);
-                    }, err),
-                err),
-            err);
-
-        assertTrue(sync.await(5, TimeUnit.SECONDS));
+        dbr.db().begin()
+                .thenApply(transaction ->
+                        transaction.begin()
+                                .thenApply(nested ->
+                                        nested.completeQuery("INSERT INTO TX_TEST(ID) VALUES(19)")
+                                                .thenApply(result -> {
+                                                    assertEquals(1, result.affectedRows());
+                                                    return nested.commit();
+                                                })
+                                                .thenCompose(Function.identity())
+                                                .thenApply(v -> transaction.commit())
+                                                .thenCompose(Function.identity())
+                                )
+                                .thenCompose(Function.identity())
+                )
+                .thenCompose(Function.identity())
+                .get(5, TimeUnit.SECONDS);
         assertEquals(1L, dbr.query("SELECT ID FROM TX_TEST WHERE ID = 19").size());
     }
 
     @Test
     public void shouldRollbackNestedTransaction() throws Exception {
-        CountDownLatch sync = new CountDownLatch(1);
-
-        dbr.db().begin((transaction) ->
-                transaction.query("INSERT INTO TX_TEST(ID) VALUES(24)", result -> {
-                    assertEquals(1, result.updatedRows());
-                    transaction.begin((nested) ->
-                        nested.query("INSERT INTO TX_TEST(ID) VALUES(23)", res2 -> {
-                            assertEquals(1, res2.updatedRows());
-                            nested.rollback(() -> transaction.commit(sync::countDown, err), err);
-                        }, err), err);
-                }, err),
-            err);
-
-        assertTrue(sync.await(5, TimeUnit.SECONDS));
+        dbr.db().begin()
+                .thenApply(transaction ->
+                        transaction.completeQuery("INSERT INTO TX_TEST(ID) VALUES(24)")
+                                .thenApply(result -> {
+                                    assertEquals(1, result.affectedRows());
+                                    return transaction.begin()
+                                            .thenApply(nested ->
+                                                    nested.completeQuery("INSERT INTO TX_TEST(ID) VALUES(23)")
+                                                            .thenApply(res2 -> {
+                                                                assertEquals(1, res2.affectedRows());
+                                                                return nested.rollback();
+                                                            })
+                                                            .thenCompose(Function.identity())
+                                            )
+                                            .thenCompose(Function.identity())
+                                            .thenApply(v -> transaction.commit())
+                                            .thenCompose(Function.identity());
+                                })
+                                .thenCompose(Function.identity())
+                )
+                .thenCompose(Function.identity())
+                .get(5, TimeUnit.SECONDS);
         assertEquals(1L, dbr.query("SELECT ID FROM TX_TEST WHERE ID = 24").size());
         assertEquals(0L, dbr.query("SELECT ID FROM TX_TEST WHERE ID = 23").size());
     }
 
     @Test
     public void shouldRollbackNestedTransactionOnBackendError() throws Exception {
-        CountDownLatch sync = new CountDownLatch(1);
-
-        dbr.db().begin((transaction) ->
-                transaction.query("INSERT INTO TX_TEST(ID) VALUES(25)", result -> {
-                    assertEquals(1, result.updatedRows());
-                    transaction.begin((nested) ->
-                        nested.query("INSERT INTO TX_TEST(ID) VALUES(26)", res2 -> {
-                            assertEquals(1, res2.updatedRows());
-                            nested.query("INSERT INTO TD_TEST(ID) VALUES(26)",
-                                fail, t -> transaction.commit(sync::countDown, err));
-                        }, err), err);
-                }, err),
-            err);
-
-        assertTrue(sync.await(5, TimeUnit.SECONDS));
+        dbr.db().begin()
+                .thenApply(transaction ->
+                        transaction.completeQuery("INSERT INTO TX_TEST(ID) VALUES(25)")
+                                .thenApply(result -> {
+                                    assertEquals(1, result.affectedRows());
+                                    return transaction.begin()
+                                            .thenApply(nested ->
+                                                    nested.completeQuery("INSERT INTO TX_TEST(ID) VALUES(26)")
+                                                            .thenAccept(res2 -> assertEquals(1, res2.affectedRows()))
+                                                            .thenApply(v -> nested.completeQuery("INSERT INTO TX_TEST(ID) VALUES(26)"))
+                                                            .thenCompose(Function.identity())
+                                                            .thenApply(rs -> {
+                                                                fail.accept(rs);
+                                                                return CompletableFuture.completedFuture((Void) null);
+                                                            })
+                                                            .exceptionally(t -> transaction.commit())
+                                                            .thenCompose(Function.identity())
+                                            )
+                                            .thenCompose(Function.identity());
+                                })
+                                .thenCompose(Function.identity())
+                )
+                .thenCompose(Function.identity())
+                .get(5, TimeUnit.SECONDS);
         assertEquals(1L, dbr.query("SELECT ID FROM TX_TEST WHERE ID = 25").size());
         assertEquals(0L, dbr.query("SELECT ID FROM TX_TEST WHERE ID = 26").size());
     }

@@ -60,7 +60,7 @@ public class ParseEncoder extends ExtendedQueryEncoder<Parse> {
         putCString(buffer, msg.getSname()); // prepared statement
         putCString(buffer, msg.getQuery());
         buffer.putShort((short) msg.getTypes().length); // parameter types count
-        for(Oid type : msg.getTypes()){
+        for (Oid type : msg.getTypes()) {
             buffer.putInt(type.getId());
         }
     }

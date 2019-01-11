@@ -1,9 +1,6 @@
 ## Refactoring
-* Make futures completable through arbitrary executor.
-
-##Review
-* Review all round trips.
+* Add arguments checks to most core methods.
 
 ## Tests
-* Make tests for all round trips.
+* Make tests for all message flow scenarios.
 * Review other test cases.

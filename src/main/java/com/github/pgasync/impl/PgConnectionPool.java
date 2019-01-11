@@ -25,6 +25,7 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -160,7 +161,9 @@ public abstract class PgConnectionPool implements ConnectionPool {
     private final String database;
     private final DataConverter dataConverter;
 
-    public PgConnectionPool(PoolProperties properties) {
+    protected final Executor futuresExecutor;
+
+    public PgConnectionPool(PoolProperties properties, Executor futuresExecutor) {
         this.address = InetSocketAddress.createUnresolved(properties.getHostname(), properties.getPort());
         this.username = properties.getUsername();
         this.password = properties.getPassword();
@@ -168,6 +171,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
         this.maxConnections = properties.getMaxConnections();
         this.maxStatements = properties.getMaxStatements();
         this.dataConverter = properties.getDataConverter();
+        this.futuresExecutor = futuresExecutor;
     }
 
     @Override
@@ -177,7 +181,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
             closed = true;
             while (!subscribers.isEmpty()) {
                 CompletableFuture<? super Connection> queued = subscribers.poll();
-                queued.completeExceptionally(new SqlException("Connection pool is closing"));
+                futuresExecutor.execute(() -> queued.completeExceptionally(new SqlException("Connection pool is closing")));
             }
             while (!connections.isEmpty()) {
                 PooledPgConnection connection = connections.poll();
@@ -197,18 +201,18 @@ public abstract class PgConnectionPool implements ConnectionPool {
         lock.lock();
         try {
             if (closed) {
-                uponAvailable.completeExceptionally(new SqlException("Connection pool is closed"));
+                futuresExecutor.execute(() -> uponAvailable.completeExceptionally(new SqlException("Connection pool is closed")));
             } else {
                 Connection connection = connections.poll();
                 if (connection != null) {
-                    uponAvailable.complete(connection);
+                    uponAvailable.completeAsync(() -> connection, futuresExecutor);
                 } else {
                     if (tryIncreaseSize()) {
                         new PooledPgConnection(new PgConnection(openStream(address), dataConverter))
                                 .connect(username, password, database)
                                 .thenAccept(uponAvailable::complete)
                                 .exceptionally(th -> {
-                                    uponAvailable.completeExceptionally(th);
+                                    futuresExecutor.execute(() -> uponAvailable.completeExceptionally(th));
                                     return null;
                                 });
                     } else {
@@ -246,7 +250,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
             } else {
                 if (connection.isConnected()) {
                     if (!subscribers.isEmpty()) {
-                        subscribers.poll().complete(connection);
+                        subscribers.poll().completeAsync(() -> connection, futuresExecutor);
                     } else {
                         connections.offer(connection);
                     }

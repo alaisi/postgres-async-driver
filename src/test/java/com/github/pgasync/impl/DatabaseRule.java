@@ -76,12 +76,11 @@ class DatabaseRule extends ExternalResource {
     }
 
     ResultSet query(String sql) {
-        return block(db().querySet(sql, (Object[]) null));
+        return block(db().completeQuery(sql));
     }
 
-    @SuppressWarnings("rawtypes")
-    ResultSet query(String sql, List/*<Object>*/ params) {
-        return block(db().querySet(sql, params.toArray()));
+    ResultSet query(String sql, List<?> params) {
+        return block(db().completeQuery(sql, params.toArray()));
     }
 
     private <T> T block(CompletableFuture<T> future) {

@@ -23,7 +23,6 @@ import org.junit.runners.Parameterized.Parameters;
 
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.function.Consumer;
 
 import static java.lang.System.currentTimeMillis;
 import static java.lang.System.out;
@@ -37,13 +36,13 @@ public class PerformanceTest {
     @Parameters(name = "{index}: maxConnections={0}, threads={1}, pipeline={2}")
     public static Iterable<Object[]> data() {
         results = new TreeMap<>();
-        ArrayList<Object[]> testData = new ArrayList<>();
+        List<Object[]> testData = new ArrayList<>();
         for (int poolSize = 1; poolSize <= 4; poolSize *= 2) {
             results.putIfAbsent(key(poolSize, true), new TreeMap<>());
             results.putIfAbsent(key(poolSize, false), new TreeMap<>());
             for (int threads = 1; threads <= 16; threads *= 2) {
-                testData.add(new Object[] { poolSize, threads, true });
-                testData.add(new Object[] { poolSize, threads, false });
+                testData.add(new Object[]{poolSize, threads, true});
+                testData.add(new Object[]{poolSize, threads, false});
             }
         }
         return testData;
@@ -55,28 +54,22 @@ public class PerformanceTest {
 
     private static final int batchSize = 100;
     private static final int repeats = 5;
-    private static final Consumer<Throwable> err = t -> {t.printStackTrace();
-        throw new AssertionError(t);
-    };
     private static SortedMap<String, SortedMap<Integer, Long>> results = new TreeMap<>();
     private final int poolSize;
     private final int numThreads;
     private final boolean pipeline;
-    private final ConnectionPool dbPool;
-    private final ExecutorService threadPool;
+    private final ConnectionPool pool;
 
     public PerformanceTest(int poolSize, int numThreads, boolean pipeline) {
         this.poolSize = poolSize;
         this.numThreads = numThreads;
         this.pipeline = pipeline;
-        dbPool = DatabaseRule.createPoolBuilder(poolSize).pipeline(pipeline).validationQuery(null).build();
-        threadPool = Executors.newFixedThreadPool(numThreads);
+        pool = DatabaseRule.createPoolBuilder(poolSize).validationQuery(null).build();
     }
 
     @After
-    public void close() throws Exception {
-        threadPool.shutdownNow();
-        dbPool.close();
+    public void close() {
+        pool.close();
     }
 
     @Test(timeout = 1000)
@@ -84,12 +77,12 @@ public class PerformanceTest {
     public void t1_preAllocatePool() throws InterruptedException {
         Queue<Connection> connections = new ArrayBlockingQueue<>(poolSize);
         for (int i = 0; i < poolSize; ++i) {
-            dbPool.getConnection().thenAccept(connections::add);
+            pool.getConnection().thenAccept(connections::add);
         }
         while (connections.size() < poolSize) {
             MILLISECONDS.sleep(5);
         }
-        connections.forEach(dbPool::release);
+        connections.forEach(Connection::close);
     }
 
     @Test
@@ -102,13 +95,17 @@ public class PerformanceTest {
 
                 @Override
                 public Long call() throws Exception {
-                    dbPool.completeQuery("select 42", r -> {
-                        try {
-                            swap.exchange(currentTimeMillis());
-                        } catch (Exception e) {
-                            err.accept(e);
-                        }
-                    }, err);
+                    pool.completeQuery("select 42")
+                            .thenAccept(r -> {
+                                try {
+                                    swap.exchange(currentTimeMillis());
+                                } catch (Exception e) {
+                                    throw new AssertionError(e);
+                                }
+                            })
+                            .exceptionally(th -> {
+                                throw new AssertionError(th);
+                            });
                     return swap.exchange(null);
                 }
             });

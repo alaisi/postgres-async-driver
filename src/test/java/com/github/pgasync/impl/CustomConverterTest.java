@@ -6,8 +6,9 @@ import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
 
+import java.util.List;
+
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 
 /**
@@ -54,13 +55,13 @@ public class CustomConverterTest {
 
     @Test
     public void shouldConvertColumnDataToType() {
-        dbr.query("INSERT INTO CC_TEST VALUES (1, $1)", asList("{\"a\": 1}"));
+        dbr.query("INSERT INTO CC_TEST VALUES (1, $1)", List.of("{\"a\": 1}"));
         assertEquals("{\"a\": 1}", dbr.query("SELECT * FROM CC_TEST WHERE ID = 1").at(0).get("js", Json.class).json);
     }
 
     @Test
     public void shouldConvertParameter() {
-        dbr.query("INSERT INTO CC_TEST VALUES (2, $1)", asList(new Json("{\"b\": 2}")));
+        dbr.query("INSERT INTO CC_TEST VALUES (2, $1)", List.of(new Json("{\"b\": 2}")));
         assertEquals("{\"b\": 2}", dbr.query("SELECT * FROM CC_TEST WHERE ID = 2").at(0).get("js", Json.class).json);
     }
 

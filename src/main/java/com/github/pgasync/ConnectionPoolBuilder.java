@@ -20,6 +20,8 @@ import com.github.pgasync.impl.netty.NettyPgConnectionPool;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ForkJoinPool;
 
 /**
  * Builder for creating {@link ConnectionPool} instances.
@@ -33,8 +35,12 @@ public class ConnectionPoolBuilder {
     /**
      * @return Pool ready for use
      */
+    public ConnectionPool build(Executor futureExecutor) {
+        return new NettyPgConnectionPool(properties, futureExecutor);
+    }
+
     public ConnectionPool build() {
-        return new NettyPgConnectionPool(properties);
+        return build(ForkJoinPool.commonPool());
     }
 
     public ConnectionPoolBuilder hostname(String hostname) {

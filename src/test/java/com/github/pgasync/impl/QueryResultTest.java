@@ -24,13 +24,14 @@ import org.junit.Test;
 
 import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
-import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 
 /**
  * Tests for result set row counts.
- * 
+ *
  * @author Antti Laisi
  */
 public class QueryResultTest {
@@ -80,13 +81,13 @@ public class QueryResultTest {
 
     @Test
     public void shouldStreamResultRows() throws Exception {
-        List<Integer> series = dbr.db().queryRows("select generate_series(1, 5)")
-                .map(row -> row.getInt(0))
-                .toList()
-                .toBlocking()
-                .single();
+        List<Integer> series = dbr.db().completeQuery("select generate_series(1, 5)")
+                .thenApply(rs -> StreamSupport.stream(rs.spliterator(), false)
+                        .map(r -> r.getInt(0))
+                        .collect(Collectors.toList()))
+                .get();
 
-        assertEquals(asList(1, 2, 3, 4, 5), series);
+        assertEquals(List.of(1, 2, 3, 4, 5), series);
     }
 
 }

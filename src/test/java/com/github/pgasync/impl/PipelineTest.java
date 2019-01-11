@@ -16,19 +16,16 @@ package com.github.pgasync.impl;
 
 import com.github.pgasync.Connection;
 import com.github.pgasync.ConnectionPool;
-import com.github.pgasync.ResultSet;
 import org.junit.After;
+import org.junit.Before;
 import org.junit.ClassRule;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.Deque;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Consumer;
 
 import static java.lang.System.currentTimeMillis;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
@@ -42,34 +39,40 @@ import static org.junit.Assert.assertThat;
  * @author Mikko Tiihonen
  */
 public class PipelineTest {
+
     @ClassRule
     public static DatabaseRule dbr = new DatabaseRule();
 
-    final Consumer<Throwable> err = t -> { throw new AssertionError("failed", t); };
+    private Connection c;
+    private ConnectionPool pool;
 
-    Connection c;
-    ConnectionPool pool;
+    @Before
+    public void setupPool() {
+        pool = dbr.builder.build();
+    }
 
     @After
-    public void closeConnection() throws Exception {
+    public void closePool() throws Exception {
         if (c != null) {
-            pool.release(c);
+            c.close().get();
         }
         if (pool != null) {
-            pool.close();
+            pool.close().get();
         }
     }
 
     @Test
-    public void connectionPipelinesQueries() throws InterruptedException {
-        pool = dbr.builder.pipeline(true).build();
-
+    public void connectionPoolPipelinesQueries() throws InterruptedException {
         int count = 5;
         double sleep = 0.5;
         Deque<Long> results = new LinkedBlockingDeque<>();
         long startWrite = currentTimeMillis();
         for (int i = 0; i < count; ++i) {
-            pool.completeQuery("select " + i + ", pg_sleep(" + sleep + ")", r -> results.add(currentTimeMillis()), err);
+            pool.completeQuery("select " + i + ", pg_sleep(" + sleep + ")")
+                    .thenAccept(r -> results.add(currentTimeMillis()))
+                    .exceptionally(th -> {
+                        throw new AssertionError("failed", th);
+                    });
         }
         long writeTime = currentTimeMillis() - startWrite;
 
@@ -82,36 +85,27 @@ public class PipelineTest {
         assertThat(MILLISECONDS.toSeconds(readTime + 999) >= remoteWaitTimeSeconds, is(true));
     }
 
-    private Connection getConnection(boolean pipeline) throws InterruptedException {
-        pool = dbr.builder.pipeline(pipeline).build();
+    private Connection getConnection() throws InterruptedException {
         SynchronousQueue<Connection> connQueue = new SynchronousQueue<>();
-        pool.getConnection().thenAccept(connQueue::add);
+        pool.getConnection()
+                .thenAccept(connQueue::offer);
         return c = connQueue.take();
     }
 
-    @Test @Ignore("TODO: Setup pipeline queue limits")
-    public void disabledConnectionPipeliningThrowsErrorWhenPipeliningIsAttempted() throws Exception {
-        Connection c = getConnection(false);
-
-        BlockingQueue<ResultSet> rs = new LinkedBlockingDeque<>();
-        BlockingQueue<Throwable> err = new LinkedBlockingDeque<>();
-        for (int i = 0; i < 2; ++i) {
-            c.completeQuery("select " + i + ", pg_sleep(0.5)", rs::add, err::add);
-        }
-        assertThat(err.take().getMessage(), containsString("Pipelining not enabled"));
-        assertThat(rs.take(), isA(ResultSet.class));
-    }
-
     @Test
-    public void connectionPoolPipelinesQueries() throws InterruptedException {
-        Connection c = getConnection(true);
+    public void connectionPipelinesQueries() throws InterruptedException {
+        Connection c = getConnection();
 
         int count = 5;
         double sleep = 0.5;
         Deque<Long> results = new LinkedBlockingDeque<>();
         long startWrite = currentTimeMillis();
         for (int i = 0; i < count; ++i) {
-            c.completeQuery("select " + i + ", pg_sleep(" + sleep + ")", r -> results.add(currentTimeMillis()), err);
+            c.completeQuery("select " + i + ", pg_sleep(" + sleep + ")")
+                    .thenAccept(r -> results.add(currentTimeMillis()))
+                    .exceptionally(th -> {
+                        throw new AssertionError("failed", th);
+                    });
         }
         long writeTime = currentTimeMillis() - startWrite;
 
@@ -126,8 +120,6 @@ public class PipelineTest {
 
     @Test
     public void connectionPoolPipelinesQueriesWithinTransaction() throws InterruptedException {
-        pool = dbr.builder.pipeline(true).build();
-
         int count = 5;
         double sleep = 0.5;
         Deque<Long> results = new LinkedBlockingDeque<>();
@@ -135,13 +127,25 @@ public class PipelineTest {
 
         CountDownLatch sync = new CountDownLatch(1);
         long startWrite = currentTimeMillis();
-        pool.begin(t -> {
-            for (int i = 0; i < count; ++i) {
-                t.query("select " + i + ", pg_sleep(" + sleep + ")", r -> results.add(currentTimeMillis()), err);
-            }
-            t.commit(sync::countDown, err);
-            writeTime.set(currentTimeMillis() - startWrite);
-        } , err);
+        pool.begin()
+                .thenAccept(transaction -> {
+                    for (int i = 0; i < count; ++i) {
+                        transaction.completeQuery("select " + i + ", pg_sleep(" + sleep + ")")
+                                .thenAccept(r -> results.add(currentTimeMillis()))
+                                .exceptionally(th -> {
+                                    throw new AssertionError("failed", th);
+                                });
+                    }
+                    transaction.commit()
+                            .thenAccept(v -> sync.countDown())
+                            .exceptionally(th -> {
+                                throw new AssertionError("failed", th);
+                            });
+                    writeTime.set(currentTimeMillis() - startWrite);
+                })
+                .exceptionally(th -> {
+                    throw new AssertionError("failed", th);
+                });
         sync.await(3, SECONDS);
 
         long remoteWaitTimeSeconds = (long) (sleep * count);
