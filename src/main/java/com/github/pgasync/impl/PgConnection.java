@@ -16,6 +16,7 @@ package com.github.pgasync.impl;
 
 import static com.github.pgasync.impl.message.backend.RowDescription.ColumnDescription;
 
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -119,10 +120,12 @@ public class PgConnection implements Connection {
 
     private final PgProtocolStream stream;
     private final DataConverter dataConverter;
+    private final Charset encoding;
 
-    PgConnection(PgProtocolStream stream, DataConverter dataConverter) {
+    PgConnection(PgProtocolStream stream, DataConverter dataConverter, Charset encoding) {
         this.stream = stream;
         this.dataConverter = dataConverter;
+        this.encoding = encoding;
     }
 
     CompletableFuture<Connection> connect(String username, String password, String database) {
@@ -134,7 +137,7 @@ public class PgConnection implements Connection {
 
     private CompletableFuture<? extends Message> authenticate(String username, String password, Message message) {
         return message instanceof Authentication && !((Authentication) message).isAuthenticationOk()
-                ? stream.authenticate(new PasswordMessage(username, password, ((Authentication) message).getMd5Salt()))
+                ? stream.authenticate(new PasswordMessage(username, password, ((Authentication) message).getMd5Salt(), encoding))
                 : CompletableFuture.completedFuture(message);
     }
 
@@ -182,12 +185,12 @@ public class PgConnection implements Connection {
     public CompletableFuture<Integer> query(Consumer<Map<String, PgColumn>> onColumns, Consumer<Row> onRow, String sql, Object... params) {
         return prepareStatement(sql, dataConverter.assumeTypes(params))
                 .thenApply(ps -> ps.fetch(onColumns, onRow, params)
-                        .handle((rs, th) -> ps.close()
+                        .handle((affected, th) -> ps.close()
                                 .thenApply(v -> {
                                     if (th != null)
                                         throw new RuntimeException(th);
                                     else
-                                        return rs;
+                                        return affected;
                                 })
                         )
                         .thenCompose(Function.identity())

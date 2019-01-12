@@ -21,7 +21,7 @@ import com.github.pgasync.impl.message.Message;
  */
 public class StartupMessage implements Message {
 
-    private final int protocol = 196608;
+    private static final int protocol = 196608;
     private final String username;
     private final String database;
 

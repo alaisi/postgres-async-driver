@@ -18,6 +18,7 @@ import com.github.pgasync.SqlException;
 import com.github.pgasync.impl.PgProtocolStream;
 import com.github.pgasync.impl.message.*;
 import com.github.pgasync.impl.message.backend.Authentication;
+import com.github.pgasync.impl.message.backend.BIndicators;
 import com.github.pgasync.impl.message.backend.CommandComplete;
 import com.github.pgasync.impl.message.backend.DataRow;
 import com.github.pgasync.impl.message.backend.ErrorResponse;
@@ -47,6 +48,7 @@ import io.netty.util.concurrent.GenericFutureListener;
 
 import java.io.IOException;
 import java.net.SocketAddress;
+import java.nio.charset.Charset;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -66,6 +68,9 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     private final boolean useSsl;
     private final Bootstrap channelPipeline;
     private final Executor futuresExecutor;
+    private final Charset encoding;
+
+    private StartupMessage startupWith;
 
     private ChannelHandlerContext ctx;
 
@@ -81,37 +86,26 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     private Consumer<DataRow> onRow;
     private Consumer<CommandComplete> onAffected;
 
+    private boolean seenReadyForQuery;
     private Message readyForQueryPendingMessage;
 
-    NettyPgProtocolStream(EventLoopGroup group, SocketAddress address, boolean useSsl, Executor futuresExecutor) {
+    NettyPgProtocolStream(EventLoopGroup group, SocketAddress address, boolean useSsl, Charset encoding, Executor futuresExecutor) {
         this.address = address;
         this.useSsl = useSsl; // TODO: refactor into SSLConfig with trust parameters
         this.channelPipeline = new Bootstrap()
                 .group(group)
                 .channel(NioSocketChannel.class)
                 .handler(newProtocolInitializer());
+        this.encoding = encoding;
         this.futuresExecutor = futuresExecutor;
     }
 
     @Override
     public CompletableFuture<Message> connect(StartupMessage startup) {
-        return offerRoundTrip(() ->
-                channelPipeline.connect(address).addListener(connected -> {
-                    if (connected.isSuccess()) {
-                        if (useSsl) {
-                            send(SSLRequest.INSTANCE)
-                                    .thenAccept(sslHandshake -> write(startup))
-                                    .exceptionally(th -> {
-                                        respondWithException(th);
-                                        return null;
-                                    });
-                        } else {
-                            write(startup);
-                        }
-                    } else {
-                        respondWithException(connected.cause());
-                    }
-                })
+        startupWith = startup;
+        return offerRoundTrip(
+                () -> channelPipeline.connect(address).addListener(outboundErrorListener),
+                false
         );
     }
 
@@ -188,8 +182,10 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         onRow = null;
         onAffected = null;
         readyForQueryPendingMessage = null;
-        CompletableFuture<? super Message> uponResponse = uponResponses.remove();
-        futuresExecutor.execute(() -> uponResponse.completeExceptionally(th));
+        if (!uponResponses.isEmpty()) {
+            CompletableFuture<? super Message> uponResponse = uponResponses.remove();
+            futuresExecutor.execute(() -> uponResponse.completeExceptionally(th));
+        }
     }
 
     private void respondWithMessage(Message message) {
@@ -203,12 +199,22 @@ public class NettyPgProtocolStream implements PgProtocolStream {
             } else {
                 uponResponses.remove().completeAsync(() -> message, futuresExecutor);
             }
+        } else if (message == BIndicators.NO_DATA) {
+            if (isSimpleQueryInProgress()) {
+                onColumns.accept(new RowDescription.ColumnDescription[]{});
+            } else {
+                uponResponses.remove().completeAsync(() -> new RowDescription(new RowDescription.ColumnDescription[]{}), futuresExecutor);
+            }
         } else if (message instanceof DataRow) {
             onRow.accept((DataRow) message);
         } else if (message instanceof ErrorResponse) {
-            readyForQueryPendingMessage = message;
-            if (isExtendedQueryInProgress()) {
-                write(FIndicators.SYNC);
+            if (seenReadyForQuery) {
+                readyForQueryPendingMessage = message;
+                if (isExtendedQueryInProgress()) {
+                    write(FIndicators.SYNC);
+                }
+            } else {
+                respondWithException(toSqlException((ErrorResponse) message));
             }
         } else if (message instanceof CommandComplete) {
             if (isSimpleQueryInProgress()) {
@@ -220,9 +226,15 @@ public class NettyPgProtocolStream implements PgProtocolStream {
                 readyForQueryPendingMessage = message;
                 write(FIndicators.SYNC);
             }
-        } else if (message instanceof Authentication && ((Authentication) message).isAuthenticationOk()) {
-            readyForQueryPendingMessage = message;
+        } else if (message instanceof Authentication) {
+            Authentication authentication = (Authentication) message;
+            if (authentication.isAuthenticationOk()) {
+                readyForQueryPendingMessage = message;
+            } else {
+                uponResponses.remove().completeAsync(() -> message, futuresExecutor);
+            }
         } else if (message == ReadyForQuery.INSTANCE) {
+            seenReadyForQuery = true;
             if (readyForQueryPendingMessage instanceof ErrorResponse) {
                 respondWithException(toSqlException((ErrorResponse) readyForQueryPendingMessage));
             } else {
@@ -233,12 +245,18 @@ public class NettyPgProtocolStream implements PgProtocolStream {
                 uponResponses.remove().completeAsync(() -> response, futuresExecutor);
             }
             readyForQueryPendingMessage = null;
+        } else {
+            uponResponses.remove().completeAsync(() -> message, futuresExecutor);
         }
     }
 
     private CompletableFuture<Message> offerRoundTrip(Runnable requestAction) {
+        return offerRoundTrip(requestAction, true);
+    }
+
+    private CompletableFuture<Message> offerRoundTrip(Runnable requestAction, boolean assumeConnected) {
         CompletableFuture<Message> uponResponse = new CompletableFuture<>();
-        if (isConnected()) {
+        if (!assumeConnected || isConnected()) {
             if (uponResponses.offer(uponResponse)) {
                 try {
                     requestAction.run();
@@ -277,7 +295,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     }
 
     private static SqlException toSqlException(ErrorResponse error) {
-        return new SqlException(error.getLevel().name(), error.getCode(), error.getMessage());
+        return new SqlException(error.getLevel(), error.getCode(), error.getMessage());
     }
 
     private ChannelInitializer<Channel> newProtocolInitializer() {
@@ -288,8 +306,8 @@ public class NettyPgProtocolStream implements PgProtocolStream {
                     channel.pipeline().addLast(newSslInitiator());
                 }
                 channel.pipeline().addLast(new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 1, 4, -4, 0, true));
-                channel.pipeline().addLast(new ByteBufMessageDecoder());
-                channel.pipeline().addLast(new ByteBufMessageEncoder());
+                channel.pipeline().addLast(new ByteBufMessageDecoder(encoding));
+                channel.pipeline().addLast(new ByteBufMessageEncoder(encoding));
                 channel.pipeline().addLast(newProtocolHandler());
             }
         };
@@ -323,6 +341,16 @@ public class NettyPgProtocolStream implements PgProtocolStream {
             @Override
             public void channelActive(ChannelHandlerContext context) {
                 NettyPgProtocolStream.this.ctx = context;
+                if (useSsl) {
+                    send(SSLRequest.INSTANCE)
+                            .thenAccept(sslHandshake -> write(startupWith))
+                            .exceptionally(th -> {
+                                respondWithException(th);
+                                return null;
+                            });
+                } else {
+                    write(startupWith);
+                }
             }
 
             @Override
@@ -346,9 +374,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
 
             @Override
             public void exceptionCaught(ChannelHandlerContext context, Throwable cause) {
-                while (!uponResponses.isEmpty()) {
-                    respondWithException(cause);
-                }
+                respondWithException(cause);
             }
         };
     }

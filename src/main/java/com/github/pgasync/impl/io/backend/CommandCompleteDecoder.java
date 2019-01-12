@@ -18,6 +18,7 @@ import com.github.pgasync.impl.io.Decoder;
 import com.github.pgasync.impl.message.backend.CommandComplete;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 
 import static com.github.pgasync.impl.io.IO.getCString;
 
@@ -51,8 +52,8 @@ public class CommandCompleteDecoder implements Decoder<CommandComplete> {
     }
 
     @Override
-    public CommandComplete read(ByteBuffer buffer) {
-        String tag = getCString(buffer);
+    public CommandComplete read(ByteBuffer buffer, Charset encoding) {
+        String tag = getCString(buffer, encoding);
         return new CommandComplete(tag);
     }
 

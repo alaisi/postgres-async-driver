@@ -24,9 +24,9 @@ import java.nio.charset.Charset;
  * See <a https://www.postgresql.org/docs/11/protocol-message-formats.html">Postgres message formats</a>
  *
  * <pre>
- * ParseComplete (B)
- *  Byte1('1')
- *      Identifies the message as a Parse-complete indicator.
+ * NoData (B)
+ *  Byte1('n')
+ *      Identifies the message as a no-data indicator.
  *
  *  Int32(4)
  *      Length of message contents in bytes, including self.
@@ -35,16 +35,16 @@ import java.nio.charset.Charset;
  *
  * @author Marat Gainullin
  */
-public class ParseCompleteDecoder implements Decoder<BIndicators> {
+public class NoDataDecoder implements Decoder<BIndicators> {
 
     @Override
     public byte getMessageId() {
-        return '1';
+        return 'n';
     }
 
     @Override
     public BIndicators read(ByteBuffer buffer, Charset encoding) {
-        return BIndicators.PARSE_COMPLETE;
+        return BIndicators.NO_DATA;
     }
 
 }

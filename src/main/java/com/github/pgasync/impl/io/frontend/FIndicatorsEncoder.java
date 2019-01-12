@@ -18,6 +18,7 @@ import com.github.pgasync.impl.io.Encoder;
 import com.github.pgasync.impl.message.frontend.FIndicators;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 
 /**
  * See <a href="https://www.postgresql.org/docs/11/protocol-message-formats.html">Postgres message formats</a>
@@ -40,7 +41,7 @@ public class FIndicatorsEncoder implements Encoder<FIndicators> {
     }
 
     @Override
-    public void write(FIndicators msg, ByteBuffer buffer) {
+    public void write(FIndicators msg, ByteBuffer buffer, Charset encoding) {
         switch (msg) {
             case SYNC:
                 sync(buffer);

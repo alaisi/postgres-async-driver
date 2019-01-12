@@ -18,6 +18,7 @@ import com.github.pgasync.impl.io.Decoder;
 import com.github.pgasync.impl.message.backend.DataRow;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 
 /**
  * See <a href="www.postgresql.org/docs/9.3/static/protocol-message-formats.html">Postgres message formats</a>
@@ -47,7 +48,7 @@ public class DataRowDecoder implements Decoder<DataRow> {
     }
 
     @Override
-    public DataRow read(ByteBuffer buffer) {
+    public DataRow read(ByteBuffer buffer, Charset encoding) {
         byte[][] values = new byte[buffer.getShort()][];
         for (int i = 0; i < values.length; i++) {
             int length = buffer.getInt();

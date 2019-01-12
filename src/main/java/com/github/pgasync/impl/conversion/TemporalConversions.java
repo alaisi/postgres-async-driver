@@ -3,6 +3,7 @@ package com.github.pgasync.impl.conversion;
 import com.github.pgasync.SqlException;
 import com.github.pgasync.impl.Oid;
 
+import java.nio.charset.Charset;
 import java.sql.Date;
 import java.sql.Time;
 import java.sql.Timestamp;
@@ -11,13 +12,12 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.time.format.DateTimeFormatter.ISO_LOCAL_DATE;
 import static java.time.format.DateTimeFormatter.ISO_LOCAL_TIME;
 
 /**
  * @author Antti Laisi
- *
+ * <p>
  * TODO: Add support for Java 8 temporal types.
  */
 class TemporalConversions {
@@ -43,11 +43,11 @@ class TemporalConversions {
             .appendOffset("+HH:mm", "")
             .toFormatter();
 
-    static Date toDate(Oid oid, byte[] value) {
+    static Date toDate(Oid oid, byte[] value, Charset charset) {
         switch (oid) {
             case UNSPECIFIED: // fallthrough
             case DATE:
-                String date = new String(value, UTF_8);
+                String date = new String(value, charset);
                 try {
                     return Date.valueOf(LocalDate.parse(date, ISO_LOCAL_DATE));
                 } catch (DateTimeParseException e) {
@@ -58,8 +58,8 @@ class TemporalConversions {
         }
     }
 
-    static Time toTime(Oid oid, byte[] value) {
-        String time = new String(value, UTF_8);
+    static Time toTime(Oid oid, byte[] value, Charset charset) {
+        String time = new String(value, charset);
         try {
             switch (oid) {
                 case UNSPECIFIED: // fallthrough
@@ -75,8 +75,8 @@ class TemporalConversions {
         }
     }
 
-    static Timestamp toTimestamp(Oid oid, byte[] value) {
-        String time = new String(value, UTF_8);
+    static Timestamp toTimestamp(Oid oid, byte[] value, Charset charset) {
+        String time = new String(value, charset);
         try {
             switch (oid) {
                 case UNSPECIFIED: // fallthrough
@@ -92,15 +92,15 @@ class TemporalConversions {
         }
     }
 
-    static byte[] fromTime(Time time) {
-        return ISO_LOCAL_TIME.format(time.toLocalTime()).getBytes(UTF_8);
+    static byte[] fromTime(Time time, Charset charset) {
+        return ISO_LOCAL_TIME.format(time.toLocalTime()).getBytes(charset);
     }
 
-    static byte[] fromDate(Date date) {
-        return ISO_LOCAL_DATE.format(date.toLocalDate()).getBytes(UTF_8);
+    static byte[] fromDate(Date date, Charset charset) {
+        return ISO_LOCAL_DATE.format(date.toLocalDate()).getBytes(charset);
     }
 
-    static byte[] fromTimestamp(Timestamp ts) {
-        return TIMESTAMP_FORMAT.format(ts.toLocalDateTime()).getBytes(UTF_8);
+    static byte[] fromTimestamp(Timestamp ts, Charset charset) {
+        return TIMESTAMP_FORMAT.format(ts.toLocalDateTime()).getBytes(charset);
     }
 }

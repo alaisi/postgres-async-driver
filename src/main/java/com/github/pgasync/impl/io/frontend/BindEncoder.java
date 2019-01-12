@@ -18,6 +18,7 @@ import com.github.pgasync.impl.io.IO;
 import com.github.pgasync.impl.message.frontend.Bind;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 
 /**
  * See <a href="https://www.postgresql.org/docs/11/protocol-message-formats.html">Postgres message formats</a>
@@ -77,9 +78,9 @@ public class BindEncoder extends ExtendedQueryEncoder<Bind> {
     }
 
     @Override
-    public void writeBody(Bind msg, ByteBuffer buffer) {
-        IO.putCString(buffer, msg.getPname()); // portal
-        IO.putCString(buffer, msg.getSname()); // prepared statement
+    public void writeBody(Bind msg, ByteBuffer buffer, Charset encoding) {
+        IO.putCString(buffer, msg.getPname(), encoding); // portal
+        IO.putCString(buffer, msg.getSname(), encoding); // prepared statement
         buffer.putShort((short) 0); // number of format codes
         buffer.putShort((short) msg.getParams().length); // number of parameters
         for (byte[] param : msg.getParams()) {

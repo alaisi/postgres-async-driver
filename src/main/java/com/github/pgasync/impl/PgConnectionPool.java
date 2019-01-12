@@ -20,6 +20,7 @@ import com.github.pgasync.impl.conversion.DataConverter;
 
 import javax.annotation.concurrent.GuardedBy;
 import java.net.InetSocketAddress;
+import java.nio.charset.Charset;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.Map;
@@ -112,7 +113,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
             private final String sql;
             private final PgConnection.PgPreparedStatement delegate;
 
-            public PooledPgPreparedStatement(String sql, PgConnection.PgPreparedStatement delegate) {
+            private PooledPgPreparedStatement(String sql, PgConnection.PgPreparedStatement delegate) {
                 this.sql = sql;
                 this.delegate = delegate;
             }
@@ -145,6 +146,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
 
     private final int maxConnections;
     private final int maxStatements;
+    protected final Charset encoding;
     private final ReentrantLock lock = new ReentrantLock();
     @GuardedBy("lock")
     private int size;
@@ -171,6 +173,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
         this.maxConnections = properties.getMaxConnections();
         this.maxStatements = properties.getMaxStatements();
         this.dataConverter = properties.getDataConverter();
+        this.encoding = Charset.forName(properties.getEncoding());
         this.futuresExecutor = futuresExecutor;
     }
 
@@ -208,7 +211,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
                     uponAvailable.completeAsync(() -> connection, futuresExecutor);
                 } else {
                     if (tryIncreaseSize()) {
-                        new PooledPgConnection(new PgConnection(openStream(address), dataConverter))
+                        new PooledPgConnection(new PgConnection(openStream(address), dataConverter, encoding))
                                 .connect(username, password, database)
                                 .thenAccept(uponAvailable::complete)
                                 .exceptionally(th -> {
@@ -237,7 +240,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
         }
     }
 
-    void release(PooledPgConnection connection) {
+    private void release(PooledPgConnection connection) {
         if (connection == null) {
             throw new IllegalArgumentException("'connection' should be non null to be returned to the pool");
         }

@@ -17,6 +17,7 @@ package com.github.pgasync.impl.io.frontend;
 import com.github.pgasync.impl.message.frontend.Query;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 
 import static com.github.pgasync.impl.io.IO.putCString;
 
@@ -48,7 +49,7 @@ public class QueryEncoder extends SkipableEncoder<Query> {
     }
 
     @Override
-    public void writeBody(Query msg, ByteBuffer buffer) {
-        putCString(buffer, msg.getQuery());
+    public void writeBody(Query msg, ByteBuffer buffer, Charset encoding) {
+        putCString(buffer, msg.getQuery(), encoding);
     }
 }

@@ -17,6 +17,7 @@ package com.github.pgasync.impl.io;
 import com.github.pgasync.impl.message.Message;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 
 /**
  * Encoder writes messages to byte buffer.
@@ -34,6 +35,6 @@ public interface Encoder<T extends Message> {
      * @param msg Protocol message
      * @param buffer Target buffer
      */
-    void write(T msg, ByteBuffer buffer);
+    void write(T msg, ByteBuffer buffer, Charset encoding);
 
 }

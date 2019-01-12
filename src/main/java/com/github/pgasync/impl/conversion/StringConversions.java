@@ -4,15 +4,14 @@ import com.github.pgasync.SqlException;
 import com.github.pgasync.impl.Oid;
 
 import java.nio.ByteBuffer;
-
-import static java.nio.charset.StandardCharsets.UTF_8;
+import java.nio.charset.Charset;
 
 /**
  * @author Antti Laisi
  */
 class StringConversions {
 
-    static String toString(Oid oid, byte[] value) {
+    static String toString(Oid oid, byte[] value, Charset charset) {
         switch (oid) {
             case UNSPECIFIED: // fallthrough
             case TEXT: // fallthrough
@@ -20,18 +19,18 @@ class StringConversions {
             case BPCHAR: // fallthrough
             case UUID: // fallthrough
             case VARCHAR:
-                return new String(value, UTF_8);
+                return new String(value, charset);
             default:
                 throw new SqlException("Unsupported conversion " + oid.name() + " -> String");
         }
     }
 
-    static Character toChar(Oid oid, byte[] value) {
+    static Character toChar(Oid oid, byte[] value, Charset charset) {
         switch (oid) {
             case UNSPECIFIED: // fallthrough
             case CHAR: // fallthrough
             case BPCHAR:
-                return UTF_8.decode(ByteBuffer.wrap(value)).charAt(0);
+                return charset.decode(ByteBuffer.wrap(value)).charAt(0);
             default:
                 throw new SqlException("Unsupported conversion " + oid.name() + " -> String");
         }

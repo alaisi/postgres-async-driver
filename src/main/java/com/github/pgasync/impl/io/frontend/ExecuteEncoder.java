@@ -18,6 +18,7 @@ import com.github.pgasync.impl.io.IO;
 import com.github.pgasync.impl.message.frontend.Execute;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 
 /**
  * See <a href="https://www.postgresql.org/docs/11/protocol-message-formats.html">Postgres message formats</a>
@@ -52,8 +53,8 @@ public class ExecuteEncoder extends ExtendedQueryEncoder<Execute> {
     }
 
     @Override
-    public void writeBody(Execute msg, ByteBuffer buffer) {
-        IO.putCString(buffer, msg.getPname()); // portal
+    public void writeBody(Execute msg, ByteBuffer buffer, Charset encoding) {
+        IO.putCString(buffer, msg.getPname(), encoding); // portal
         buffer.putInt(0); // unlimited maximum rows
     }
 }

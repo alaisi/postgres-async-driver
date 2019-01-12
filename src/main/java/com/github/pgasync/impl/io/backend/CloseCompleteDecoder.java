@@ -18,6 +18,7 @@ import com.github.pgasync.impl.io.Decoder;
 import com.github.pgasync.impl.message.backend.BIndicators;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 
 /**
  * See <a https://www.postgresql.org/docs/11/protocol-message-formats.html">Postgres message formats</a>
@@ -42,7 +43,7 @@ public class CloseCompleteDecoder implements Decoder<BIndicators> {
     }
 
     @Override
-    public BIndicators read(ByteBuffer buffer) {
+    public BIndicators read(ByteBuffer buffer, Charset encoding) {
         return BIndicators.CLOSE_COMPLETE;
     }
 

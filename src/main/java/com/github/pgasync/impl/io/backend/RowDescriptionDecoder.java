@@ -19,6 +19,7 @@ import com.github.pgasync.impl.io.Decoder;
 import com.github.pgasync.impl.message.backend.RowDescription;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 
 import static com.github.pgasync.impl.io.IO.getCString;
 
@@ -60,11 +61,11 @@ public class RowDescriptionDecoder implements Decoder<RowDescription> {
     }
 
     @Override
-    public RowDescription read(ByteBuffer buffer) {
+    public RowDescription read(ByteBuffer buffer, Charset encoding) {
         RowDescription.ColumnDescription[] columns = new RowDescription.ColumnDescription[buffer.getShort()];
 
         for (int i = 0; i < columns.length; i++) {
-            String name = getCString(buffer);
+            String name = getCString(buffer, encoding);
             buffer.position(buffer.position() + 6);
             Oid type = Oid.valueOfId(buffer.getInt());
             buffer.position(buffer.position() + 8);

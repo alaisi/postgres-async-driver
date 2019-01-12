@@ -4,6 +4,7 @@ import com.github.pgasync.impl.io.Decoder;
 import com.github.pgasync.impl.message.backend.NotificationResponse;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 
 import static com.github.pgasync.impl.io.IO.getCString;
 
@@ -29,8 +30,8 @@ import static com.github.pgasync.impl.io.IO.getCString;
 public class NotificationResponseDecoder implements Decoder<NotificationResponse> {
 
     @Override
-    public NotificationResponse read(ByteBuffer buffer) {
-        return new NotificationResponse(buffer.getInt(), getCString(buffer), getCString(buffer));
+    public NotificationResponse read(ByteBuffer buffer, Charset encoding) {
+        return new NotificationResponse(buffer.getInt(), getCString(buffer, encoding), getCString(buffer, encoding));
     }
 
     @Override

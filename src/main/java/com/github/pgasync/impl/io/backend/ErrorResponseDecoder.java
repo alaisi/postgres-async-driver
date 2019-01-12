@@ -14,32 +14,27 @@
 
 package com.github.pgasync.impl.io.backend;
 
-import com.github.pgasync.impl.io.Decoder;
 import com.github.pgasync.impl.message.backend.ErrorResponse;
 
-import java.nio.ByteBuffer;
-
-import static com.github.pgasync.impl.io.IO.getCString;
-
 /**
- * See <a href="www.postgresql.org/docs/9.3/static/protocol-message-formats.html">Postgres message formats</a>
+ * See <a href="https://www.postgresql.org/docs/11/protocol-message-formats.html">Postgres message formats</a>
  *
  * <pre>
  * ErrorResponse (B)
- *  Byte1('E')
- *      Identifies the message as an error.
- *  Int32
- *      Length of message contents in bytes, including self.
- *  The message body consists of one or more identified fields, followed by a zero byte as a terminator. Fields can appear in any order. For each field there is the following:
- *  Byte1
- *      A code identifying the field type; if zero, this is the message terminator and no string follows. The presently defined field types are listed in Section 46.6. Since more field types might be added in future, frontends should silently ignore fields of unrecognized type.
- *  String
- *      The field value.
+ * Byte1('E')
+ *     Identifies the message as an error.
+ * Int32
+ *     Length of message contents in bytes, including self.
+ * The message body consists of one or more identified fields, followed by a zero byte as a terminator. Fields can appear in any order. For each field there is the following:
+ * Byte1
+ *     A code identifying the field type; if zero, this is the message terminator and no string follows. The presently defined field types are listed in Section 46.6. Since more field types might be added in future, frontends should silently ignore fields of unrecognized type.
+ * String
+ *     The field value.
  * </pre>
  *
  * @author Antti Laisi
  */
-public class ErrorResponseDecoder implements Decoder<ErrorResponse> {
+public class ErrorResponseDecoder extends LogResponseDecoder<ErrorResponse> {
 
     @Override
     public byte getMessageId() {
@@ -47,23 +42,7 @@ public class ErrorResponseDecoder implements Decoder<ErrorResponse> {
     }
 
     @Override
-    public ErrorResponse read(ByteBuffer buffer) {
-
-        String level = null;
-        String code = null;
-        String message = null;
-
-        for (byte type = buffer.get(); type != 0; type = buffer.get()) {
-            String value = getCString(buffer);
-            if (type == (byte) 'S') {
-                level = value;
-            } else if (type == 'C') {
-                code = value;
-            } else if (type == 'M') {
-                message = value;
-            }
-        }
-
+    protected ErrorResponse asMessage(String level, String code, String message) {
         return new ErrorResponse(level, code, message);
     }
 

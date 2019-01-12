@@ -17,6 +17,7 @@ package com.github.pgasync.impl.io;
 import com.github.pgasync.impl.message.Message;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 
 /**
  * Decoder reads messages from byte buffer.
@@ -33,6 +34,6 @@ public interface Decoder<T extends Message> {
     /**
      * @return Decoded message
      */
-    T read(ByteBuffer buffer);
+    T read(ByteBuffer buffer, Charset encoding);
 
 }

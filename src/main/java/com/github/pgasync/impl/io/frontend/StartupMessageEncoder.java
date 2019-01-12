@@ -18,6 +18,8 @@ import com.github.pgasync.impl.io.Encoder;
 import com.github.pgasync.impl.message.frontend.StartupMessage;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 
 import static com.github.pgasync.impl.io.IO.putCString;
 
@@ -54,15 +56,16 @@ public class StartupMessageEncoder implements Encoder<StartupMessage> {
     }
 
     @Override
-    public void write(StartupMessage msg, ByteBuffer buffer) {
+    public void write(StartupMessage msg, ByteBuffer buffer, Charset encoding) {
         buffer.putInt(0);
         buffer.putInt(msg.getProtocol());
 
-        for (String s : new String[] {
+        for (String s : new String[]{
                 "user", msg.getUsername(),
                 "database", msg.getDatabase(),
-                "client_encoding", "UTF8" }) {
-            putCString(buffer, s);
+                "client_encoding", encoding.name()
+        }) {
+            putCString(buffer, s, StandardCharsets.US_ASCII);
         }
 
         buffer.put((byte) 0);

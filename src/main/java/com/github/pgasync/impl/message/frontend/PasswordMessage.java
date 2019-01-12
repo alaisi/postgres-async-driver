@@ -16,23 +16,23 @@ package com.github.pgasync.impl.message.frontend;
 
 import com.github.pgasync.impl.message.Message;
 
+import java.nio.charset.Charset;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
-import static com.github.pgasync.impl.io.IO.bytes;
 import static javax.xml.bind.DatatypeConverter.printHexBinary;
 
 /**
- * @author  Antti Laisi
+ * @author Antti Laisi
  */
 public class PasswordMessage implements Message {
 
     private final String password;
     private final byte[] passwordHash;
 
-    public PasswordMessage(String username, String password, byte[] md5salt) {
+    public PasswordMessage(String username, String password, byte[] md5salt, Charset encoding) {
         this.password = password;
-        this.passwordHash = md5salt != null ? md5(username, password, md5salt) : null;
+        this.passwordHash = md5salt != null ? md5(username, password, md5salt, encoding) : null;
     }
 
     public byte[] getPasswordHash() {
@@ -43,15 +43,15 @@ public class PasswordMessage implements Message {
         return password;
     }
 
-    private static byte[] md5(String username, String password, byte[] md5salt) {
+    private static byte[] md5(String username, String password, byte[] md5salt, Charset encoding) {
         MessageDigest md5 = md5();
-        md5.update(bytes(password));
-        md5.update(bytes(username));
-        byte[] hash = bytes(printHexBinary(md5.digest()).toLowerCase());
+        md5.update(password.getBytes(encoding));
+        md5.update(username.getBytes(encoding));
+        byte[] hash = printHexBinary(md5.digest()).toLowerCase().getBytes(encoding);
 
         md5.update(hash);
         md5.update(md5salt);
-        hash = bytes(printHexBinary(md5.digest()).toLowerCase());
+        hash = printHexBinary(md5.digest()).toLowerCase().getBytes(encoding);
 
         byte[] prefixed = new byte[hash.length + 3];
         prefixed[0] = (byte) 'm';

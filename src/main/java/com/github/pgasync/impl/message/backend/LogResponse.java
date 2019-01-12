@@ -11,30 +11,36 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.pgasync.impl.io.frontend;
 
-import com.github.pgasync.impl.message.frontend.Terminate;
+package com.github.pgasync.impl.message.backend;
 
-import java.nio.ByteBuffer;
-import java.nio.charset.Charset;
+import com.github.pgasync.impl.message.Message;
 
 /**
  * @author Antti Laisi
  */
-public class TerminateEncoder extends SkipableEncoder<Terminate> {
+public class LogResponse implements Message {
 
-    @Override
-    public Class<Terminate> getMessageType() {
-        return Terminate.class;
+    protected final String level;
+    protected final String code;
+    protected final String message;
+
+    public LogResponse(String level, String code, String message) {
+        this.level = level;
+        this.code = code;
+        this.message = message;
     }
 
-    @Override
-    protected byte getMessageId() {
-        return (byte) 'X';
+    public String getLevel() {
+        return level;
     }
 
-    @Override
-    public void writeBody(Terminate msg, ByteBuffer buffer, Charset encoding) {
-        // No op, since Terminate message is body less message
+    public String getCode() {
+        return code;
     }
+
+    public String getMessage() {
+        return message;
+    }
+
 }

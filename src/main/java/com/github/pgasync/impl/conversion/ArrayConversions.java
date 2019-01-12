@@ -3,22 +3,21 @@ package com.github.pgasync.impl.conversion;
 import com.github.pgasync.impl.Oid;
 
 import java.lang.reflect.Array;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-
 // TODO: change internal value format from byte[] to PgValue(TEXT|BINARY)
-@SuppressWarnings({"unchecked","rawtypes"})
-class ArrayConversions  {
+@SuppressWarnings({"unchecked", "rawtypes"})
+class ArrayConversions {
 
-    static byte[] fromArray(final Object elements, final Function<Object,byte[]> printFn) {
-        return appendArray(new StringBuilder(), elements, printFn).toString().getBytes(UTF_8);
+    static byte[] fromArray(final Object elements, final Function<Object, byte[]> printFn, final Charset encoding) {
+        return appendArray(new StringBuilder(), elements, printFn, encoding).toString().getBytes(encoding);
     }
 
-    private static StringBuilder appendArray(StringBuilder sb, final Object elements, final Function<Object,byte[]> printFn) {
+    private static StringBuilder appendArray(StringBuilder sb, final Object elements, final Function<Object, byte[]> printFn, final Charset encoding) {
         sb.append('{');
 
         int nElements = Array.getLength(elements);
@@ -31,9 +30,9 @@ class ArrayConversions  {
             if (o == null) {
                 sb.append("NULL");
             } else if (o.getClass().isArray()) {
-                sb = appendArray(sb, o, printFn);
+                sb = appendArray(sb, o, printFn, encoding);
             } else {
-                sb = appendEscaped(sb, new String(printFn.apply(o), UTF_8));
+                sb = appendEscaped(sb, new String(printFn.apply(o), encoding));
             }
         }
 
@@ -53,9 +52,9 @@ class ArrayConversions  {
         return b.append('"');
     }
 
-    static <T> T toArray(Class<T> type, Oid oid, byte[] value, BiFunction<Oid,byte[],Object> parse) {
+    static <T> T toArray(Class<T> type, Oid oid, byte[] value, BiFunction<Oid, byte[], Object> parse, Charset encoding) {
         Class elementType = getElementType(type);
-        if(elementType.isPrimitive()) {
+        if (elementType.isPrimitive()) {
             throw new IllegalArgumentException("Primitive arrays are not supported due to possible NULL values");
         }
 
@@ -63,22 +62,22 @@ class ArrayConversions  {
             return null;
         }
 
-        char[] text = new String(value, UTF_8).toCharArray();
+        char[] text = new String(value, encoding).toCharArray();
         List<List<Object>> holder = new ArrayList<>(1);
 
-        if(readArray(text, skipBounds(text, 0), (List) holder) != text.length) {
+        if (readArray(text, skipBounds(text, 0), (List) holder) != text.length) {
             throw new IllegalStateException("Failed to read array");
         }
 
-        return (T) toNestedArrays(holder.get(0), elementType, getElementOid(oid), parse);
+        return (T) toNestedArrays(holder.get(0), elementType, getElementOid(oid), parse, encoding);
     }
 
     private static int skipBounds(final char[] text, final int start) {
-        if(text[start] != '[') {
+        if (text[start] != '[') {
             return start;
         }
-        for(int end = start + 1;;) {
-            if(text[end++] == '=') {
+        for (int end = start + 1; ; ) {
+            if (text[end++] == '=') {
                 return end;
             }
         }
@@ -86,20 +85,20 @@ class ArrayConversions  {
 
     private static int readArray(final char[] text, final int start, List<Object> result) {
         List<Object> values = new ArrayList<>();
-        for(int i = start + 1;;) {
+        for (int i = start + 1; ; ) {
             final char c = text[i];
-            if(c == '}') {
+            if (c == '}') {
                 result.add(values);
                 return i + 1;
-            } else if(c == ',' || Character.isWhitespace(c)) {
+            } else if (c == ',' || Character.isWhitespace(c)) {
                 i++;
-            } else if(c == '"') {
+            } else if (c == '"') {
                 i = readString(text, i, values);
-            } else if(c == '{') {
+            } else if (c == '{') {
                 i = readArray(text, i, values);
             } else if (c == 'N' && text.length > i + 4 &&
-                    text[i+1] == 'U' && text[i+2] == 'L' && text[i+3] == 'L' &&
-                    (text[i+4] == ',' || text[i+4] == '}' || Character.isWhitespace(text[i+4]))) {
+                    text[i + 1] == 'U' && text[i + 2] == 'L' && text[i + 3] == 'L' &&
+                    (text[i + 4] == ',' || text[i + 4] == '}' || Character.isWhitespace(text[i + 4]))) {
                 i = readNull(i, values);
             } else {
                 i = readValue(text, i, values);
@@ -109,9 +108,9 @@ class ArrayConversions  {
 
     private static int readValue(final char[] text, final int start, List<Object> result) {
         StringBuilder str = new StringBuilder();
-        for(int i = start;; i++) {
+        for (int i = start; ; i++) {
             char c = text[i];
-            if(c == ',' || c == '}' || Character.isWhitespace(c)) {
+            if (c == ',' || c == '}' || Character.isWhitespace(c)) {
                 result.add(str.toString());
                 return i;
             }
@@ -126,13 +125,13 @@ class ArrayConversions  {
 
     private static int readString(final char[] text, final int start, final List<Object> result) {
         StringBuilder str = new StringBuilder();
-        for(int i = start + 1;;) {
+        for (int i = start + 1; ; ) {
             char c = text[i++];
-            if(c == '"') {
+            if (c == '"') {
                 result.add(str.toString());
                 return i;
             }
-            if(c == '\\') {
+            if (c == '\\') {
                 c = text[i++];
             }
             str.append(c);
@@ -148,40 +147,40 @@ class ArrayConversions  {
     }
 
     private static Class getElementType(Class arrayType) {
-        while(arrayType.getComponentType() != null) {
+        while (arrayType.getComponentType() != null) {
             arrayType = arrayType.getComponentType();
         }
         return arrayType;
     }
 
-    private static <T> T[] toNestedArrays(List<Object> result, Class<?> type, Oid oid, BiFunction<Oid, byte[], Object> parse) {
+    private static <T> T[] toNestedArrays(List<Object> result, Class<?> type, Oid oid, BiFunction<Oid, byte[], Object> parse, Charset encoding) {
         Object[] arr = (Object[]) Array.newInstance(type, getNestedDimensions(result));
-        for(int i = 0; i < result.size(); i++) {
+        for (int i = 0; i < result.size(); i++) {
             Object elem = result.get(i);
-            if(elem == null) {
+            if (elem == null) {
                 arr[i] = null;
-            } else if(elem.getClass().equals(String.class)) {
-                arr[i] = parse.apply(oid, ((String) elem).getBytes(UTF_8));
+            } else if (elem.getClass().equals(String.class)) {
+                arr[i] = parse.apply(oid, ((String) elem).getBytes(encoding));
             } else {
-                arr[i] = toNestedArrays((List<Object>) elem, type, oid, parse);
+                arr[i] = toNestedArrays((List<Object>) elem, type, oid, parse, encoding);
             }
         }
         return (T[]) arr;
     }
 
     private static int[] getNestedDimensions(List<Object> result) {
-        if(result.isEmpty()) {
+        if (result.isEmpty()) {
             return new int[]{0};
         }
-        if(!(result.get(0) instanceof List)) {
-            return new int[]{ result.size() };
+        if (!(result.get(0) instanceof List)) {
+            return new int[]{result.size()};
         }
 
         List<Integer> dimensions = new ArrayList<>();
         dimensions.add(result.size());
 
         Object value = result.get(0);
-        while(value instanceof List) {
+        while (value instanceof List) {
             List nested = (List) value;
             dimensions.add(nested.size());
             value = nested.isEmpty() ? null : nested.get(0);
@@ -192,7 +191,7 @@ class ArrayConversions  {
 
     private static int[] toIntArray(List<Integer> list) {
         int[] arr = new int[list.size()];
-        for(int i = 0; i < arr.length; i++) {
+        for (int i = 0; i < arr.length; i++) {
             arr[i] = list.get(i);
         }
         return arr;

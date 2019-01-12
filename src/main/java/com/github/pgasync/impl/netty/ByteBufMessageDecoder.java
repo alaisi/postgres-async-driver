@@ -21,6 +21,7 @@ import com.github.pgasync.impl.io.backend.CloseCompleteDecoder;
 import com.github.pgasync.impl.io.backend.CommandCompleteDecoder;
 import com.github.pgasync.impl.io.backend.DataRowDecoder;
 import com.github.pgasync.impl.io.backend.ErrorResponseDecoder;
+import com.github.pgasync.impl.io.backend.NoDataDecoder;
 import com.github.pgasync.impl.io.backend.NoticeResponseDecoder;
 import com.github.pgasync.impl.io.backend.NotificationResponseDecoder;
 import com.github.pgasync.impl.io.backend.ParseCompleteDecoder;
@@ -31,6 +32,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -44,13 +46,15 @@ import java.util.stream.Collectors;
  */
 class ByteBufMessageDecoder extends ByteToMessageDecoder {
 
-    private static final Map<Byte, Decoder<?>> DECODERS = Set.of(new ErrorResponseDecoder(),
+    private static final Map<Byte, Decoder<?>> DECODERS = Set.of(
+            new ErrorResponseDecoder(),
             new AuthenticationDecoder(),
             new ReadyForQueryDecoder(),
             new RowDescriptionDecoder(),
             new ParseCompleteDecoder(),
             new CloseCompleteDecoder(),
             new BindCompleteDecoder(),
+            new NoDataDecoder(),
             new CommandCompleteDecoder(),
             new DataRowDecoder(),
             new NotificationResponseDecoder(),
@@ -58,6 +62,12 @@ class ByteBufMessageDecoder extends ByteToMessageDecoder {
     ).stream().collect(
             Collectors.toMap(Decoder::getMessageId, Function.identity())
     );
+
+    private final Charset encoding;
+
+    public ByteBufMessageDecoder(Charset encoding) {
+        this.encoding = encoding;
+    }
 
     @Override
     protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
@@ -69,7 +79,7 @@ class ByteBufMessageDecoder extends ByteToMessageDecoder {
             try {
                 if (decoder != null) {
                     ByteBuffer buffer = in.nioBuffer();
-                    out.add(decoder.read(buffer));
+                    out.add(decoder.read(buffer, encoding));
                     in.skipBytes(buffer.position());
                 } else {
                     in.skipBytes(length - 4);

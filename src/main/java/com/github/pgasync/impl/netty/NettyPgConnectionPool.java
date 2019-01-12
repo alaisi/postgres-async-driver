@@ -48,7 +48,7 @@ public class NettyPgConnectionPool extends PgConnectionPool {
 
     @Override
     protected PgProtocolStream openStream(InetSocketAddress address) {
-        return new NettyPgProtocolStream(group, address, useSsl, futuresExecutor);
+        return new NettyPgProtocolStream(group, address, useSsl, encoding, futuresExecutor);
     }
 
     @Override

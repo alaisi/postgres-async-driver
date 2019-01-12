@@ -18,6 +18,7 @@ import com.github.pgasync.impl.io.Decoder;
 import com.github.pgasync.impl.message.backend.Authentication;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 
 /**
  * See <a href="www.postgresql.org/docs/9.3/static/protocol-message-formats.html">Postgres message formats</a>
@@ -56,7 +57,7 @@ public class AuthenticationDecoder implements Decoder<Authentication> {
     }
 
     @Override
-    public Authentication read(ByteBuffer buffer) {
+    public Authentication read(ByteBuffer buffer, Charset encoding) {
         int type = buffer.getInt();
         switch (type) {
             case OK:

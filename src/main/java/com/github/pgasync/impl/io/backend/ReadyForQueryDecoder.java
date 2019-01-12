@@ -18,6 +18,7 @@ import com.github.pgasync.impl.io.Decoder;
 import com.github.pgasync.impl.message.backend.ReadyForQuery;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 
 /**
  * See <a href="www.postgresql.org/docs/9.3/static/protocol-message-formats.html">Postgres message formats</a>
@@ -37,7 +38,7 @@ import java.nio.ByteBuffer;
 public class ReadyForQueryDecoder implements Decoder<ReadyForQuery> {
 
     @Override
-    public ReadyForQuery read(ByteBuffer buffer) {
+    public ReadyForQuery read(ByteBuffer buffer, Charset encoding) {
         buffer.get();
         return ReadyForQuery.INSTANCE;
     }

@@ -19,6 +19,7 @@ import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.sql.Time;
 import java.sql.Timestamp;
@@ -27,7 +28,6 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 
-import static com.github.pgasync.impl.io.IO.bytes;
 import static java.util.Collections.singletonList;
 import static org.junit.Assert.*;
 
@@ -132,7 +132,7 @@ public class ParametersBindingTest {
 
     @Test
     public void shouldBindBytes() {
-        byte[] b = bytes("blob content");
+        byte[] b = "blob content".getBytes(StandardCharsets.UTF_8); // UTF-8 is hard coded here only because the ascii compatible data
         dbr.query("INSERT INTO PS_TEST(BYTEA) VALUES ($1)", List.of(b));
         assertArrayEquals(b, dbr.query("SELECT BYTEA FROM PS_TEST WHERE BYTEA = $1", List.of(b)).at(0).getBytes(0));
     }

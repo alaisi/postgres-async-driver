@@ -2,7 +2,7 @@ package com.github.pgasync.impl;
 
 import static java.lang.System.getenv;
 import static java.lang.System.out;
-import static ru.yandex.qatools.embed.postgresql.distribution.Version.V9_6_2;
+import static ru.yandex.qatools.embed.postgresql.distribution.Version.*;
 
 import com.github.pgasync.ConnectionPool;
 import com.github.pgasync.ConnectionPoolBuilder;
@@ -27,7 +27,7 @@ import ru.yandex.qatools.embed.postgresql.config.PostgresConfig;
 class DatabaseRule extends ExternalResource {
 
     final ConnectionPoolBuilder builder;
-    static PostgresProcess process;
+    private static PostgresProcess process;
     ConnectionPool pool;
 
     DatabaseRule() {
@@ -37,10 +37,12 @@ class DatabaseRule extends ExternalResource {
     DatabaseRule(ConnectionPoolBuilder builder) {
         this.builder = builder;
         if (builder instanceof EmbeddedConnectionPoolBuilder) {
+            /*
             if (process == null) {
                 try {
                     PostgresStarter<PostgresExecutable, PostgresProcess> runtime = PostgresStarter.getDefaultInstance();
-                    PostgresConfig config = new PostgresConfig(V9_6_2, new AbstractPostgresConfig.Net(),
+                    //PostgresConfig config = new PostgresConfig(V11_1, new AbstractPostgresConfig.Net(),
+                    PostgresConfig config = new PostgresConfig(V11_1, new AbstractPostgresConfig.Net("localhost", 54321),
                             new AbstractPostgresConfig.Storage("async-pg"), new AbstractPostgresConfig.Timeout(),
                             new AbstractPostgresConfig.Credentials("async-pg", "async-pg"));
                     PostgresExecutable exec = runtime.prepare(config);
@@ -51,9 +53,11 @@ class DatabaseRule extends ExternalResource {
                     throw new RuntimeException(e);
                 }
             }
-
             builder.hostname(process.getConfig().net().host());
             builder.port(process.getConfig().net().port());
+            */
+            builder.hostname("localhost");
+            builder.port(54321);
         }
     }
 
@@ -101,6 +105,7 @@ class DatabaseRule extends ExternalResource {
             database("async-pg");
             username("async-pg");
             password("async-pg");
+            encoding(System.getProperty("file.encoding", "utf-8"));
         }
     }
 

@@ -18,6 +18,7 @@ import com.github.pgasync.impl.Oid;
 import com.github.pgasync.impl.message.frontend.Parse;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 
 import static com.github.pgasync.impl.io.IO.putCString;
 
@@ -56,9 +57,9 @@ public class ParseEncoder extends ExtendedQueryEncoder<Parse> {
     }
 
     @Override
-    public void writeBody(Parse msg, ByteBuffer buffer) {
-        putCString(buffer, msg.getSname()); // prepared statement
-        putCString(buffer, msg.getQuery());
+    public void writeBody(Parse msg, ByteBuffer buffer, Charset encoding) {
+        putCString(buffer, msg.getSname(), encoding); // prepared statement
+        putCString(buffer, msg.getQuery(), encoding);
         buffer.putShort((short) msg.getTypes().length); // parameter types count
         for (Oid type : msg.getTypes()) {
             buffer.putInt(type.getId());

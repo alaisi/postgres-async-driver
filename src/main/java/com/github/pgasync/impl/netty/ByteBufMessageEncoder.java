@@ -33,12 +33,13 @@ import io.netty.handler.codec.MessageToByteEncoder;
 
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Encodes Postgres protocol V11 messages to bytes.
+ * Encodes Postgres v11 protocol v3 messages to bytes.
  *
  * @author Antti Laisi
  */
@@ -60,6 +61,12 @@ public class ByteBufMessageEncoder extends MessageToByteEncoder<Message> {
 
     private final ByteBuffer buffer = ByteBuffer.allocate(Integer.valueOf(System.getProperty("pg.io.buffer.length", "4096")));
 
+    private final Charset encoding;
+
+    public ByteBufMessageEncoder(Charset encoding) {
+        this.encoding = encoding;
+    }
+
     @Override
     @SuppressWarnings("unchecked")
     protected void encode(ChannelHandlerContext ctx, Message msg, ByteBuf out) {
@@ -70,7 +77,7 @@ public class ByteBufMessageEncoder extends MessageToByteEncoder<Message> {
         try {
             while (true) {
                 try {
-                    encoder.write(msg, msgbuf);
+                    encoder.write(msg, msgbuf, encoding);
                     break;
                 } catch (BufferOverflowException overflow) {
                     // large clob/blob, resize buffer aggressively

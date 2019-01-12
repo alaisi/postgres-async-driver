@@ -4,6 +4,7 @@ import com.github.pgasync.impl.io.Encoder;
 import com.github.pgasync.impl.message.frontend.SSLRequest;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 
 /**
  * @author Marat Gainullin
@@ -16,7 +17,7 @@ public class SSLRequestEncoder implements Encoder<SSLRequest> {
     }
 
     @Override
-    public void write(SSLRequest msg, ByteBuffer buffer) {
+    public void write(SSLRequest msg, ByteBuffer buffer, Charset encoding) {
         buffer.putInt(8);
         buffer.putInt(80877103);
     }

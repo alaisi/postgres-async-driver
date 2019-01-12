@@ -1,6 +1,7 @@
 package com.github.pgasync.impl;
 
 import com.github.pgasync.ConnectionPool;
+import com.github.pgasync.ResultSet;
 import com.github.pgasync.SqlException;
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -21,8 +22,23 @@ public class AuthenticationTest {
             pool.completeQuery("SELECT 1").get();
             fail();
         } catch (Exception ex) {
-            SqlException sqlException = (SqlException) ex;
-            assertEquals("28P01", sqlException.getCode());
+            SqlException.ifCause(ex,
+                    sqlException ->
+                            assertEquals("28P01", sqlException.getCode()),
+                    () -> {
+                        throw ex;
+                    });
+        } finally {
+            pool.close().get();
+        }
+    }
+
+    @Test
+    public void shouldGetResultOnValidCredentials() throws Exception {
+        ConnectionPool pool = dbr.builder.password("async-pg").build();
+        try {
+            ResultSet rs = pool.completeQuery("SELECT 1").get();
+            assertEquals(1L, (long) rs.at(0).getInt(0));
         } finally {
             pool.close().get();
         }

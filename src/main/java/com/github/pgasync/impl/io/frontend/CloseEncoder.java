@@ -18,6 +18,7 @@ import com.github.pgasync.impl.io.IO;
 import com.github.pgasync.impl.message.frontend.Close;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 
 /**
  * See <https://www.postgresql.org/docs/11/protocol-message-formats.html">Postgres message formats</a>
@@ -40,7 +41,7 @@ import java.nio.ByteBuffer;
  *
  * @author Marat Gainullin
  */
-public class CloseEncoder extends SkipableEncoder<Close> {
+public class CloseEncoder extends ExtendedQueryEncoder<Close> {
 
     @Override
     public Class<Close> getMessageType() {
@@ -53,8 +54,8 @@ public class CloseEncoder extends SkipableEncoder<Close> {
     }
 
     @Override
-    public void writeBody(Close msg, ByteBuffer buffer) {
+    public void writeBody(Close msg, ByteBuffer buffer, Charset encoding) {
         buffer.put(msg.getKind().getCode());
-        IO.putCString(buffer, msg.getName());
+        IO.putCString(buffer, msg.getName(), encoding);
     }
 }

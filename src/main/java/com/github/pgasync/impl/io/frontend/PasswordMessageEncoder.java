@@ -17,8 +17,7 @@ package com.github.pgasync.impl.io.frontend;
 import com.github.pgasync.impl.message.frontend.PasswordMessage;
 
 import java.nio.ByteBuffer;
-
-import static com.github.pgasync.impl.io.IO.bytes;
+import java.nio.charset.Charset;
 
 /**
  * See <a href="www.postgresql.org/docs/9.3/static/protocol-message-formats.html">Postgres message formats</a>
@@ -48,8 +47,8 @@ public class PasswordMessageEncoder extends SkipableEncoder<PasswordMessage> {
     }
 
     @Override
-    public void writeBody(PasswordMessage msg, ByteBuffer buffer) {
-        buffer.put(msg.getPasswordHash() != null ? msg.getPasswordHash() : bytes(msg.getPassword()));
+    public void writeBody(PasswordMessage msg, ByteBuffer buffer, Charset encoding) {
+        buffer.put(msg.getPasswordHash() != null ? msg.getPasswordHash() : msg.getPassword().getBytes(encoding));
         buffer.put((byte) 0);
     }
 

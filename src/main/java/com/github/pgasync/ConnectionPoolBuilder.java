@@ -17,6 +17,7 @@ package com.github.pgasync;
 import com.github.pgasync.impl.conversion.DataConverter;
 import com.github.pgasync.impl.netty.NettyPgConnectionPool;
 
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -98,6 +99,11 @@ public class ConnectionPoolBuilder {
         return this;
     }
 
+    public ConnectionPoolBuilder encoding(String value) {
+        properties.encoding = value;
+        return this;
+    }
+
     /**
      * Configuration for a pool.
      */
@@ -113,6 +119,7 @@ public class ConnectionPoolBuilder {
         DataConverter dataConverter = null;
         List<Converter<?>> converters = new ArrayList<>();
         boolean useSsl;
+        String encoding = System.getProperty("pg.async.encoding", "utf-8");
         String validationQuery;
 
         public String getHostname() {
@@ -147,8 +154,12 @@ public class ConnectionPoolBuilder {
             return useSsl;
         }
 
+        public String getEncoding() {
+            return encoding;
+        }
+
         public DataConverter getDataConverter() {
-            return dataConverter != null ? dataConverter : new DataConverter(converters);
+            return dataConverter != null ? dataConverter : new DataConverter(converters, Charset.forName(encoding));
         }
 
         public String getValidationQuery() {

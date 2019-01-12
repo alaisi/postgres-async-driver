@@ -16,6 +16,8 @@ package com.github.pgasync.impl.message.backend;
 
 import com.github.pgasync.impl.message.Message;
 
+import static javax.xml.bind.DatatypeConverter.printHexBinary;
+
 /**
  * @author Antti Laisi
  */
@@ -39,6 +41,6 @@ public class Authentication implements Message {
 
     @Override
     public String toString() {
-        return String.format("Authentication(success=%s, md5salt=%s)", success, md5salt.toString());
+        return String.format("Authentication(success=%s, md5salt=%s)", success, md5salt != null ? printHexBinary(md5salt) : null);
     }
 }
