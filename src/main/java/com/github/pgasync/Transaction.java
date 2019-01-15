@@ -40,4 +40,9 @@ public interface Transaction extends QueryExecutor {
      */
     CompletableFuture<Void> close();
 
+    /**
+     * Returns a connection, this transaction belongs to.
+     */
+    Connection getConnection();
+
 }

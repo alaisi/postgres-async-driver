@@ -15,7 +15,7 @@
 package com.github.pgasync.impl.message.backend;
 
 /**
- * @author Antti Laisi
+ * @author Marat Gainullin
  */
 public class NoticeResponse extends LogResponse {
 
@@ -25,6 +25,6 @@ public class NoticeResponse extends LogResponse {
 
     @Override
     public String toString() {
-        return "NoticeResponse(level=" + level + ",code=" + code + ",message=" + message + ")";
+        return "Postgres notice. " + level + ": SQLSTATE=" + code + ", MESSAGE=" + message;
     }
 }

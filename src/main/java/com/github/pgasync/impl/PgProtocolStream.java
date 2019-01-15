@@ -19,6 +19,7 @@ import com.github.pgasync.impl.message.backend.CommandComplete;
 import com.github.pgasync.impl.message.backend.DataRow;
 import com.github.pgasync.impl.message.backend.RowDescription;
 import com.github.pgasync.impl.message.frontend.Execute;
+import com.github.pgasync.impl.message.frontend.Parse;
 import com.github.pgasync.impl.message.frontend.PasswordMessage;
 import com.github.pgasync.impl.message.frontend.Query;
 import com.github.pgasync.impl.message.frontend.StartupMessage;

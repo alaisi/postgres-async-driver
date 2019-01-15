@@ -1,11 +1,11 @@
 package com.github.pgasync.impl.io.frontend;
 
-import com.github.pgasync.impl.message.Message;
+import com.github.pgasync.impl.message.ExtendedQueryMessage;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 
-public abstract class ExtendedQueryEncoder<M extends Message> extends SkipableEncoder<M> {
+public abstract class ExtendedQueryEncoder<M extends ExtendedQueryMessage> extends SkipableEncoder<M> {
 
     @Override
     public void write(M msg, ByteBuffer buffer, Charset encoding) {

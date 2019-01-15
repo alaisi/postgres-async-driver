@@ -4,6 +4,7 @@ import com.github.pgasync.impl.PgColumn;
 
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
@@ -31,7 +32,7 @@ public interface PreparedStatement {
      * @param params Array of query parameters values.
      * @return CompletableFuture that completes when the whole process ends or when an error occurs. Future's value will indicate the number of rows affected by the query.
      */
-    CompletableFuture<Integer> fetch(Consumer<Map<String, PgColumn>> onColumns, Consumer<Row> processor, Object... params);
+    CompletableFuture<Integer> fetch(BiConsumer<Map<String, PgColumn>, PgColumn[]> onColumns, Consumer<Row> processor, Object... params);
 
     /**
      * Closes this {@link PreparedStatement} and possibly frees resources. In case of pool statement it may be returned to a pool for future reuse.

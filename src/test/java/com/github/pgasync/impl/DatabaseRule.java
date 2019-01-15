@@ -8,9 +8,11 @@ import com.github.pgasync.ConnectionPool;
 import com.github.pgasync.ConnectionPoolBuilder;
 import com.github.pgasync.Db;
 import com.github.pgasync.ResultSet;
+import com.github.pgasync.SqlException;
 import org.junit.rules.ExternalResource;
 
 import java.io.IOException;
+import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -56,8 +58,10 @@ class DatabaseRule extends ExternalResource {
             builder.hostname(process.getConfig().net().host());
             builder.port(process.getConfig().net().port());
             */
+
             builder.hostname("localhost");
             builder.port(54321);
+
         }
     }
 
@@ -87,9 +91,13 @@ class DatabaseRule extends ExternalResource {
         return block(db().completeQuery(sql, params.toArray()));
     }
 
+    Collection<ResultSet> script(String sql) {
+        return block(db().completeScript(sql));
+    }
+
     private <T> T block(CompletableFuture<T> future) {
         try {
-            return future.get(5, TimeUnit.SECONDS);
+            return future.get(5_0000000, TimeUnit.SECONDS);
         } catch (Throwable th) {
             throw new RuntimeException(th);
         }
@@ -120,13 +128,14 @@ class DatabaseRule extends ExternalResource {
 
         if (db == null && user == null && pass == null) {
             return new EmbeddedConnectionPoolBuilder().maxConnections(size);
+        } else {
+            return new EmbeddedConnectionPoolBuilder()
+                    .database(envOrDefault("PG_DATABASE", "postgres"))
+                    .username(envOrDefault("PG_USERNAME", "postgres"))
+                    .password(envOrDefault("PG_PASSWORD", "postgres"))
+                    .ssl(true)
+                    .maxConnections(size);
         }
-        return new EmbeddedConnectionPoolBuilder()
-                .database(envOrDefault("PG_DATABASE", "postgres"))
-                .username(envOrDefault("PG_USERNAME", "postgres"))
-                .password(envOrDefault("PG_PASSWORD", "postgres"))
-                .ssl(true)
-                .maxConnections(size);
     }
 
 

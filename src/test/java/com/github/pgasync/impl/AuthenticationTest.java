@@ -15,16 +15,19 @@ public class AuthenticationTest {
     @ClassRule
     public static DatabaseRule dbr = new DatabaseRule(createPoolBuilder(1));
 
-    @Test
+    @Test(expected = SqlException.class)
     public void shouldThrowExceptionOnInvalidCredentials() throws Exception {
-        ConnectionPool pool = dbr.builder.password("_invalid_").build();
+        ConnectionPool pool = dbr.builder
+                .password("_invalid_")
+                .build();
         try {
             pool.completeQuery("SELECT 1").get();
-            fail();
         } catch (Exception ex) {
             SqlException.ifCause(ex,
-                    sqlException ->
-                            assertEquals("28P01", sqlException.getCode()),
+                    sqlException -> {
+                        assertEquals("28P01", sqlException.getCode());
+                        throw sqlException;
+                    },
                     () -> {
                         throw ex;
                     });
@@ -35,7 +38,9 @@ public class AuthenticationTest {
 
     @Test
     public void shouldGetResultOnValidCredentials() throws Exception {
-        ConnectionPool pool = dbr.builder.password("async-pg").build();
+        ConnectionPool pool = dbr.builder
+                .password("async-pg")
+                .build();
         try {
             ResultSet rs = pool.completeQuery("SELECT 1").get();
             assertEquals(1L, (long) rs.at(0).getInt(0));

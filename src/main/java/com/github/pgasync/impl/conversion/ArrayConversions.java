@@ -29,6 +29,8 @@ class ArrayConversions {
             Object o = Array.get(elements, i);
             if (o == null) {
                 sb.append("NULL");
+            } else if (o instanceof byte[]) {
+                sb.append(BlobConversions.fromBytes((byte[]) o));
             } else if (o.getClass().isArray()) {
                 sb = appendArray(sb, o, printFn, encoding);
             } else {
@@ -52,8 +54,11 @@ class ArrayConversions {
         return b.append('"');
     }
 
-    static <T> T toArray(Class<T> type, Oid oid, byte[] value, BiFunction<Oid, byte[], Object> parse, Charset encoding) {
-        Class elementType = getElementType(type);
+    static <T> T toArray(Class<T> arrayType, Oid oid, byte[] value, BiFunction<Oid, byte[], Object> parse, Charset encoding) {
+        Class elementType = arrayType.getComponentType();
+        while (elementType.getComponentType() != null && elementType != byte[].class) {
+            elementType = elementType.getComponentType();
+        }
         if (elementType.isPrimitive()) {
             throw new IllegalArgumentException("Primitive arrays are not supported due to possible NULL values");
         }
@@ -146,15 +151,8 @@ class ArrayConversions {
         }
     }
 
-    private static Class getElementType(Class arrayType) {
-        while (arrayType.getComponentType() != null) {
-            arrayType = arrayType.getComponentType();
-        }
-        return arrayType;
-    }
-
-    private static <T> T[] toNestedArrays(List<Object> result, Class<?> type, Oid oid, BiFunction<Oid, byte[], Object> parse, Charset encoding) {
-        Object[] arr = (Object[]) Array.newInstance(type, getNestedDimensions(result));
+    private static <T> T[] toNestedArrays(List<Object> result, Class<?> leafElementType, Oid oid, BiFunction<Oid, byte[], Object> parse, Charset encoding) {
+        Object[] arr = (Object[]) Array.newInstance(leafElementType, getNestedDimensions(result, oid));
         for (int i = 0; i < result.size(); i++) {
             Object elem = result.get(i);
             if (elem == null) {
@@ -162,13 +160,13 @@ class ArrayConversions {
             } else if (elem.getClass().equals(String.class)) {
                 arr[i] = parse.apply(oid, ((String) elem).getBytes(encoding));
             } else {
-                arr[i] = toNestedArrays((List<Object>) elem, type, oid, parse, encoding);
+                arr[i] = toNestedArrays((List<Object>) elem, leafElementType, oid, parse, encoding);
             }
         }
         return (T[]) arr;
     }
 
-    private static int[] getNestedDimensions(List<Object> result) {
+    private static int[] getNestedDimensions(List<Object> result, Oid oid) {
         if (result.isEmpty()) {
             return new int[]{0};
         }

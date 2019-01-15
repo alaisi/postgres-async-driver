@@ -18,6 +18,8 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static javax.xml.bind.DatatypeConverter.parseHexBinary;
+
 /**
  * @author Antti Laisi
  */
@@ -85,7 +87,7 @@ public class DataConverter {
     }
 
     public byte[] toBytes(Oid oid, byte[] value) {
-        return value == null ? null : BlobConversions.toBytes(oid, value, encoding);
+        return value == null ? null : BlobConversions.toBytes(oid, value);
     }
 
     public Boolean toBoolean(Oid oid, byte[] value) {
@@ -125,6 +127,11 @@ public class DataConverter {
 
             case BOOL_ARRAY:
                 return ArrayConversions.toArray(arrayType, oid, value, BooleanConversions::toBoolean, encoding);
+            case BYTEA_ARRAY:
+                return ArrayConversions.toArray(arrayType, oid, value, (oide, valuee) -> {
+                    byte[] first = BlobConversions.toBytes(oide, valuee);
+                    return parseHexBinary(new String(first, 1, first.length - 1, encoding));
+                }, encoding);
             default:
                 throw new IllegalStateException("Unsupported array type: " + oid);
         }
@@ -275,7 +282,9 @@ public class DataConverter {
             } else if (params[i] instanceof Byte) {
                 types[i] = Oid.INT2;
             } else if (params[i] instanceof byte[]) {
-                types[i] = Oid.INT2_ARRAY;
+                types[i] = Oid.BYTEA;
+            } else if (params[i] instanceof byte[][]) {
+                types[i] = Oid.BYTEA_ARRAY;
             } else if (params[i] instanceof BigInteger) {
                 types[i] = Oid.NUMERIC;
             } else if (params[i] instanceof BigInteger[]) {
@@ -285,9 +294,9 @@ public class DataConverter {
             } else if (params[i] instanceof BigDecimal[]) {
                 types[i] = Oid.NUMERIC_ARRAY;
             } else if (params[i] instanceof Boolean) {
-                types[i] = Oid.BIT;
+                types[i] = Oid.BOOL;
             } else if (params[i] instanceof Boolean[]) {
-                types[i] = Oid.BIT_ARRAY;
+                types[i] = Oid.BOOL_ARRAY;
             } else if (params[i] instanceof CharSequence) {
                 types[i] = Oid.VARCHAR;
             } else if (params[i] instanceof Character) {

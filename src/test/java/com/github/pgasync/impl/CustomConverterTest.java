@@ -18,19 +18,23 @@ public class CustomConverterTest {
 
     static class Json {
         final String json;
+
         Json(String json) {
             this.json = json;
         }
     }
+
     static class JsonConverter implements Converter<Json> {
         @Override
         public Class<Json> type() {
             return Json.class;
         }
+
         @Override
         public byte[] from(Json o) {
             return o.json.getBytes(UTF_8);
         }
+
         @Override
         public Json to(Oid oid, byte[] value) {
             return new Json(new String(value, UTF_8));
@@ -38,9 +42,10 @@ public class CustomConverterTest {
     }
 
     @ClassRule
-    public static DatabaseRule dbr = new DatabaseRule(DatabaseRule
-            .createPoolBuilder(1)
-            .converters(new JsonConverter()));
+    public static DatabaseRule dbr = new DatabaseRule(
+            DatabaseRule.createPoolBuilder(1)
+                    .converters(new JsonConverter())
+    );
 
     @BeforeClass
     public static void create() {
@@ -55,7 +60,7 @@ public class CustomConverterTest {
 
     @Test
     public void shouldConvertColumnDataToType() {
-        dbr.query("INSERT INTO CC_TEST VALUES (1, $1)", List.of("{\"a\": 1}"));
+        dbr.query("INSERT INTO CC_TEST VALUES (1, $1)", List.of(new Json("{\"a\": 1}")));
         assertEquals("{\"a\": 1}", dbr.query("SELECT * FROM CC_TEST WHERE ID = 1").at(0).get("js", Json.class).json);
     }
 

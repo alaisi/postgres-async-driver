@@ -28,6 +28,7 @@ import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -39,6 +40,45 @@ import java.util.function.Function;
 public abstract class PgConnectionPool implements ConnectionPool {
 
     private class PooledPgConnection implements Connection {
+
+        private class PooledPgTransaction implements Transaction {
+
+            private final Transaction delegate;
+
+            PooledPgTransaction(Transaction delegate) {
+                this.delegate = delegate;
+            }
+
+            public CompletableFuture<Void> commit() {
+                return delegate.commit();
+            }
+
+            public CompletableFuture<Void> rollback() {
+                return delegate.rollback();
+            }
+
+            public CompletableFuture<Void> close() {
+                return delegate.close();
+            }
+
+            public CompletableFuture<Transaction> begin() {
+                return delegate.begin().thenApply(PooledPgTransaction::new);
+            }
+
+            @Override
+            public CompletableFuture<Integer> query(BiConsumer<Map<String, PgColumn>, PgColumn[]> onColumns, Consumer<Row> onRow, String sql, Object... params) {
+                return delegate.query(onColumns, onRow, sql, params);
+            }
+
+            @Override
+            public CompletableFuture<Void> script(BiConsumer<Map<String, PgColumn>, PgColumn[]> onColumns, Consumer<Row> onRow, Consumer<Integer> onAffected, String sql) {
+                return delegate.script(onColumns, onRow, onAffected, sql);
+            }
+
+            public Connection getConnection() {
+                return PooledPgConnection.this;
+            }
+        }
 
         private final PgConnection delegate;
         private PooledPgPreparedStatement evicted;
@@ -69,6 +109,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
         void shutdown() {
             statements.forEach((sql, stmt) -> stmt.delegate.close().join());
             statements.clear();
+            delegate.close().join();
         }
 
         @Override
@@ -84,16 +125,16 @@ public abstract class PgConnectionPool implements ConnectionPool {
 
         @Override
         public CompletableFuture<Transaction> begin() {
-            return delegate.begin();
+            return delegate.begin().thenApply(PooledPgTransaction::new);
         }
 
         @Override
-        public CompletableFuture<Void> script(Consumer<Map<String, PgColumn>> onColumns, Consumer<Row> onRow, Consumer<Integer> onAffected, String sql) {
+        public CompletableFuture<Void> script(BiConsumer<Map<String, PgColumn>, PgColumn[]> onColumns, Consumer<Row> onRow, Consumer<Integer> onAffected, String sql) {
             return delegate.script(onColumns, onRow, onAffected, sql);
         }
 
         @Override
-        public CompletableFuture<Integer> query(Consumer<Map<String, PgColumn>> onColumns, Consumer<Row> onRow, String sql, Object... params) {
+        public CompletableFuture<Integer> query(BiConsumer<Map<String, PgColumn>, PgColumn[]> onColumns, Consumer<Row> onRow, String sql, Object... params) {
             return delegate.query(onColumns, onRow, sql, params);
         }
 
@@ -138,7 +179,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
             }
 
             @Override
-            public CompletableFuture<Integer> fetch(Consumer<Map<String, PgColumn>> onColumns, Consumer<Row> processor, Object... params) {
+            public CompletableFuture<Integer> fetch(BiConsumer<Map<String, PgColumn>, PgColumn[]> onColumns, Consumer<Row> processor, Object... params) {
                 return delegate.fetch(onColumns, processor, params);
             }
         }
@@ -146,6 +187,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
 
     private final int maxConnections;
     private final int maxStatements;
+    private final String validationQuery;
     protected final Charset encoding;
     private final ReentrantLock lock = new ReentrantLock();
     @GuardedBy("lock")
@@ -173,6 +215,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
         this.maxConnections = properties.getMaxConnections();
         this.maxStatements = properties.getMaxStatements();
         this.dataConverter = properties.getDataConverter();
+        this.validationQuery = properties.getValidationQuery();
         this.encoding = Charset.forName(properties.getEncoding());
         this.futuresExecutor = futuresExecutor;
     }
@@ -213,10 +256,24 @@ public abstract class PgConnectionPool implements ConnectionPool {
                     if (tryIncreaseSize()) {
                         new PooledPgConnection(new PgConnection(openStream(address), dataConverter, encoding))
                                 .connect(username, password, database)
-                                .thenAccept(uponAvailable::complete)
+                                .thenApply(pooledConnection -> {
+                                    if (validationQuery != null && !validationQuery.isBlank()) {
+                                        return pooledConnection.completeQuery(validationQuery).thenApply(rs -> pooledConnection);
+                                    } else {
+                                        return CompletableFuture.completedFuture(pooledConnection);
+                                    }
+                                })
+                                .thenCompose(Function.identity())
+                                .thenAccept(pooledConnection -> uponAvailable.completeAsync(() -> pooledConnection, futuresExecutor))
                                 .exceptionally(th -> {
-                                    futuresExecutor.execute(() -> uponAvailable.completeExceptionally(th));
-                                    return null;
+                                    lock.lock();
+                                    try {
+                                        size--;
+                                        futuresExecutor.execute(() -> uponAvailable.completeExceptionally(th));
+                                        return null;
+                                    } finally {
+                                        lock.unlock();
+                                    }
                                 });
                     } else {
                         // Pool is full now and all connections are busy
@@ -274,7 +331,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
     }
 
     @Override
-    public CompletableFuture<Void> script(Consumer<Map<String, PgColumn>> onColumns, Consumer<Row> onRow, Consumer<Integer> onAffected, String sql) {
+    public CompletableFuture<Void> script(BiConsumer<Map<String, PgColumn>, PgColumn[]> onColumns, Consumer<Row> onRow, Consumer<Integer> onAffected, String sql) {
         return getConnection()
                 .thenApply(connection ->
                         connection.script(onColumns, onRow, onAffected, sql)
@@ -293,7 +350,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
     }
 
     @Override
-    public CompletableFuture<Integer> query(Consumer<Map<String, PgColumn>> onColumns, Consumer<Row> onRow, String sql, Object... params) {
+    public CompletableFuture<Integer> query(BiConsumer<Map<String, PgColumn>, PgColumn[]> onColumns, Consumer<Row> onRow, String sql, Object... params) {
         return getConnection()
                 .thenApply(connection ->
                         connection.query(onColumns, onRow, sql, params)

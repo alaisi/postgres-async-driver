@@ -25,19 +25,19 @@ public class ListenNotifyTest {
         BlockingQueue<String> result = new LinkedBlockingQueue<>(5);
 
         Listening subscription = pool.getConnection().get().subscribe("example", result::offer).get();
+        try {
+            TimeUnit.SECONDS.sleep(2);
 
-        TimeUnit.SECONDS.sleep(2);
+            pool.completeScript("notify example, 'msg-1'").get();
+            pool.completeScript("notify example, 'msg-2'").get();
+            pool.completeScript("notify example, 'msg-3'").get();
 
-        pool.completeScript("notify example, 'msg-1'").get();
-        pool.completeScript("notify example, 'msg-2'").get();
-        pool.completeScript("notify example, 'msg-3'").get();
-
-        assertEquals("msg-1", result.poll(2, TimeUnit.SECONDS));
-        assertEquals("msg-2", result.poll(2, TimeUnit.SECONDS));
-        assertEquals("msg-3", result.poll(2, TimeUnit.SECONDS));
-
-        subscription.unlisten();
-
+            assertEquals("msg-1", result.poll(2, TimeUnit.SECONDS));
+            assertEquals("msg-2", result.poll(2, TimeUnit.SECONDS));
+            assertEquals("msg-3", result.poll(2, TimeUnit.SECONDS));
+        } finally {
+            subscription.unlisten();
+        }
         pool.completeQuery("notify example, 'msg'").get();
         assertNull(result.poll(2, TimeUnit.SECONDS));
     }

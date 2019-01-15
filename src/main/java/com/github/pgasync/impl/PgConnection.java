@@ -18,11 +18,13 @@ import static com.github.pgasync.impl.message.backend.RowDescription.ColumnDescr
 
 import java.nio.charset.Charset;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.logging.Level;
@@ -70,22 +72,26 @@ public class PgConnection implements Connection {
 
         @Override
         public CompletableFuture<ResultSet> query(Object... params) {
-            AtomicReference<Map<String, PgColumn>> columnsRef = new AtomicReference<>();
+            AtomicReference<Map<String, PgColumn>> columnsByNameRef = new AtomicReference<>();
+            AtomicReference<PgColumn[]> orderedColumnsRef = new AtomicReference<>();
             List<Row> rows = new ArrayList<>();
-            return fetch(columnsRef::set, rows::add, params)
-                    .thenApply(v -> new PgResultSet(columnsRef.get(), rows, 0));
+            return fetch((columnsByName, orderedColumns) -> {
+                columnsByNameRef.set(columnsByName);
+                orderedColumnsRef.set(orderedColumns);
+            }, rows::add, params)
+                    .thenApply(v -> new PgResultSet(columnsByNameRef.get(), List.of(orderedColumnsRef.get()), rows, 0));
         }
 
         @Override
-        public CompletableFuture<Integer> fetch(Consumer<Map<String, PgColumn>> onColumns, Consumer<Row> processor, Object... params) {
+        public CompletableFuture<Integer> fetch(BiConsumer<Map<String, PgColumn>, PgColumn[]> onColumns, Consumer<Row> processor, Object... params) {
             return stream
                     .send(new Bind(sname, pname, dataConverter.fromParameters(params)))
                     .thenApply(bindComplete -> stream.send(Describe.portal(pname)))
                     .thenCompose(Function.identity())
-                    .thenApply(rowDescription -> calcColumns(((RowDescription) rowDescription).getColumns()))
-                    .thenApply(columns -> {
-                        onColumns.accept(columns);
-                        return stream.send(new Execute(pname), dataRow -> processor.accept(new PgRow(dataRow, columns, dataConverter)));
+                    .thenApply(rowDescription -> {
+                        Columns columns = calcColumns(((RowDescription) rowDescription).getColumns());
+                        onColumns.accept(columns.byName, columns.ordered);
+                        return stream.send(new Execute(pname), dataRow -> processor.accept(new PgRow(dataRow, columns.byName, columns.ordered, dataConverter)));
                     })
                     .thenCompose(Function.identity());
         }
@@ -94,6 +100,16 @@ public class PgConnection implements Connection {
         public CompletableFuture<Void> close() {
             return stream.send(Close.statement(sname)).thenAccept(closeComplete -> {
             });
+        }
+    }
+
+    public static class Columns {
+        final Map<String, PgColumn> byName;
+        final PgColumn[] ordered;
+
+        Columns(Map<String, PgColumn> byName, PgColumn[] ordered) {
+            this.byName = byName;
+            this.ordered = ordered;
         }
     }
 
@@ -164,25 +180,25 @@ public class PgConnection implements Connection {
     }
 
     @Override
-    public CompletableFuture<Void> script(Consumer<Map<String, PgColumn>> onColumns, Consumer<Row> onRow, Consumer<Integer> onAffected, String sql) {
+    public CompletableFuture<Void> script(BiConsumer<Map<String, PgColumn>, PgColumn[]> onColumns, Consumer<Row> onRow, Consumer<Integer> onAffected, String sql) {
         if (sql == null || sql.isBlank()) {
             throw new IllegalArgumentException("'sql' shouldn't be null or empty or blank string");
         }
-        AtomicReference<Map<String, PgColumn>> columnsRef = new AtomicReference<>();
+        AtomicReference<Columns> columnsRef = new AtomicReference<>();
         return stream.send(
                 new Query(sql),
                 columnDescriptions -> {
-                    Map<String, PgColumn> columns = calcColumns(columnDescriptions);
-                    onColumns.accept(columns);
+                    Columns columns = calcColumns(columnDescriptions);
                     columnsRef.set(columns);
+                    onColumns.accept(columns.byName, columns.ordered);
                 },
-                message -> onRow.accept(new PgRow(message, columnsRef.get(), dataConverter)),
+                message -> onRow.accept(new PgRow(message, columnsRef.get().byName, columnsRef.get().ordered, dataConverter)),
                 message -> onAffected.accept(message.getAffectedRows())
         );
     }
 
     @Override
-    public CompletableFuture<Integer> query(Consumer<Map<String, PgColumn>> onColumns, Consumer<Row> onRow, String sql, Object... params) {
+    public CompletableFuture<Integer> query(BiConsumer<Map<String, PgColumn>, PgColumn[]> onColumns, Consumer<Row> onRow, String sql, Object... params) {
         return prepareStatement(sql, dataConverter.assumeTypes(params))
                 .thenApply(ps -> ps.fetch(onColumns, onRow, params)
                         .handle((affected, th) -> ps.close()
@@ -219,12 +235,15 @@ public class PgConnection implements Connection {
         return stream.close();
     }
 
-    private static Map<String, PgColumn> calcColumns(ColumnDescription[] descriptions) {
-        Map<String, PgColumn> columns = new LinkedHashMap<>();
+    private static Columns calcColumns(ColumnDescription[] descriptions) {
+        Map<String, PgColumn> byName = new HashMap<>();
+        PgColumn[] ordered = new PgColumn[descriptions.length];
         for (int i = 0; i < descriptions.length; i++) {
-            columns.put(descriptions[i].getName().toUpperCase(), new PgColumn(i, descriptions[i].getName(), descriptions[i].getType()));
+            PgColumn column = new PgColumn(i, descriptions[i].getName(), descriptions[i].getType());
+            byName.put(descriptions[i].getName(), column);
+            ordered[i] = column;
         }
-        return columns;
+        return new Columns(Collections.unmodifiableMap(byName), ordered);
     }
 
     /**
@@ -274,20 +293,39 @@ public class PgConnection implements Connection {
         }
 
         @Override
-        public CompletableFuture<Void> script(Consumer<Map<String, PgColumn>> onColumns, Consumer<Row> onRow, Consumer<Integer> onAffected, String sql) {
-            return PgConnection.this.script(onColumns, onRow, onAffected, sql)
-                    .exceptionally(th -> {
-                        rollback();
-                        throw new RuntimeException(th);
-                    });
+        public Connection getConnection() {
+            return PgConnection.this;
         }
 
-        public CompletableFuture<Integer> query(Consumer<Map<String, PgColumn>> onColumns, Consumer<Row> onRow, String sql, Object... params) {
+        @Override
+        public CompletableFuture<Void> script(BiConsumer<Map<String, PgColumn>, PgColumn[]> onColumns, Consumer<Row> onRow, Consumer<Integer> onAffected, String sql) {
+            return PgConnection.this.script(onColumns, onRow, onAffected, sql)
+                    .handle((v, th) -> {
+                        if (th != null) {
+                            return rollback()
+                                    .thenAccept(_v -> {
+                                        throw new RuntimeException(th);
+                                    });
+                        } else {
+                            return CompletableFuture.<Void>completedFuture(null);
+                        }
+                    })
+                    .thenCompose(Function.identity());
+        }
+
+        public CompletableFuture<Integer> query(BiConsumer<Map<String, PgColumn>, PgColumn[]> onColumns, Consumer<Row> onRow, String sql, Object... params) {
             return PgConnection.this.query(onColumns, onRow, sql, params)
-                    .exceptionally(th -> {
-                        rollback();
-                        throw new RuntimeException(th);
-                    });
+                    .handle((affected, th) -> {
+                        if (th != null) {
+                            return rollback()
+                                    .<Integer>thenApply(v -> {
+                                        throw new RuntimeException(th);
+                                    });
+                        } else {
+                            return CompletableFuture.completedFuture(affected);
+                        }
+                    })
+                    .thenCompose(Function.identity());
         }
 
     }

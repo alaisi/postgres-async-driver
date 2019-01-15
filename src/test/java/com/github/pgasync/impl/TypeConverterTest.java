@@ -23,6 +23,7 @@ import java.sql.Date;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.time.*;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -31,7 +32,7 @@ import static org.junit.Assert.*;
 
 /**
  * Conversion tests from/to SQL types.
- * 
+ *
  * @author Antti Laisi
  */
 public class TypeConverterTest {
@@ -81,7 +82,7 @@ public class TypeConverterTest {
 
     @Test
     public void shouldConvertInt4ToLong() {
-        assertEquals(4000L, dbr.query("select 4000::INT4 AS R").at(0).getLong("R").longValue());
+        assertEquals(4000L, dbr.query("select 4000::INT4 AS R").at(0).getLong("r").longValue());
     }
 
     @Test
@@ -91,7 +92,7 @@ public class TypeConverterTest {
 
     @Test
     public void shouldConvertInt4ToInteger() {
-        assertEquals(5000, dbr.query("select 5000::INT4 AS I").at(0).getInt("I").intValue());
+        assertEquals(5000, dbr.query("select 5000::INT4 AS I").at(0).getInt("i").intValue());
     }
 
     @Test
@@ -106,7 +107,7 @@ public class TypeConverterTest {
 
     @Test
     public void shouldConvertInt2ToShortWithName() {
-        assertEquals(128, dbr.query("select 128::INT2 AS S").at(0).getShort("S").shortValue());
+        assertEquals(128, dbr.query("select 128::INT2 AS S").at(0).getShort("s").shortValue());
     }
 
     @Test
@@ -164,7 +165,7 @@ public class TypeConverterTest {
     @Test
     public void shouldConvertDateToDateWithName() {
         assertEquals(Date.valueOf(LocalDate.parse("2014-02-21")), dbr.query("select '2014-02-21'::DATE as D").at(0)
-                .getDate("D"));
+                .getDate("d"));
     }
 
     @Test
@@ -224,8 +225,8 @@ public class TypeConverterTest {
     public void shouldConvertBoolean() {
         assertTrue(dbr.query("select $1::BOOL as b", List.of(true)).at(0).getBoolean("b"));
         assertFalse(dbr.query("select $1::BOOL as b", List.of(false)).at(0).getBoolean(0));
-        assertNull(dbr.query("select $1::BOOL as b", List.of(new Object[]{null})).at(0).getBoolean("b"));
-        assertArrayEquals(new Boolean[]{ true, false}, dbr.query("select '{true,false}'::BOOL[]").at(0).getArray(0, Boolean[].class));
+        assertNull(dbr.query("select $1::BOOL as b", Collections.singletonList(null)).at(0).getBoolean("b"));
+        assertArrayEquals(new Boolean[]{true, false}, dbr.query("select '{true, false}'::BOOL[]").at(0).getArray(0, Boolean[].class));
     }
 
     @Test

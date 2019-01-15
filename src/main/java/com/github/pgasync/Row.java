@@ -82,7 +82,7 @@ public interface Row {
 
     Boolean getBoolean(int index);
 
-    Boolean getBoolean(String b);
+    Boolean getBoolean(String column);
 
     <T> T get(int index, Class<T> type);
 

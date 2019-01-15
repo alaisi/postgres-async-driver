@@ -23,33 +23,35 @@ import org.junit.runners.Parameterized.Parameters;
 
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.stream.IntStream;
 
 import static java.lang.System.currentTimeMillis;
 import static java.lang.System.out;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.junit.runners.MethodSorters.NAME_ASCENDING;
 
+@Ignore
 @RunWith(Parameterized.class)
 @FixMethodOrder(NAME_ASCENDING)
 public class PerformanceTest {
 
-    @Parameters(name = "{index}: maxConnections={0}, threads={1}, pipeline={2}")
+    @Parameters(name = "{index}: maxConnections={0}, threads={1}")
     public static Iterable<Object[]> data() {
         results = new TreeMap<>();
         List<Object[]> testData = new ArrayList<>();
         for (int poolSize = 1; poolSize <= 4; poolSize *= 2) {
-            results.putIfAbsent(key(poolSize, true), new TreeMap<>());
-            results.putIfAbsent(key(poolSize, false), new TreeMap<>());
+            results.putIfAbsent(key(poolSize), new TreeMap<>());
+            results.putIfAbsent(key(poolSize), new TreeMap<>());
             for (int threads = 1; threads <= 16; threads *= 2) {
-                testData.add(new Object[]{poolSize, threads, true});
-                testData.add(new Object[]{poolSize, threads, false});
+                testData.add(new Object[]{poolSize, threads});
+                testData.add(new Object[]{poolSize, threads});
             }
         }
         return testData;
     }
 
-    private static String key(int poolSize, boolean pipeline) {
-        return poolSize + " conn" + (pipeline ? "/pipeline" : "");
+    private static String key(int poolSize) {
+        return poolSize + " conn";
     }
 
     private static final int batchSize = 100;
@@ -57,14 +59,12 @@ public class PerformanceTest {
     private static SortedMap<String, SortedMap<Integer, Long>> results = new TreeMap<>();
     private final int poolSize;
     private final int numThreads;
-    private final boolean pipeline;
     private final ConnectionPool pool;
 
-    public PerformanceTest(int poolSize, int numThreads, boolean pipeline) {
+    public PerformanceTest(int poolSize, int numThreads) {
         this.poolSize = poolSize;
         this.numThreads = numThreads;
-        this.pipeline = pipeline;
-        pool = DatabaseRule.createPoolBuilder(poolSize).validationQuery(null).build();
+        pool = DatabaseRule.createPoolBuilder(poolSize).build();
     }
 
     @After
@@ -72,21 +72,17 @@ public class PerformanceTest {
         pool.close();
     }
 
-    @Test(timeout = 1000)
-    @Ignore
-    public void t1_preAllocatePool() throws InterruptedException {
-        Queue<Connection> connections = new ArrayBlockingQueue<>(poolSize);
-        for (int i = 0; i < poolSize; ++i) {
-            pool.getConnection().thenAccept(connections::add);
-        }
-        while (connections.size() < poolSize) {
-            MILLISECONDS.sleep(5);
-        }
+    @Test(timeout = 1000_0)
+    public void t1_preAllocatePool() throws Exception {
+        List<Connection> connections = new ArrayList<>();
+        CompletableFuture.allOf((CompletableFuture<?>[]) IntStream.range(0, poolSize)
+                .mapToObj(i -> pool.getConnection().thenAccept(connections::add))
+                .toArray(size -> new CompletableFuture<?>[size])
+        ).get();
         connections.forEach(Connection::close);
     }
 
     @Test
-    @Ignore
     public void t3_run() throws Exception {
         Collection<Callable<Long>> tasks = new ArrayList<>();
         for (int i = 0; i < batchSize; ++i) {
@@ -157,9 +153,9 @@ public class PerformanceTest {
             minTime = Math.min(minTime, time);
         }
 
-        results.get(key(poolSize, pipeline)).put(numThreads, minTime);
+        results.get(key(poolSize)).put(numThreads, minTime);
 
-        out.printf("%d%s,%2d,%4.3f%n", poolSize, pipeline ? "p" : "n", numThreads, minTime / 1000.0);
+        out.printf("%d,%2d,%4.3f%n", poolSize, numThreads, minTime / 1000.0);
     }
 
     @AfterClass

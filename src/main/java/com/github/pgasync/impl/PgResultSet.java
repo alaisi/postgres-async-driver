@@ -21,24 +21,31 @@ import java.util.*;
 
 /**
  * {@link ResultSet} constructed from Query/Execute response messages.
- * 
+ *
  * @author Antti Laisi
  */
 public class PgResultSet implements ResultSet {
 
     private final List<Row> rows;
-    private final Map<String, PgColumn> columns;
+    private final Map<String, PgColumn> columnsByName;
+    private final List<PgColumn> orderedColumns;
     private final int affectedRows;
 
-    public PgResultSet(Map<String, PgColumn> columns, List<Row> rows, int affectedRows) {
-        this.columns = columns;
+    public PgResultSet(Map<String, PgColumn> columnsByName, List<PgColumn> orderedColumns, List<Row> rows, int affectedRows) {
+        this.columnsByName = columnsByName;
+        this.orderedColumns = orderedColumns;
         this.rows = rows;
         this.affectedRows = affectedRows;
     }
 
     @Override
-    public Collection<String> getColumns() {
-        return columns != null ? columns.keySet() : Collections.emptyList();
+    public Map<String, PgColumn> getColumnsByName() {
+        return columnsByName != null ? columnsByName : Map.of();
+    }
+
+    @Override
+    public List<PgColumn> getOrderedColumns() {
+        return orderedColumns;
     }
 
     @Override

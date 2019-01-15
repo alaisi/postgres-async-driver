@@ -52,8 +52,8 @@ import java.nio.charset.Charset;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.concurrent.LinkedBlockingDeque;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -79,7 +79,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
             respondWithException(written.cause());
         }
     };
-    private final Queue<CompletableFuture<? super Message>> uponResponses = new LinkedBlockingDeque<>(Integer.valueOf(System.getProperty("pg.request.pipeline.length", "1")));
+    private CompletableFuture<? super Message> onResponse;
     private final Map<String, Set<Consumer<String>>> subscriptions = new HashMap<>();
 
     private Consumer<RowDescription.ColumnDescription[]> onColumns;
@@ -88,6 +88,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
 
     private boolean seenReadyForQuery;
     private Message readyForQueryPendingMessage;
+    private Message lastSentMessage;
 
     NettyPgProtocolStream(EventLoopGroup group, SocketAddress address, boolean useSsl, Charset encoding, Executor futuresExecutor) {
         this.address = address;
@@ -100,13 +101,26 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         this.futuresExecutor = futuresExecutor;
     }
 
+    private CompletableFuture<? super Message> consumeOnResponse() {
+        CompletableFuture<? super Message> wasOnResponse = onResponse;
+        onResponse = null;
+        return wasOnResponse;
+    }
+
     @Override
     public CompletableFuture<Message> connect(StartupMessage startup) {
         startupWith = startup;
-        return offerRoundTrip(
-                () -> channelPipeline.connect(address).addListener(outboundErrorListener),
-                false
-        );
+        return offerRoundTrip(() -> channelPipeline.connect(address).addListener(outboundErrorListener), false)
+                .thenApply(this::send)
+                .thenCompose(Function.identity())
+                .thenApply(message -> {
+                    if (message == SSLHandshake.INSTANCE) {
+                        return send(startup);
+                    } else {
+                        return CompletableFuture.completedFuture(message);
+                    }
+                })
+                .thenCompose(Function.identity());
     }
 
     @Override
@@ -116,7 +130,10 @@ public class NettyPgProtocolStream implements PgProtocolStream {
 
     @Override
     public CompletableFuture<Message> send(Message message) {
-        return offerRoundTrip(() -> write(message));
+        return offerRoundTrip(() -> {
+            lastSentMessage = message;
+            write(message);
+        });
     }
 
     @Override
@@ -182,8 +199,9 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         onRow = null;
         onAffected = null;
         readyForQueryPendingMessage = null;
-        if (!uponResponses.isEmpty()) {
-            CompletableFuture<? super Message> uponResponse = uponResponses.remove();
+        lastSentMessage = null;
+        if (onResponse != null) {
+            CompletableFuture<? super Message> uponResponse = consumeOnResponse();
             futuresExecutor.execute(() -> uponResponse.completeExceptionally(th));
         }
     }
@@ -197,13 +215,13 @@ public class NettyPgProtocolStream implements PgProtocolStream {
             if (isSimpleQueryInProgress()) {
                 onColumns.accept(((RowDescription) message).getColumns());
             } else {
-                uponResponses.remove().completeAsync(() -> message, futuresExecutor);
+                consumeOnResponse().completeAsync(() -> message, futuresExecutor);
             }
         } else if (message == BIndicators.NO_DATA) {
             if (isSimpleQueryInProgress()) {
                 onColumns.accept(new RowDescription.ColumnDescription[]{});
             } else {
-                uponResponses.remove().completeAsync(() -> new RowDescription(new RowDescription.ColumnDescription[]{}), futuresExecutor);
+                consumeOnResponse().completeAsync(() -> new RowDescription(new RowDescription.ColumnDescription[]{}), futuresExecutor);
             }
         } else if (message instanceof DataRow) {
             onRow.accept((DataRow) message);
@@ -231,7 +249,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
             if (authentication.isAuthenticationOk()) {
                 readyForQueryPendingMessage = message;
             } else {
-                uponResponses.remove().completeAsync(() -> message, futuresExecutor);
+                consumeOnResponse().completeAsync(() -> message, futuresExecutor);
             }
         } else if (message == ReadyForQuery.INSTANCE) {
             seenReadyForQuery = true;
@@ -242,11 +260,11 @@ public class NettyPgProtocolStream implements PgProtocolStream {
                 onRow = null;
                 onAffected = null;
                 Message response = readyForQueryPendingMessage != null ? readyForQueryPendingMessage : message;
-                uponResponses.remove().completeAsync(() -> response, futuresExecutor);
+                consumeOnResponse().completeAsync(() -> response, futuresExecutor);
             }
             readyForQueryPendingMessage = null;
         } else {
-            uponResponses.remove().completeAsync(() -> message, futuresExecutor);
+            consumeOnResponse().completeAsync(() -> message, futuresExecutor);
         }
     }
 
@@ -257,14 +275,15 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     private CompletableFuture<Message> offerRoundTrip(Runnable requestAction, boolean assumeConnected) {
         CompletableFuture<Message> uponResponse = new CompletableFuture<>();
         if (!assumeConnected || isConnected()) {
-            if (uponResponses.offer(uponResponse)) {
+            if (onResponse == null) {
+                onResponse = uponResponse;
                 try {
                     requestAction.run();
                 } catch (Throwable th) {
                     respondWithException(th);
                 }
             } else {
-                futuresExecutor.execute(() -> uponResponse.completeExceptionally(new IllegalStateException("Postgres requests queue is full")));
+                futuresExecutor.execute(() -> uponResponse.completeExceptionally(new IllegalStateException("Postgres messages stream simultaneous use detected")));
             }
         } else {
             futuresExecutor.execute(() -> uponResponse.completeExceptionally(new IllegalStateException("Channel is closed")));
@@ -287,11 +306,11 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     }
 
     private boolean isSimpleQueryInProgress() {
-        return onColumns != null;
+        return lastSentMessage instanceof Query;
     }
 
     private boolean isExtendedQueryInProgress() {
-        return onColumns == null && onRow != null;
+        return lastSentMessage instanceof ExtendedQueryMessage;
     }
 
     private static SqlException toSqlException(ErrorResponse error) {
@@ -327,7 +346,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
                                         .build()
                                         .newHandler(ctx.alloc()));
                     } else {
-                        ctx.fireExceptionCaught(new IllegalStateException("SSL required but not supported by backend server"));
+                        ctx.fireExceptionCaught(new IllegalStateException("SSL required but not supported by Postgres"));
                     }
                 }
             }
@@ -337,19 +356,13 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     private ChannelHandler newProtocolHandler() {
         return new ChannelInboundHandlerAdapter() {
 
-
             @Override
             public void channelActive(ChannelHandlerContext context) {
                 NettyPgProtocolStream.this.ctx = context;
                 if (useSsl) {
-                    send(SSLRequest.INSTANCE)
-                            .thenAccept(sslHandshake -> write(startupWith))
-                            .exceptionally(th -> {
-                                respondWithException(th);
-                                return null;
-                            });
+                    respondWithMessage(SSLRequest.INSTANCE);
                 } else {
-                    write(startupWith);
+                    respondWithMessage(startupWith);
                 }
             }
 

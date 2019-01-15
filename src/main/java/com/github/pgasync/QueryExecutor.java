@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
@@ -33,15 +34,22 @@ public interface QueryExecutor {
      */
     default CompletableFuture<Collection<ResultSet>> completeScript(String sql) {
         List<ResultSet> results = new ArrayList<>();
-        AtomicReference<Map<String, PgColumn>> columnsRef = new AtomicReference<>();
+        AtomicReference<Map<String, PgColumn>> columnsByNameRef = new AtomicReference<>();
+        AtomicReference<PgColumn[]> orderedColumnsRef = new AtomicReference<>();
         AtomicReference<List<Row>> rowsRef = new AtomicReference<>();
         return script(
-                columns -> {
-                    columnsRef.set(columns);
+                (columnsByName, orderedColumns) -> {
+                    columnsByNameRef.set(columnsByName);
+                    orderedColumnsRef.set(orderedColumns);
                     rowsRef.set(new ArrayList<>());
                 },
-                rowsRef.get()::add,
-                affected -> results.add(new PgResultSet(columnsRef.get(), rowsRef.get(), affected)),
+                row -> rowsRef.get().add(row),
+                affected -> results.add(new PgResultSet(
+                        columnsByNameRef.get() != null ? columnsByNameRef.get() : Map.of(),
+                        orderedColumnsRef.get() != null ? List.of(orderedColumnsRef.get()) : List.of(),
+                        rowsRef.get() != null ? rowsRef.get() : List.of(),
+                        affected
+                )),
                 sql
         )
                 .thenApply(v -> results);
@@ -62,7 +70,7 @@ public interface QueryExecutor {
      * @param sql        Sql Script text.
      * @return CompletableFuture that is completed when the whole process of multiple {@link ResultSet}s fetching ends.
      */
-    CompletableFuture<Void> script(Consumer<Map<String, PgColumn>> onColumns, Consumer<Row> onRow, Consumer<Integer> onAffected, String sql);
+    CompletableFuture<Void> script(BiConsumer<Map<String, PgColumn>, PgColumn[]> onColumns, Consumer<Row> onRow, Consumer<Integer> onAffected, String sql);
 
     /**
      * Sends single query with parameters. Uses extended query protocol of Postgres.
@@ -74,15 +82,19 @@ public interface QueryExecutor {
      * @return CompletableFuture of {@link ResultSet}.
      */
     default CompletableFuture<ResultSet> completeQuery(String sql, Object... params) {
-        AtomicReference<Map<String, PgColumn>> columnsRef = new AtomicReference<>();
+        AtomicReference<Map<String, PgColumn>> columnsByNameRef = new AtomicReference<>();
+        AtomicReference<PgColumn[]> orderedColumnsRef = new AtomicReference<>();
         List<Row> rows = new ArrayList<>();
         return query(
-                columnsRef::set,
+                (columnsByName, orderedColumns) -> {
+                    columnsByNameRef.set(columnsByName);
+                    orderedColumnsRef.set(orderedColumns);
+                },
                 rows::add,
                 sql,
                 params
         )
-                .thenApply(affected -> new PgResultSet(columnsRef.get(), rows, affected));
+                .thenApply(affected -> new PgResultSet(columnsByNameRef.get(), List.of(orderedColumnsRef.get()), rows, affected));
 
     }
 
@@ -100,5 +112,5 @@ public interface QueryExecutor {
      * This future is used by implementation to create a {@link ResultSet} instance from already fetched columns, rows and affected rows count.
      * Affected rows count is this future's completion value.
      */
-    CompletableFuture<Integer> query(Consumer<Map<String, PgColumn>> onColumns, Consumer<Row> onRow, String sql, Object... params);
+    CompletableFuture<Integer> query(BiConsumer<Map<String, PgColumn>, PgColumn[]> onColumns, Consumer<Row> onRow, String sql, Object... params);
 }

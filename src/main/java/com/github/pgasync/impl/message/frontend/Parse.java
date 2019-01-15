@@ -15,12 +15,12 @@
 package com.github.pgasync.impl.message.frontend;
 
 import com.github.pgasync.impl.Oid;
-import com.github.pgasync.impl.message.Message;
+import com.github.pgasync.impl.message.ExtendedQueryMessage;
 
 /**
  * @author Antti Laisi
  */
-public class Parse implements Message {
+public class Parse implements ExtendedQueryMessage {
 
     private final String sql;
     private final String sname;

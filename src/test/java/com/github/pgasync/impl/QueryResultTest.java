@@ -55,7 +55,7 @@ public class QueryResultTest {
         assertEquals(2, dbr.query("INSERT INTO CONN_TEST (ID) VALUES (1),(2)").affectedRows());
         ResultSet result = dbr.query("SELECT * FROM CONN_TEST WHERE ID <= 2 ORDER BY ID");
         assertEquals(2, result.size());
-        assertEquals("ID", result.getColumns().iterator().next());
+        assertEquals("ID", result.getOrderedColumns().iterator().next().getName().toUpperCase());
 
         Iterator<Row> i = result.iterator();
         assertEquals(1L, i.next().getLong(0).longValue());
@@ -75,8 +75,16 @@ public class QueryResultTest {
     }
 
     @Test(expected = SqlException.class)
-    public void shouldInvokeErrorHandlerOnError() {
-        dbr.query("SELECT * FROM not_there");
+    public void shouldInvokeErrorHandlerOnError() throws Exception {
+        try {
+            dbr.query("SELECT * FROM not_there");
+        } catch (Exception ex) {
+            SqlException.ifCause(ex, sqlException -> {
+                throw sqlException;
+            }, () -> {
+                throw ex;
+            });
+        }
     }
 
     @Test

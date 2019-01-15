@@ -12,3 +12,9 @@
 * Auto rollback transaction review
 * Termination process test
 * Ssl interaction test
+* Notifications test
+* Transactions general test
+* Multiple result sets test
+* Connection pool general test
+* Connection pool failed connections and abandoned waiters tests
+* Queries pipelining vs errors test

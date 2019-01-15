@@ -14,8 +14,10 @@
 
 package com.github.pgasync;
 
-import java.util.Collection;
-import java.util.Iterator;
+import com.github.pgasync.impl.PgColumn;
+
+import java.util.List;
+import java.util.Map;
 
 /**
  * SQL result set. Consists of 0-n result rows and amount of affected
@@ -25,10 +27,9 @@ import java.util.Iterator;
  */
 public interface ResultSet extends Iterable<Row> {
 
-    /**
-     * @return Column names in order.
-     */
-    Collection<String> getColumns();
+    Map<String, PgColumn> getColumnsByName();
+
+    List<PgColumn> getOrderedColumns();
 
     /**
      * @param index Row index starting from 0

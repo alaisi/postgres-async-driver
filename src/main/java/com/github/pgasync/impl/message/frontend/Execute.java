@@ -14,12 +14,12 @@
 
 package com.github.pgasync.impl.message.frontend;
 
-import com.github.pgasync.impl.message.Message;
+import com.github.pgasync.impl.message.ExtendedQueryMessage;
 
 /**
  * @author Marat Gainullin
  */
-public class Execute implements Message {
+public class Execute implements ExtendedQueryMessage {
 
     private final String pname;
 

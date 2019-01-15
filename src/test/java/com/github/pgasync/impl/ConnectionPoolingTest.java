@@ -34,7 +34,7 @@ import static org.junit.Assert.assertEquals;
 
 /**
  * Tests for connection pool concurrency.
- * 
+ *
  * @author Antti Laisi
  */
 public class ConnectionPoolingTest {
@@ -44,7 +44,10 @@ public class ConnectionPoolingTest {
 
     @Before
     public void create() {
-        dbr.query("DROP TABLE IF EXISTS CP_TEST; CREATE TABLE CP_TEST (ID VARCHAR(255) PRIMARY KEY)");
+        dbr.script(
+                "DROP TABLE IF EXISTS CP_TEST;" +
+                        "CREATE TABLE CP_TEST (ID VARCHAR(255) PRIMARY KEY)"
+        );
     }
 
     @After
@@ -59,7 +62,7 @@ public class ConnectionPoolingTest {
         List<Callable<ResultSet>> tasks = IntStream.range(0, count).mapToObj(insert).collect(toList());
 
         ExecutorService executor = Executors.newFixedThreadPool(20);
-        executor.invokeAll(tasks).stream().map(this::await);
+        executor.invokeAll(tasks).forEach(this::await);
 
         assertEquals(count, dbr.query("SELECT COUNT(*) FROM CP_TEST").at(0).getLong(0).longValue());
     }

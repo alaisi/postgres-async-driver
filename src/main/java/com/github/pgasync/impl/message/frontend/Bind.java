@@ -14,12 +14,12 @@
 
 package com.github.pgasync.impl.message.frontend;
 
-import com.github.pgasync.impl.message.Message;
+import com.github.pgasync.impl.message.ExtendedQueryMessage;
 
 /**
  * @author Antti Laisi
  */
-public class Bind implements Message {
+public class Bind implements ExtendedQueryMessage {
 
     private final String sname;
     private final String pname;

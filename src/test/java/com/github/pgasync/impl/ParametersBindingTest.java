@@ -33,7 +33,7 @@ import static org.junit.Assert.*;
 
 /**
  * Tests for parameters binding.
- * 
+ *
  * @author Antti Laisi
  */
 public class ParametersBindingTest {
@@ -79,8 +79,8 @@ public class ParametersBindingTest {
 
     @Test
     public void shouldBindByte() {
-        dbr.query("INSERT INTO PS_TEST(BYTE) VALUES ($1)", List.of(0x41));
-        assertEquals(0x41, dbr.query("SELECT BYTE FROM PS_TEST WHERE BYTE = $1", List.of(0x41)).at(0).getByte(0)
+        dbr.query("INSERT INTO PS_TEST(BYTE) VALUES ($1)", List.of((byte) 0x41));
+        assertEquals((byte) 0x41, dbr.query("SELECT BYTE FROM PS_TEST WHERE BYTE = $1", List.of(0x41)).at(0).getByte(0)
                 .byteValue());
     }
 
@@ -141,7 +141,7 @@ public class ParametersBindingTest {
     public void shouldBindBoolean() {
         dbr.query("INSERT INTO PS_TEST(BOOLEAN) VALUES ($1)", singletonList(true));
         assertTrue((Boolean) ((PgRow) dbr.query("SELECT BOOLEAN FROM PS_TEST WHERE BOOLEAN = $1",
-                List.of(true)).at(0)).get("BOOLEAN"));
+                List.of(true)).at(0)).get("boolean"));
 
     }
 
