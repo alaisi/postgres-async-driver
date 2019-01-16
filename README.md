@@ -45,7 +45,7 @@ db.queryRows("select unnest('{ hello, world }'::text[] as message)")
 
 ### Creating a Db
 
-Db is a connection pool that is created with [`com.github.pgasync.ConnectionPoolBuilder`](https://github.com/alaisi/postgres-async-driver/blob/master/src/main/java/com/github/pgasync/ConnectionPoolBuilder.java)
+Db is a connection pool that is created with [`ConnectionPoolBuilder`](https://github.com/alaisi/postgres-async-driver/blob/master/src/main/java/com/github/pgasync/ConnectionPoolBuilder.java)
 
 ```java
 Db db = new ConnectionPoolBuilder()
@@ -87,7 +87,7 @@ db.begin()
 
 ### Custom data types
 
-Support for additional data types requires registering converters to [`com.github.pgasync.ConnectionPoolBuilder`](https://github.com/alaisi/postgres-async-driver/blob/master/src/main/java/com/github/pgasync/ConnectionPoolBuilder.java)
+Support for additional data types requires registering converters to [`ConnectionPoolBuilder`](https://github.com/alaisi/postgres-async-driver/blob/master/src/main/java/com/github/pgasync/ConnectionPoolBuilder.java)
 
 ```java
 class JsonConverter implements Converter<example.Json> {
