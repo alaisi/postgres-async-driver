@@ -8,20 +8,20 @@ import com.github.pgasync.impl.Oid;
  */
 class BooleanConversions {
 
-    static final byte[] TRUE  = new byte[]{ 't' };
-    static final byte[] FALSE = new byte[]{ 'f' };
+    private static final String TRUE = "t";
+    private static final String FALSE = "f";
 
-    static boolean toBoolean(Oid oid, byte[] value) {
+    static boolean toBoolean(Oid oid, String value) {
         switch (oid) {
             case UNSPECIFIED: // fallthrough
             case BOOL:
-                return TRUE[0] == value[0];
+                return TRUE.equals(value);
             default:
                 throw new SqlException("Unsupported conversion " + oid.name() + " -> boolean");
         }
     }
 
-    static byte[] fromBoolean(boolean value) {
+    static String fromBoolean(boolean value) {
         return value ? TRUE : FALSE;
     }
 }

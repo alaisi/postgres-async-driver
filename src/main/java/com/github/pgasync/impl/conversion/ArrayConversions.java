@@ -3,7 +3,6 @@ package com.github.pgasync.impl.conversion;
 import com.github.pgasync.impl.Oid;
 
 import java.lang.reflect.Array;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiFunction;
@@ -13,11 +12,11 @@ import java.util.function.Function;
 @SuppressWarnings({"unchecked", "rawtypes"})
 class ArrayConversions {
 
-    static byte[] fromArray(final Object elements, final Function<Object, byte[]> printFn, final Charset encoding) {
-        return appendArray(new StringBuilder(), elements, printFn, encoding).toString().getBytes(encoding);
+    static String fromArray(final Object elements, final Function<Object, String> printFn) {
+        return appendArray(new StringBuilder(), elements, printFn).toString();
     }
 
-    private static StringBuilder appendArray(StringBuilder sb, final Object elements, final Function<Object, byte[]> printFn, final Charset encoding) {
+    private static StringBuilder appendArray(StringBuilder sb, final Object elements, final Function<Object, String> printFn) {
         sb.append('{');
 
         int nElements = Array.getLength(elements);
@@ -32,9 +31,9 @@ class ArrayConversions {
             } else if (o instanceof byte[]) {
                 sb.append(BlobConversions.fromBytes((byte[]) o));
             } else if (o.getClass().isArray()) {
-                sb = appendArray(sb, o, printFn, encoding);
+                sb = appendArray(sb, o, printFn);
             } else {
-                sb = appendEscaped(sb, new String(printFn.apply(o), encoding));
+                sb = appendEscaped(sb, printFn.apply(o));
             }
         }
 
@@ -54,7 +53,7 @@ class ArrayConversions {
         return b.append('"');
     }
 
-    static <T> T toArray(Class<T> arrayType, Oid oid, byte[] value, BiFunction<Oid, byte[], Object> parse, Charset encoding) {
+    static <T> T toArray(Class<T> arrayType, Oid oid, String value, BiFunction<Oid, String, Object> parse) {
         Class elementType = arrayType.getComponentType();
         while (elementType.getComponentType() != null && elementType != byte[].class) {
             elementType = elementType.getComponentType();
@@ -67,14 +66,14 @@ class ArrayConversions {
             return null;
         }
 
-        char[] text = new String(value, encoding).toCharArray();
+        char[] text = value.toCharArray();
         List<List<Object>> holder = new ArrayList<>(1);
 
         if (readArray(text, skipBounds(text, 0), (List) holder) != text.length) {
             throw new IllegalStateException("Failed to read array");
         }
 
-        return (T) toNestedArrays(holder.get(0), elementType, getElementOid(oid), parse, encoding);
+        return (T) toNestedArrays(holder.get(0), elementType, getElementOid(oid), parse);
     }
 
     private static int skipBounds(final char[] text, final int start) {
@@ -151,16 +150,16 @@ class ArrayConversions {
         }
     }
 
-    private static <T> T[] toNestedArrays(List<Object> result, Class<?> leafElementType, Oid oid, BiFunction<Oid, byte[], Object> parse, Charset encoding) {
+    private static <T> T[] toNestedArrays(List<Object> result, Class<?> leafElementType, Oid oid, BiFunction<Oid, String, Object> parse) {
         Object[] arr = (Object[]) Array.newInstance(leafElementType, getNestedDimensions(result, oid));
         for (int i = 0; i < result.size(); i++) {
             Object elem = result.get(i);
             if (elem == null) {
                 arr[i] = null;
             } else if (elem.getClass().equals(String.class)) {
-                arr[i] = parse.apply(oid, ((String) elem).getBytes(encoding));
+                arr[i] = parse.apply(oid, (String) elem);
             } else {
-                arr[i] = toNestedArrays((List<Object>) elem, leafElementType, oid, parse, encoding);
+                arr[i] = toNestedArrays((List<Object>) elem, leafElementType, oid, parse);
             }
         }
         return (T[]) arr;

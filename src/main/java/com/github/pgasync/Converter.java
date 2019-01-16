@@ -20,13 +20,13 @@ public interface Converter<T> {
      * @param o Object to convert, never null
      * @return data in backend format
      */
-    byte[] from(T o);
+    String from(T o);
 
     /**
      * @param oid Value oid
      * @param value Value in backend format, never null
      * @return Converted object, never null
      */
-    T to(Oid oid, byte[] value);
+    T to(Oid oid, String value);
 
 }

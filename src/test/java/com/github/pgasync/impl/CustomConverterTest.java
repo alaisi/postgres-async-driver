@@ -8,7 +8,6 @@ import org.junit.Test;
 
 import java.util.List;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 
 /**
@@ -31,13 +30,13 @@ public class CustomConverterTest {
         }
 
         @Override
-        public byte[] from(Json o) {
-            return o.json.getBytes(UTF_8);
+        public String from(Json o) {
+            return o.json;
         }
 
         @Override
-        public Json to(Oid oid, byte[] value) {
-            return new Json(new String(value, UTF_8));
+        public Json to(Oid oid, String value) {
+            return new Json(value);
         }
     }
 

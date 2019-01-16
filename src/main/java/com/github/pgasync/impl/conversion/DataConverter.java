@@ -39,99 +39,103 @@ public class DataConverter {
     }
 
     public String toString(Oid oid, byte[] value) {
-        return value == null ? null : StringConversions.toString(oid, value, encoding);
+        return value == null ? null : StringConversions.toString(oid, new String(value, encoding));
     }
 
     public Character toChar(Oid oid, byte[] value) {
-        return value == null ? null : StringConversions.toChar(oid, value, encoding);
+        return value == null ? null : StringConversions.toChar(oid, new String(value, encoding));
     }
 
     public Long toLong(Oid oid, byte[] value) {
-        return value == null ? null : NumericConversions.toLong(oid, value, encoding);
+        return value == null ? null : NumericConversions.toLong(oid, new String(value, encoding));
     }
 
     public Integer toInteger(Oid oid, byte[] value) {
-        return value == null ? null : NumericConversions.toInteger(oid, value, encoding);
+        return value == null ? null : NumericConversions.toInteger(oid, new String(value, encoding));
     }
 
     public Short toShort(Oid oid, byte[] value) {
-        return value == null ? null : NumericConversions.toShort(oid, value, encoding);
+        return value == null ? null : NumericConversions.toShort(oid, new String(value, encoding));
     }
 
     public Byte toByte(Oid oid, byte[] value) {
-        return value == null ? null : NumericConversions.toByte(oid, value, encoding);
+        return value == null ? null : NumericConversions.toByte(oid, new String(value, encoding));
     }
 
     public BigInteger toBigInteger(Oid oid, byte[] value) {
-        return value == null ? null : NumericConversions.toBigInteger(oid, value, encoding);
+        return value == null ? null : NumericConversions.toBigInteger(oid, new String(value, encoding));
     }
 
     public BigDecimal toBigDecimal(Oid oid, byte[] value) {
-        return value == null ? null : NumericConversions.toBigDecimal(oid, value, encoding);
+        return value == null ? null : NumericConversions.toBigDecimal(oid, new String(value, encoding));
     }
 
     public Double toDouble(Oid oid, byte[] value) {
-        return value == null ? null : NumericConversions.toDouble(oid, value, encoding);
+        return value == null ? null : NumericConversions.toDouble(oid, new String(value, encoding));
     }
 
     public Date toDate(Oid oid, byte[] value) {
-        return value == null ? null : TemporalConversions.toDate(oid, value, encoding);
+        return value == null ? null : TemporalConversions.toDate(oid, new String(value, encoding));
     }
 
     public Time toTime(Oid oid, byte[] value) {
-        return value == null ? null : TemporalConversions.toTime(oid, value, encoding);
+        return value == null ? null : TemporalConversions.toTime(oid, new String(value, encoding));
     }
 
     public Timestamp toTimestamp(Oid oid, byte[] value) {
-        return value == null ? null : TemporalConversions.toTimestamp(oid, value, encoding);
+        return value == null ? null : TemporalConversions.toTimestamp(oid, new String(value, encoding));
     }
 
     public byte[] toBytes(Oid oid, byte[] value) {
-        return value == null ? null : BlobConversions.toBytes(oid, value);
+        return value == null ? null : BlobConversions.toBytes(oid, new String(value, 2, value.length - 2, encoding));
     }
 
     public Boolean toBoolean(Oid oid, byte[] value) {
-        return value == null ? null : BooleanConversions.toBoolean(oid, value);
+        return value == null ? null : BooleanConversions.toBoolean(oid, new String(value, encoding));
     }
 
     public <TArray> TArray toArray(Class<TArray> arrayType, Oid oid, byte[] value) {
+        if (value == null) {
+            return null;
+        }
+        String svalue = new String(value, encoding);
         switch (oid) {
             case INT2_ARRAY:
-                return ArrayConversions.toArray(arrayType, oid, value, (oide, valuee) -> NumericConversions.toShort(oide, valuee, encoding), encoding);
+                return ArrayConversions.toArray(arrayType, oid, svalue, NumericConversions::toShort);
             case INT4_ARRAY:
-                return ArrayConversions.toArray(arrayType, oid, value, (oide, valuee) -> NumericConversions.toInteger(oide, valuee, encoding), encoding);
+                return ArrayConversions.toArray(arrayType, oid, svalue, NumericConversions::toInteger);
             case INT8_ARRAY:
-                return ArrayConversions.toArray(arrayType, oid, value, (oide, valuee) -> NumericConversions.toLong(oide, valuee, encoding), encoding);
+                return ArrayConversions.toArray(arrayType, oid, svalue, NumericConversions::toLong);
 
             case TEXT_ARRAY:
             case CHAR_ARRAY:
             case BPCHAR_ARRAY:
             case VARCHAR_ARRAY:
-                return ArrayConversions.toArray(arrayType, oid, value, (oide, valuee) -> StringConversions.toString(oide, valuee, encoding), encoding);
+                return ArrayConversions.toArray(arrayType, oid, svalue, StringConversions::toString);
 
             case NUMERIC_ARRAY:
             case FLOAT4_ARRAY:
             case FLOAT8_ARRAY:
-                return ArrayConversions.toArray(arrayType, oid, value, (oide, valuee) -> NumericConversions.toBigDecimal(oide, valuee, encoding), encoding);
+                return ArrayConversions.toArray(arrayType, oid, svalue, NumericConversions::toBigDecimal);
 
             case TIMESTAMP_ARRAY:
             case TIMESTAMPTZ_ARRAY:
-                return ArrayConversions.toArray(arrayType, oid, value, (oide, valuee) -> TemporalConversions.toTimestamp(oide, valuee, encoding), encoding);
+                return ArrayConversions.toArray(arrayType, oid, svalue, TemporalConversions::toTimestamp);
 
             case TIMETZ_ARRAY:
             case TIME_ARRAY:
-                return ArrayConversions.toArray(arrayType, oid, value, (oide, valuee) -> TemporalConversions.toTime(oide, valuee, encoding), encoding);
+                return ArrayConversions.toArray(arrayType, oid, svalue, TemporalConversions::toTime);
 
             case DATE_ARRAY:
-                return ArrayConversions.toArray(arrayType, oid, value, (oide, valuee) -> TemporalConversions.toDate(oide, valuee, encoding), encoding);
+                return ArrayConversions.toArray(arrayType, oid, svalue, TemporalConversions::toDate);
 
             case BOOL_ARRAY:
-                return ArrayConversions.toArray(arrayType, oid, value, BooleanConversions::toBoolean, encoding);
+                return ArrayConversions.toArray(arrayType, oid, svalue, BooleanConversions::toBoolean);
             case BYTEA_ARRAY:
-                return ArrayConversions.toArray(arrayType, oid, value, (oide, valuee) -> {
-                    byte[] first = BlobConversions.toBytes(oide, valuee);
+                return ArrayConversions.toArray(arrayType, oid, svalue, (oide, svaluee) -> {
+                    byte[] first = BlobConversions.toBytes(oide, svaluee.substring(2));
                     return parseHexBinary(new String(first, 1, first.length - 1, encoding));
-                }, encoding);
+                });
             default:
                 throw new IllegalStateException("Unsupported array type: " + oid);
         }
@@ -143,39 +147,39 @@ public class DataConverter {
         if (converter == null) {
             throw new IllegalArgumentException("Unknown conversion target: " + value.getClass());
         }
-        return (T) converter.to(oid, value);
+        return value == null ? null : (T) converter.to(oid, new String(value, encoding));
     }
 
-    private byte[] fromObject(Object o) {
+    private String fromObject(Object o) {
         if (o == null) {
             return null;
         }
         if (o instanceof Time) {
-            return TemporalConversions.fromTime((Time) o, encoding);
+            return TemporalConversions.fromTime((Time) o);
         }
         if (o instanceof Timestamp) {
-            return TemporalConversions.fromTimestamp((Timestamp) o, encoding);
+            return TemporalConversions.fromTimestamp((Timestamp) o);
         }
         if (o instanceof Date) {
-            return TemporalConversions.fromDate((Date) o, encoding);
+            return TemporalConversions.fromDate((Date) o);
         }
         if (o instanceof byte[]) {
-            return BlobConversions.fromBytes((byte[]) o, encoding);
+            return BlobConversions.fromBytes((byte[]) o);
         }
         if (o instanceof Boolean) {
             return BooleanConversions.fromBoolean((boolean) o);
         }
         if (o.getClass().isArray()) {
-            return ArrayConversions.fromArray(o, this::fromObject, encoding);
+            return ArrayConversions.fromArray(o, this::fromObject);
         }
         if (o instanceof String || o instanceof Number || o instanceof Character || o instanceof UUID) {
-            return o.toString().getBytes(encoding);
+            return o.toString();
         }
         return fromConvertible(o);
     }
 
     @SuppressWarnings("unchecked")
-    private byte[] fromConvertible(Object value) {
+    private String fromConvertible(Object value) {
         Converter converter = typeToConverter.get(value.getClass());
         if (converter == null) {
             throw new IllegalArgumentException("Unknown conversion target: " + value.getClass());
@@ -191,7 +195,8 @@ public class DataConverter {
         byte[][] params = new byte[parameters.length][];
         int i = 0;
         for (Object param : parameters) {
-            params[i++] = fromObject(param);
+            String converted = fromObject(param);
+            params[i++] = converted == null ? null : converted.getBytes(encoding);
         }
         return params;
     }

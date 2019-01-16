@@ -14,18 +14,14 @@ import static javax.xml.bind.DatatypeConverter.printHexBinary;
  */
 class BlobConversions {
 
-    static byte[] toBytes(Oid oid, byte[] value) {
+    static byte[] toBytes(Oid oid, String value) {
         switch (oid) {
             case UNSPECIFIED: // fallthrough
             case BYTEA:
-                return parseHexBinary(new String(value, 2, value.length - 2, StandardCharsets.US_ASCII)); // According to postgres rules bytea should be encoded as ASCII sequence
+                return parseHexBinary(value); // TODO: Add theses considerations somewhere to the code: 1. (2, length-2) 2. According to postgres rules bytea should be encoded as ASCII sequence
             default:
                 throw new SqlException("Unsupported conversion " + oid.name() + " -> byte[]");
         }
-    }
-
-    static byte[] fromBytes(byte[] bytes, Charset encoding) {
-        return ("\\x" + printHexBinary(bytes)).getBytes(encoding);
     }
 
     static String fromBytes(byte[] bytes) {
