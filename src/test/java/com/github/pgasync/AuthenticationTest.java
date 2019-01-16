@@ -1,4 +1,4 @@
-package com.pgasync.impl;
+package com.github.pgasync;
 
 import com.pgasync.ConnectionPool;
 import com.pgasync.ResultSet;
@@ -6,7 +6,7 @@ import com.pgasync.SqlException;
 import org.junit.ClassRule;
 import org.junit.Test;
 
-import static com.pgasync.impl.DatabaseRule.createPoolBuilder;
+import static com.github.pgasync.DatabaseRule.createPoolBuilder;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 

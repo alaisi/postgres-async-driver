@@ -12,9 +12,8 @@
  * limitations under the License.
  */
 
-package com.pgasync.impl;
+package com.github.pgasync;
 
-import com.github.pgasync.PgRow;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;

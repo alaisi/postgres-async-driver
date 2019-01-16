@@ -1,4 +1,4 @@
-package com.pgasync.impl;
+package com.github.pgasync;
 
 import com.pgasync.ConnectionPool;
 import com.pgasync.Listening;

@@ -1,4 +1,4 @@
-package com.pgasync.impl;
+package com.github.pgasync;
 
 import static java.lang.System.getenv;
 

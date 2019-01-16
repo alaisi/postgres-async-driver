@@ -1,6 +1,5 @@
-package com.pgasync.impl;
+package com.github.pgasync;
 
-import com.github.pgasync.PgRow;
 import com.pgasync.Row;
 import org.junit.*;
 

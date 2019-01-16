@@ -12,7 +12,7 @@
  * limitations under the License.
  */
 
-package com.pgasync.impl;
+package com.github.pgasync;
 
 import com.pgasync.Connection;
 import com.pgasync.ConnectionPool;

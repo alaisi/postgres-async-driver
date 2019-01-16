@@ -1,6 +1,5 @@
-package com.pgasync.impl;
+package com.github.pgasync;
 
-import com.github.pgasync.Oid;
 import com.pgasync.Converter;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
