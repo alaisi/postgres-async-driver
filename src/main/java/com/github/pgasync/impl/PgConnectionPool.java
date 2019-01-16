@@ -21,6 +21,8 @@ import com.github.pgasync.impl.conversion.DataConverter;
 import javax.annotation.concurrent.GuardedBy;
 import java.net.InetSocketAddress;
 import java.nio.charset.Charset;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.Map;
@@ -31,6 +33,9 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 /**
  * Pool for backend connections.
@@ -106,16 +111,24 @@ public abstract class PgConnectionPool implements ConnectionPool {
             return delegate.isConnected();
         }
 
-        void shutdown() {
-            statements.forEach((sql, stmt) -> stmt.delegate.close().join());
+        CompletableFuture<Void> shutdown() {
+            CompletableFuture<?>[] closeTasks = statements.values().stream()
+                    .map(stmt -> stmt.delegate.close())
+                    .collect(Collectors.toList()).toArray(new CompletableFuture<?>[]{});
             statements.clear();
-            delegate.close().join();
+            return CompletableFuture.allOf(closeTasks)
+                    .thenApply(v -> {
+                        if (!statements.isEmpty()) {
+                            Logger.getLogger(PooledPgConnection.class.getName()).log(Level.WARNING, "Stale prepared statements detected {0}", statements.size());
+                        }
+                        return delegate.close();
+                    })
+                    .thenCompose(Function.identity());
         }
 
         @Override
         public CompletableFuture<Void> close() {
-            release(this);
-            return CompletableFuture.completedFuture(null);
+            return release(this);
         }
 
         @Override
@@ -222,6 +235,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
 
     @Override
     public CompletableFuture<Void> close() {
+        Collection<CompletableFuture<Void>> shutdownTasks = new ArrayList<>();
         lock.lock();
         try {
             closed = true;
@@ -231,13 +245,13 @@ public abstract class PgConnectionPool implements ConnectionPool {
             }
             while (!connections.isEmpty()) {
                 PooledPgConnection connection = connections.poll();
-                connection.shutdown();
+                shutdownTasks.add(connection.shutdown());
                 size--;
             }
         } finally {
             lock.unlock();
         }
-        return CompletableFuture.completedFuture(null);
+        return CompletableFuture.allOf(shutdownTasks.toArray(size -> new CompletableFuture<?>[size]));
     }
 
     @Override
@@ -297,15 +311,16 @@ public abstract class PgConnectionPool implements ConnectionPool {
         }
     }
 
-    private void release(PooledPgConnection connection) {
+    private CompletableFuture<Void> release(PooledPgConnection connection) {
         if (connection == null) {
-            throw new IllegalArgumentException("'connection' should be non null to be returned to the pool");
+            throw new IllegalArgumentException("'connection' should be not null");
         }
+        CompletableFuture<Void> shutdownTask = CompletableFuture.completedFuture(null);
         lock.lock();
         try {
             if (closed) {
                 if (connection.isConnected()) {
-                    connection.shutdown();
+                    shutdownTask = connection.shutdown();
                 }
             } else {
                 if (connection.isConnected()) {
@@ -321,6 +336,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
         } finally {
             lock.unlock();
         }
+        return shutdownTask;
     }
 
     @Override
