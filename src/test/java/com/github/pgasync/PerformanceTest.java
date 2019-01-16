@@ -25,15 +25,18 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.stream.IntStream;
 
+import static com.github.pgasync.DatabaseRule.createPoolBuilder;
 import static java.lang.System.currentTimeMillis;
 import static java.lang.System.out;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.junit.runners.MethodSorters.NAME_ASCENDING;
 
-@Ignore
 @RunWith(Parameterized.class)
 @FixMethodOrder(NAME_ASCENDING)
 public class PerformanceTest {
+
+    @ClassRule
+    public static DatabaseRule dbr = new DatabaseRule(createPoolBuilder(1));
 
     @Parameters(name = "{index}: maxConnections={0}, threads={1}")
     public static Iterable<Object[]> data() {
@@ -57,6 +60,7 @@ public class PerformanceTest {
     private static final int batchSize = 100;
     private static final int repeats = 5;
     private static SortedMap<String, SortedMap<Integer, Long>> results = new TreeMap<>();
+
     private final int poolSize;
     private final int numThreads;
     private final ConnectionPool pool;
@@ -64,7 +68,9 @@ public class PerformanceTest {
     public PerformanceTest(int poolSize, int numThreads) {
         this.poolSize = poolSize;
         this.numThreads = numThreads;
-        pool = DatabaseRule.createPoolBuilder(poolSize).build();
+        pool = dbr.builder
+                .password("async-pg")
+                .maxConnections(poolSize).build();
     }
 
     @After
@@ -72,7 +78,7 @@ public class PerformanceTest {
         pool.close();
     }
 
-    @Test(timeout = 1000_0)
+    @Test(timeout = 2000)
     public void t1_preAllocatePool() throws Exception {
         List<Connection> connections = new ArrayList<>();
         CompletableFuture.allOf((CompletableFuture<?>[]) IntStream.range(0, poolSize)
@@ -83,10 +89,11 @@ public class PerformanceTest {
     }
 
     @Test
+    // @Ignore
     public void t3_run() throws Exception {
         Collection<Callable<Long>> tasks = new ArrayList<>();
         for (int i = 0; i < batchSize; ++i) {
-            tasks.add(new Callable<Long>() {
+            tasks.add(new Callable<>() {
                 final Exchanger<Long> swap = new Exchanger<>();
 
                 @Override
@@ -110,7 +117,6 @@ public class PerformanceTest {
         long minTime = Long.MAX_VALUE;
 
         for (int r = 0; r < repeats; ++r) {
-            System.gc();
             MILLISECONDS.sleep(300);
 
             final CyclicBarrier barrier = new CyclicBarrier(numThreads + 1);
@@ -155,21 +161,23 @@ public class PerformanceTest {
 
         results.get(key(poolSize)).put(numThreads, minTime);
 
-        out.printf("%d,%2d,%4.3f%n", poolSize, numThreads, minTime / 1000.0);
+        out.printf("\t%d\t%2d\t%4.3f\t%n", poolSize, numThreads, minTime / 1000.0);
     }
 
     @AfterClass
-    public static void printCsv() {
-        out.print("threads");
-        results.keySet().forEach(i -> out.printf(",%s", i));
+    public static void printResults() {
+        out.println();
+        out.println("Requests per second, Hz:");
+        out.print("  threads");
+        results.keySet().forEach(i -> out.printf("\t\t%s\t", i));
         out.println();
 
         results.values().iterator().next().keySet().forEach(threads -> {
-            out.print(threads);
+            out.print("    " + threads);
             results.keySet().forEach(conns -> {
                 long millis = results.get(conns).get(threads);
                 double rps = batchSize * 1000 / (double) millis;
-                out.printf(",%f", rps);
+                out.printf("\t\t%f", rps);
             });
             out.println();
         });
