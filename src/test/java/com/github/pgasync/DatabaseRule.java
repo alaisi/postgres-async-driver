@@ -1,6 +1,7 @@
 package com.github.pgasync;
 
 import static java.lang.System.getenv;
+import static ru.yandex.qatools.embed.postgresql.distribution.Version.V11_1;
 
 import com.pgasync.ConnectionPool;
 import com.pgasync.ConnectionPoolBuilder;
@@ -8,12 +9,17 @@ import com.pgasync.Db;
 import com.pgasync.ResultSet;
 import org.junit.rules.ExternalResource;
 
+import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
+import ru.yandex.qatools.embed.postgresql.PostgresExecutable;
 import ru.yandex.qatools.embed.postgresql.PostgresProcess;
+import ru.yandex.qatools.embed.postgresql.PostgresStarter;
+import ru.yandex.qatools.embed.postgresql.config.AbstractPostgresConfig;
+import ru.yandex.qatools.embed.postgresql.config.PostgresConfig;
 
 /**
  * @author Antti Laisi
@@ -42,7 +48,7 @@ class DatabaseRule extends ExternalResource {
                     PostgresExecutable exec = runtime.prepare(config);
                     process = exec.start();
 
-                    out.printf("Started postgres to %s:%d%n", process.getConfig().net().host(), process.getConfig().net().port());
+                    System.out.printf("Started postgres to %s:%d%n", process.getConfig().net().host(), process.getConfig().net().port());
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }

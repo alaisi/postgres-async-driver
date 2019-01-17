@@ -23,6 +23,7 @@ import org.junit.runners.Parameterized.Parameters;
 
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.function.Function;
 import java.util.stream.IntStream;
 
 import static com.github.pgasync.DatabaseRule.createPoolBuilder;
@@ -44,9 +45,7 @@ public class PerformanceTest {
         List<Object[]> testData = new ArrayList<>();
         for (int poolSize = 1; poolSize <= 4; poolSize *= 2) {
             results.putIfAbsent(key(poolSize), new TreeMap<>());
-            results.putIfAbsent(key(poolSize), new TreeMap<>());
             for (int threads = 1; threads <= 16; threads *= 2) {
-                testData.add(new Object[]{poolSize, threads});
                 testData.add(new Object[]{poolSize, threads});
             }
         }
@@ -89,7 +88,6 @@ public class PerformanceTest {
     }
 
     @Test
-    // @Ignore
     public void t3_run() throws Exception {
         Collection<Callable<Long>> tasks = new ArrayList<>();
         for (int i = 0; i < batchSize; ++i) {
@@ -98,7 +96,43 @@ public class PerformanceTest {
 
                 @Override
                 public Long call() throws Exception {
-                    pool.completeQuery("select 42")
+
+                    pool.getConnection()
+                            .thenApply(connection -> connection.prepareStatement("select 42")
+                                    .thenApply(stmt ->
+                                            stmt.query()
+                                                    .thenAccept(res -> {
+                                                        try {
+                                                            swap.exchange(currentTimeMillis());
+                                                        } catch (Exception e) {
+                                                            throw new AssertionError(e);
+                                                        }
+                                                    })
+                                                    .handle((v, th) ->
+                                                            stmt.close()
+                                                                    .thenAccept(_v -> {
+                                                                        if (th != null)
+                                                                            throw new RuntimeException(th);
+                                                                    })
+                                                    )
+                                                    .thenCompose(Function.identity())
+                                    )
+                                    .thenCompose(Function.identity())
+                                    .handle((v, th) -> connection.close()
+                                            .thenAccept(_v -> {
+                                                if (th != null) {
+                                                    throw new RuntimeException(th);
+                                                }
+                                            }))
+                                    .thenCompose(Function.identity())
+                            )
+                            .thenCompose(Function.identity())
+                            .exceptionally(th -> {
+                                throw new AssertionError(th);
+                            });
+
+                    /*
+                    pool.completeScript("select 42")
                             .thenAccept(r -> {
                                 try {
                                     swap.exchange(currentTimeMillis());
@@ -109,6 +143,7 @@ public class PerformanceTest {
                             .exceptionally(th -> {
                                 throw new AssertionError(th);
                             });
+                    */
                     return swap.exchange(null);
                 }
             });
