@@ -34,7 +34,9 @@ public class IO {
     }
 
     public static void putCString(ByteBuffer buffer, String value, Charset charset) {
-        buffer.put(value.getBytes(charset));
+        if (!value.isEmpty()) {
+            buffer.put(value.getBytes(charset));
+        }
         buffer.put((byte) 0);
     }
 

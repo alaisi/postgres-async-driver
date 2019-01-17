@@ -54,7 +54,7 @@ public class ExecuteEncoder extends ExtendedQueryEncoder<Execute> {
 
     @Override
     public void writeBody(Execute msg, ByteBuffer buffer, Charset encoding) {
-        IO.putCString(buffer, msg.getPname(), encoding); // portal
+        IO.putCString(buffer, "", encoding); // unnamed portal
         buffer.putInt(0); // unlimited maximum rows
     }
 }

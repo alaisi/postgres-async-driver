@@ -18,6 +18,8 @@ import com.github.pgasync.message.Message;
 import com.github.pgasync.message.backend.CommandComplete;
 import com.github.pgasync.message.backend.DataRow;
 import com.github.pgasync.message.backend.RowDescription;
+import com.github.pgasync.message.frontend.Bind;
+import com.github.pgasync.message.frontend.Describe;
 import com.github.pgasync.message.frontend.Execute;
 import com.github.pgasync.message.frontend.PasswordMessage;
 import com.github.pgasync.message.frontend.Query;
@@ -41,7 +43,9 @@ public interface PgProtocolStream {
 
     CompletableFuture<Void> send(Query query, Consumer<RowDescription.ColumnDescription[]> onColumns, Consumer<DataRow> onRow, Consumer<CommandComplete> onAffected);
 
-    CompletableFuture<Integer> send(Execute execute, Consumer<DataRow> onRow);
+    CompletableFuture<Integer> send(Bind bind, Describe describe, Consumer<RowDescription.ColumnDescription[]> onColumns, Consumer<DataRow> onRow);
+
+    CompletableFuture<Integer> send(Bind bind, Consumer<DataRow> onRow);
 
     Runnable subscribe(String channel, Consumer<String> onNotification);
 

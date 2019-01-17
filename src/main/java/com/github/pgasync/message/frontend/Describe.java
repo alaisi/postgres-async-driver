@@ -52,8 +52,8 @@ public class Describe implements ExtendedQueryMessage {
         return name;
     }
 
-    public static Describe portal(String name) {
-        return new Describe(name, Kind.PORTAL);
+    public static Describe portal() {
+        return new Describe("", Kind.PORTAL);
     }
 
     public static Describe statement(String name) {

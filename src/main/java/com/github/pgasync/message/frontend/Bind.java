@@ -22,21 +22,15 @@ import com.github.pgasync.message.ExtendedQueryMessage;
 public class Bind implements ExtendedQueryMessage {
 
     private final String sname;
-    private final String pname;
     private final byte[][] params;
 
-    public Bind(String sname, String pname, byte[][] params) {
+    public Bind(String sname, byte[][] params) {
         this.sname = sname;
-        this.pname = pname;
         this.params = params;
     }
 
     public String getSname() {
         return sname;
-    }
-
-    public String getPname() {
-        return pname;
     }
 
     public byte[][] getParams() {

@@ -30,6 +30,7 @@ import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import com.github.pgasync.message.backend.DataRow;
 import com.pgasync.Connection;
 import com.pgasync.Listening;
 import com.pgasync.PreparedStatement;
@@ -38,11 +39,9 @@ import com.pgasync.Row;
 import com.pgasync.Transaction;
 import com.github.pgasync.conversion.DataConverter;
 import com.github.pgasync.message.backend.Authentication;
-import com.github.pgasync.message.backend.RowDescription;
 import com.github.pgasync.message.frontend.Bind;
 import com.github.pgasync.message.frontend.Close;
 import com.github.pgasync.message.frontend.Describe;
-import com.github.pgasync.message.frontend.Execute;
 import com.github.pgasync.message.Message;
 import com.github.pgasync.message.frontend.Parse;
 import com.github.pgasync.message.frontend.PasswordMessage;
@@ -63,37 +62,34 @@ public class PgConnection implements Connection {
     public class PgPreparedStatement implements PreparedStatement {
 
         private final String sname;
-        private final String pname;
+        private Columns columns;
 
-        PgPreparedStatement(String sname, String pname) {
+        PgPreparedStatement(String sname) {
             this.sname = sname;
-            this.pname = pname;
         }
 
         @Override
         public CompletableFuture<ResultSet> query(Object... params) {
-            AtomicReference<Map<String, PgColumn>> columnsByNameRef = new AtomicReference<>();
-            AtomicReference<PgColumn[]> orderedColumnsRef = new AtomicReference<>();
             List<Row> rows = new ArrayList<>();
             return fetch((columnsByName, orderedColumns) -> {
-                columnsByNameRef.set(columnsByName);
-                orderedColumnsRef.set(orderedColumns);
             }, rows::add, params)
-                    .thenApply(v -> new PgResultSet(columnsByNameRef.get(), List.of(orderedColumnsRef.get()), rows, 0));
+                    .thenApply(v -> new PgResultSet(columns.byName, List.of(columns.ordered), rows, 0));
         }
 
         @Override
         public CompletableFuture<Integer> fetch(BiConsumer<Map<String, PgColumn>, PgColumn[]> onColumns, Consumer<Row> processor, Object... params) {
-            return stream
-                    .send(new Bind(sname, pname, dataConverter.fromParameters(params)))
-                    .thenApply(bindComplete -> stream.send(Describe.portal(pname)))
-                    .thenCompose(Function.identity())
-                    .thenApply(rowDescription -> {
-                        Columns columns = calcColumns(((RowDescription) rowDescription).getColumns());
-                        onColumns.accept(columns.byName, columns.ordered);
-                        return stream.send(new Execute(pname), dataRow -> processor.accept(new PgRow(dataRow, columns.byName, columns.ordered, dataConverter)));
-                    })
-                    .thenCompose(Function.identity());
+            Bind bind = new Bind(sname, dataConverter.fromParameters(params));
+            Consumer<DataRow> rowProcessor = dataRow -> processor.accept(new PgRow(dataRow, columns.byName, columns.ordered, dataConverter));
+            if (columns != null) {
+                return stream
+                        .send(bind, rowProcessor);
+            } else {
+                return stream
+                        .send(bind, Describe.portal(), columnDescriptions -> {
+                            columns = calcColumns(columnDescriptions);
+                            onColumns.accept(columns.byName, columns.ordered);
+                        }, rowProcessor);
+            }
         }
 
         @Override
@@ -132,7 +128,6 @@ public class PgConnection implements Connection {
     }
 
     private static final NameSequence preparedStatementNames = new NameSequence("s-");
-    private static final NameSequence portalNames = new NameSequence("p-");
 
     private final PgProtocolStream stream;
     private final DataConverter dataConverter;
@@ -176,7 +171,7 @@ public class PgConnection implements Connection {
         String statementName = preparedStatementNames.next();
         return stream
                 .send(new Parse(sql, statementName, parametersTypes))
-                .thenApply(parseComplete -> new PgPreparedStatement(statementName, portalNames.next()));
+                .thenApply(parseComplete -> new PgPreparedStatement(statementName));
     }
 
     @Override

@@ -14,6 +14,8 @@
 
 package com.github.pgasync.netty;
 
+import com.github.pgasync.message.frontend.Bind;
+import com.github.pgasync.message.frontend.Describe;
 import com.pgasync.SqlException;
 import com.github.pgasync.PgProtocolStream;
 import com.github.pgasync.message.ExtendedQueryMessage;
@@ -147,11 +149,25 @@ public class NettyPgProtocolStream implements PgProtocolStream {
     }
 
     @Override
-    public CompletableFuture<Integer> send(Execute execute, Consumer<DataRow> onRow) {
+    public CompletableFuture<Integer> send(Bind bind, Describe describe, Consumer<RowDescription.ColumnDescription[]> onColumns, Consumer<DataRow> onRow) {
+        this.onColumns = onColumns;
+        this.onRow = onRow;
+        this.onAffected = null;
+        return offerRoundTrip(() -> {
+            lastSentMessage = new Execute();
+            write(bind, describe, lastSentMessage);
+        }).thenApply(commandComplete -> ((CommandComplete) commandComplete).getAffectedRows());
+    }
+
+    @Override
+    public CompletableFuture<Integer> send(Bind bind, Consumer<DataRow> onRow) {
         this.onColumns = null;
         this.onRow = onRow;
         this.onAffected = null;
-        return send(execute).thenApply(commandComplete -> ((CommandComplete) commandComplete).getAffectedRows());
+        return offerRoundTrip(() -> {
+            lastSentMessage = new Execute();
+            write(bind, lastSentMessage);
+        }).thenApply(commandComplete -> ((CommandComplete) commandComplete).getAffectedRows());
     }
 
     @Override
@@ -212,18 +228,12 @@ public class NettyPgProtocolStream implements PgProtocolStream {
             publish((NotificationResponse) message);
         } else if (message instanceof NoticeResponse) {
             Logger.getLogger(NettyPgProtocolStream.class.getName()).log(Level.WARNING, message.toString());
+        } else if (message == BIndicators.BIND_COMPLETE) {
+            // op op since bulk message sequence
         } else if (message instanceof RowDescription) {
-            if (isSimpleQueryInProgress()) {
-                onColumns.accept(((RowDescription) message).getColumns());
-            } else {
-                consumeOnResponse().completeAsync(() -> message, futuresExecutor);
-            }
+            onColumns.accept(((RowDescription) message).getColumns());
         } else if (message == BIndicators.NO_DATA) {
-            if (isSimpleQueryInProgress()) {
-                onColumns.accept(new RowDescription.ColumnDescription[]{});
-            } else {
-                consumeOnResponse().completeAsync(() -> new RowDescription(new RowDescription.ColumnDescription[]{}), futuresExecutor);
-            }
+            onColumns.accept(new RowDescription.ColumnDescription[]{});
         } else if (message instanceof DataRow) {
             onRow.accept((DataRow) message);
         } else if (message instanceof ErrorResponse) {

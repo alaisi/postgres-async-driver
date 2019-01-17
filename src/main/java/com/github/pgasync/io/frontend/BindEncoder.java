@@ -79,7 +79,7 @@ public class BindEncoder extends ExtendedQueryEncoder<Bind> {
 
     @Override
     public void writeBody(Bind msg, ByteBuffer buffer, Charset encoding) {
-        IO.putCString(buffer, msg.getPname(), encoding); // portal
+        IO.putCString(buffer, "", encoding); // portal
         IO.putCString(buffer, msg.getSname(), encoding); // prepared statement
         buffer.putShort((short) 0); // number of format codes
         buffer.putShort((short) msg.getParams().length); // number of parameters

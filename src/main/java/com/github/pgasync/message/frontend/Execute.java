@@ -21,13 +21,7 @@ import com.github.pgasync.message.ExtendedQueryMessage;
  */
 public class Execute implements ExtendedQueryMessage {
 
-    private final String pname;
-
-    public Execute(String pname) {
-        this.pname = pname;
+    public Execute() {
     }
 
-    public String getPname() {
-        return pname;
-    }
 }
