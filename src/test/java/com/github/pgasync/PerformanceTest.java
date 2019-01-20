@@ -14,8 +14,8 @@
 
 package com.github.pgasync;
 
-import com.pgasync.Connection;
 import com.pgasync.ConnectionPool;
+import com.pgasync.PreparedStatement;
 import org.junit.*;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -23,18 +23,21 @@ import org.junit.runners.Parameterized.Parameters;
 
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Function;
 import java.util.stream.IntStream;
+import java.util.stream.LongStream;
 
 import static com.github.pgasync.DatabaseRule.createPoolBuilder;
 import static java.lang.System.currentTimeMillis;
 import static java.lang.System.out;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.junit.runners.MethodSorters.NAME_ASCENDING;
 
 @RunWith(Parameterized.class)
 @FixMethodOrder(NAME_ASCENDING)
 public class PerformanceTest {
+
+    private static final String SELECT_42 = "select 42";
 
     @ClassRule
     public static DatabaseRule dbr = new DatabaseRule(createPoolBuilder(1));
@@ -69,7 +72,8 @@ public class PerformanceTest {
         this.numThreads = numThreads;
         pool = dbr.builder
                 .password("async-pg")
-                .maxConnections(poolSize).build();
+                .maxConnections(poolSize)
+                .build();
     }
 
     @After
@@ -79,140 +83,96 @@ public class PerformanceTest {
 
     @Test(timeout = 2000)
     public void t1_preAllocatePool() throws Exception {
-        List<Connection> connections = new ArrayList<>();
         CompletableFuture.allOf((CompletableFuture<?>[]) IntStream.range(0, poolSize)
-                .mapToObj(i -> pool.getConnection().thenAccept(connections::add))
+                .mapToObj(i -> pool.getConnection()
+                        .thenApply(connection ->
+                                connection.prepareStatement(SELECT_42)
+                                        .thenApply(PreparedStatement::close)
+                                        .thenCompose(Function.identity())
+                                        .thenApply(v -> connection.close())
+                                        .thenCompose(Function.identity())
+                        )
+                        .thenCompose(Function.identity())
+                )
                 .toArray(size -> new CompletableFuture<?>[size])
         ).get();
-        connections.forEach(Connection::close);
     }
 
     @Test
-    public void t3_run() throws Exception {
-        Collection<Callable<Long>> tasks = new ArrayList<>();
-        for (int i = 0; i < batchSize; ++i) {
-            tasks.add(new Callable<>() {
-                final Exchanger<Long> swap = new Exchanger<>();
+    public void t3_run() {
+        double mean = LongStream.range(0, repeats)
+                .map(i -> {
+                    try {
+                        return performBatch();
+                    } catch (Exception ex) {
+                        throw new RuntimeException(ex);
+                    }
+                })
+                .average().getAsDouble();
+        results.computeIfAbsent(poolSize + " conn", k -> new TreeMap<>())
+                .put(numThreads, Math.round(mean));
+    }
 
-                @Override
-                public Long call() throws Exception {
+    private long performBatch() throws Exception {
+        List<CompletableFuture<Void>> batchFutures = new ArrayList<>();
+        long startTime = currentTimeMillis();
+        for (int i = 0; i < batchSize; i++) {
 
-                    pool.getConnection()
-                            .thenApply(connection -> connection.prepareStatement("select 42")
-                                    .thenApply(stmt ->
-                                            stmt.query()
-                                                    .thenAccept(res -> {
-                                                        try {
-                                                            swap.exchange(currentTimeMillis());
-                                                        } catch (Exception e) {
-                                                            throw new AssertionError(e);
-                                                        }
-                                                    })
-                                                    .handle((v, th) ->
-                                                            stmt.close()
-                                                                    .thenAccept(_v -> {
-                                                                        if (th != null)
-                                                                            throw new RuntimeException(th);
-                                                                    })
-                                                    )
-                                                    .thenCompose(Function.identity())
-                                    )
-                                    .thenCompose(Function.identity())
-                                    .handle((v, th) -> connection.close()
-                                            .thenAccept(_v -> {
-                                                if (th != null) {
-                                                    throw new RuntimeException(th);
-                                                }
-                                            }))
-                                    .thenCompose(Function.identity())
+            batchFutures.add(pool.getConnection()
+                    .thenApply(connection -> connection.prepareStatement(SELECT_42)
+                            .thenApply(stmt -> {
+                                        return stmt.query()
+                                                .handle((v, th) ->
+                                                        stmt.close()
+                                                                .thenAccept(_v -> {
+                                                                    if (th != null) {
+                                                                        throw new RuntimeException(th);
+                                                                    }
+                                                                })
+                                                )
+                                                .thenCompose(Function.identity());
+                                    }
                             )
                             .thenCompose(Function.identity())
-                            .exceptionally(th -> {
-                                throw new AssertionError(th);
-                            });
+                            .handle((v, th) -> connection.close()
+                                    .thenAccept(_v -> {
+                                        if (th != null) {
+                                            throw new RuntimeException(th);
+                                        }
+                                    }))
+                            .thenCompose(Function.identity())
+                    )
+                    .thenCompose(Function.identity())
+                    .exceptionally(th -> {
+                        throw new AssertionError(th);
+                    }));
 
-                    /*
-                    pool.completeScript("select 42")
-                            .thenAccept(r -> {
-                                try {
-                                    swap.exchange(currentTimeMillis());
-                                } catch (Exception e) {
-                                    throw new AssertionError(e);
-                                }
-                            })
-                            .exceptionally(th -> {
-                                throw new AssertionError(th);
-                            });
-                    */
-                    return swap.exchange(null);
-                }
-            });
+/*
+            batchFutures.add(pool.completeScript("select 42").thenAccept(rs -> {
+            }));
+            */
         }
-
-        long minTime = Long.MAX_VALUE;
-
-        for (int r = 0; r < repeats; ++r) {
-            MILLISECONDS.sleep(300);
-
-            final CyclicBarrier barrier = new CyclicBarrier(numThreads + 1);
-
-            final Queue<Callable<Long>> taskQueue = new LinkedBlockingQueue<>(tasks);
-            final Queue<Long> endTimes = new ArrayBlockingQueue<>(batchSize);
-
-            Thread[] threads = new Thread[numThreads];
-            for (int i = 0; i < numThreads; ++i) {
-                threads[i] = new Thread("tester" + i) {
-                    public void run() {
-                        try {
-                            barrier.await();
-                        } catch (InterruptedException | BrokenBarrierException e) {
-                            e.printStackTrace();
-                        }
-
-                        Callable<Long> c;
-                        try {
-                            while ((c = taskQueue.poll()) != null) {
-                                endTimes.add(c.call());
-                            }
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
-                    }
-                };
-                threads[i].start();
-            }
-
-            long start = currentTimeMillis();
-            barrier.await();
-
-            for (Thread thread : threads) {
-                thread.join();
-            }
-
-            OptionalLong end = endTimes.stream().mapToLong(f -> f).max();
-            long time = end.getAsLong() - start;
-            minTime = Math.min(minTime, time);
-        }
-
-        results.get(key(poolSize)).put(numThreads, minTime);
-
-        out.printf("\t%d\t%2d\t%4.3f\t%n", poolSize, numThreads, minTime / 1000.0);
+        CompletableFuture
+                .allOf(batchFutures.toArray(new CompletableFuture<?>[]{}))
+                .get();
+        long duration = currentTimeMillis() - startTime;
+        return duration;
     }
 
     @AfterClass
     public static void printResults() {
         out.println();
         out.println("Requests per second, Hz:");
-        out.print("  threads");
-        results.keySet().forEach(i -> out.printf("\t\t%s\t", i));
+        out.print(" threads");
+        results.keySet().forEach(i -> out.printf("\t%s\t", i));
         out.println();
 
         results.values().iterator().next().keySet().forEach(threads -> {
             out.print("    " + threads);
-            results.keySet().forEach(conns -> {
-                long millis = results.get(conns).get(threads);
-                double rps = batchSize * 1000 / (double) millis;
-                out.printf("\t\t%f", rps);
+            results.keySet().forEach(connections -> {
+                long batchDuration = results.get(connections).get(threads);
+                double rps = 1000 * batchSize / (double) batchDuration;
+                out.printf("\t\t%d", Math.round(rps));
             });
             out.println();
         });

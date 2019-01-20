@@ -34,20 +34,23 @@ public interface QueryExecutor {
      */
     default CompletableFuture<Collection<ResultSet>> completeScript(String sql) {
         List<ResultSet> results = new ArrayList<>();
-        AtomicReference<Map<String, PgColumn>> columnsByNameRef = new AtomicReference<>();
-        AtomicReference<PgColumn[]> orderedColumnsRef = new AtomicReference<>();
-        AtomicReference<List<Row>> rowsRef = new AtomicReference<>();
+        class ResultSetAssembly {
+            private Map<String, PgColumn> columnsByName;
+            private PgColumn[] orderedColumns;
+            private List<Row> rows;
+        }
+        ResultSetAssembly assembly = new ResultSetAssembly();
         return script(
                 (columnsByName, orderedColumns) -> {
-                    columnsByNameRef.set(columnsByName);
-                    orderedColumnsRef.set(orderedColumns);
-                    rowsRef.set(new ArrayList<>());
+                    assembly.columnsByName = columnsByName;
+                    assembly.orderedColumns = orderedColumns;
+                    assembly.rows = new ArrayList<>();
                 },
-                row -> rowsRef.get().add(row),
+                row -> assembly.rows.add(row),
                 affected -> results.add(new PgResultSet(
-                        columnsByNameRef.get() != null ? columnsByNameRef.get() : Map.of(),
-                        orderedColumnsRef.get() != null ? List.of(orderedColumnsRef.get()) : List.of(),
-                        rowsRef.get() != null ? rowsRef.get() : List.of(),
+                        assembly.columnsByName != null ? assembly.columnsByName : Map.of(),
+                        assembly.orderedColumns != null ? List.of(assembly.orderedColumns) : List.of(),
+                        assembly.rows != null ? assembly.rows : List.of(),
                         affected
                 )),
                 sql

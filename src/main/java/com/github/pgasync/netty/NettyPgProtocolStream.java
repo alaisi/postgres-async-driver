@@ -155,7 +155,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         this.onAffected = null;
         return offerRoundTrip(() -> {
             lastSentMessage = new Execute();
-            write(bind, describe, lastSentMessage);
+            write(bind, describe, lastSentMessage, FIndicators.SYNC);
         }).thenApply(commandComplete -> ((CommandComplete) commandComplete).getAffectedRows());
     }
 
@@ -166,7 +166,7 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         this.onAffected = null;
         return offerRoundTrip(() -> {
             lastSentMessage = new Execute();
-            write(bind, lastSentMessage);
+            write(bind, lastSentMessage, FIndicators.SYNC);
         }).thenApply(commandComplete -> ((CommandComplete) commandComplete).getAffectedRows());
     }
 
@@ -239,9 +239,6 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         } else if (message instanceof ErrorResponse) {
             if (seenReadyForQuery) {
                 readyForQueryPendingMessage = message;
-                if (isExtendedQueryInProgress()) {
-                    write(FIndicators.SYNC);
-                }
             } else {
                 respondWithException(toSqlException((ErrorResponse) message));
             }
@@ -253,7 +250,6 @@ public class NettyPgProtocolStream implements PgProtocolStream {
                 // "During simple query message flow, CommandComplete message should be consumed only by dedicated callback,
                 // due to possibility of multiple CommandComplete messages, one per sql clause.";
                 readyForQueryPendingMessage = message;
-                write(FIndicators.SYNC);
             }
         } else if (message instanceof Authentication) {
             Authentication authentication = (Authentication) message;

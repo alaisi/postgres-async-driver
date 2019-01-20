@@ -23,7 +23,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -133,6 +132,8 @@ public class PgConnection implements Connection {
     private final DataConverter dataConverter;
     private final Charset encoding;
 
+    private Columns currentColumns;
+
     PgConnection(PgProtocolStream stream, DataConverter dataConverter, Charset encoding) {
         this.stream = stream;
         this.dataConverter = dataConverter;
@@ -179,16 +180,17 @@ public class PgConnection implements Connection {
         if (sql == null || sql.isBlank()) {
             throw new IllegalArgumentException("'sql' shouldn't be null or empty or blank string");
         }
-        AtomicReference<Columns> columnsRef = new AtomicReference<>();
         return stream.send(
                 new Query(sql),
                 columnDescriptions -> {
-                    Columns columns = calcColumns(columnDescriptions);
-                    columnsRef.set(columns);
-                    onColumns.accept(columns.byName, columns.ordered);
+                    currentColumns = calcColumns(columnDescriptions);
+                    onColumns.accept(currentColumns.byName, currentColumns.ordered);
                 },
-                message -> onRow.accept(new PgRow(message, columnsRef.get().byName, columnsRef.get().ordered, dataConverter)),
-                message -> onAffected.accept(message.getAffectedRows())
+                message -> onRow.accept(new PgRow(message, currentColumns.byName, currentColumns.ordered, dataConverter)),
+                message -> {
+                    currentColumns = null;
+                    onAffected.accept(message.getAffectedRows());
+                }
         );
     }
 
