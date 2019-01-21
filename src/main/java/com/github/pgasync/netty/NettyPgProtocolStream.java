@@ -136,6 +136,9 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         return offerRoundTrip(() -> {
             lastSentMessage = message;
             write(message);
+            if (message instanceof ExtendedQueryMessage) {
+                write(FIndicators.SYNC);
+            }
         });
     }
 
@@ -154,8 +157,9 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         this.onRow = onRow;
         this.onAffected = null;
         return offerRoundTrip(() -> {
-            lastSentMessage = new Execute();
-            write(bind, describe, lastSentMessage, FIndicators.SYNC);
+            Execute execute;
+            lastSentMessage = execute = new Execute();
+            write(bind, describe, execute, FIndicators.SYNC);
         }).thenApply(commandComplete -> ((CommandComplete) commandComplete).getAffectedRows());
     }
 
@@ -165,8 +169,9 @@ public class NettyPgProtocolStream implements PgProtocolStream {
         this.onRow = onRow;
         this.onAffected = null;
         return offerRoundTrip(() -> {
-            lastSentMessage = new Execute();
-            write(bind, lastSentMessage, FIndicators.SYNC);
+            Execute execute;
+            lastSentMessage = execute = new Execute();
+            write(bind, execute, FIndicators.SYNC);
         }).thenApply(commandComplete -> ((CommandComplete) commandComplete).getAffectedRows());
     }
 
@@ -230,6 +235,8 @@ public class NettyPgProtocolStream implements PgProtocolStream {
             Logger.getLogger(NettyPgProtocolStream.class.getName()).log(Level.WARNING, message.toString());
         } else if (message == BIndicators.BIND_COMPLETE) {
             // op op since bulk message sequence
+        } else if (message == BIndicators.PARSE_COMPLETE || message == BIndicators.CLOSE_COMPLETE) {
+            readyForQueryPendingMessage = message;
         } else if (message instanceof RowDescription) {
             onColumns.accept(((RowDescription) message).getColumns());
         } else if (message == BIndicators.NO_DATA) {
