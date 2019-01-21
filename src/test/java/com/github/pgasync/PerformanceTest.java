@@ -44,22 +44,18 @@ public class PerformanceTest {
     public static Iterable<Object[]> data() {
         results = new TreeMap<>();
         List<Object[]> testData = new ArrayList<>();
-        for (int poolSize = 1; poolSize <= 4; poolSize *= 2) {
-            results.putIfAbsent(key(poolSize), new TreeMap<>());
-            for (int threads = 1; threads <= 1; threads *= 2) {
+        for (int poolSize = 1; poolSize <= 16; poolSize *= 2) {
+            results.putIfAbsent(poolSize, new TreeMap<>());
+            for (int threads = 1; threads <= 16; threads *= 2) {
                 testData.add(new Object[]{poolSize, threads});
             }
         }
         return testData;
     }
 
-    private static String key(int poolSize) {
-        return poolSize + " conn";
-    }
-
     private static final int batchSize = 1000;
     private static final int repeats = 5;
-    private static SortedMap<String, SortedMap<Integer, Long>> results = new TreeMap<>();
+    private static SortedMap<Integer, SortedMap<Integer, Long>> results = new TreeMap<>();
 
     private final int poolSize;
     private final int numThreads;
@@ -75,7 +71,7 @@ public class PerformanceTest {
         pool = dbr.builder
                 .password("async-pg")
                 .maxConnections(poolSize)
-                .build();
+                .build(Executors.newFixedThreadPool(numThreads));
         List<Connection> connections = IntStream.range(0, poolSize)
                 .mapToObj(i -> pool.getConnection().join()).collect(Collectors.toList());
         connections.forEach(connection -> {
@@ -94,14 +90,27 @@ public class PerformanceTest {
         double mean = LongStream.range(0, repeats)
                 .map(i -> {
                     try {
-                        return new Batch(batchSize).perform().get();
+                        List<CompletableFuture<Long>> batches = IntStream.range(0, poolSize)
+                                //.mapToObj(ci -> startBatchWithPreparedStatement())
+                                .mapToObj(ci -> startBatchWithSimpleQuery())
+                                .collect(Collectors.toList());
+                        CompletableFuture.allOf(batches.toArray(new CompletableFuture<?>[]{})).get();
+                        return batches.stream().map(CompletableFuture::join).max(Long::compare).get();
                     } catch (Exception ex) {
                         throw new RuntimeException(ex);
                     }
                 })
                 .average().getAsDouble();
-        results.computeIfAbsent(poolSize + " conn", k -> new TreeMap<>())
+        results.computeIfAbsent(poolSize, k -> new TreeMap<>())
                 .put(numThreads, Math.round(mean));
+    }
+
+    private CompletableFuture<Long> startBatchWithPreparedStatement() {
+        return new Batch(batchSize).startWithPreparedStatement();
+    }
+
+    private CompletableFuture<Long> startBatchWithSimpleQuery() {
+        return new Batch(batchSize).startWithSimpleQuery();
     }
 
     private class Batch {
@@ -115,14 +124,21 @@ public class PerformanceTest {
             this.batchSize = batchSize;
         }
 
-        private CompletableFuture<Long> perform() {
+        private CompletableFuture<Long> startWithPreparedStatement() {
             onBatch = new CompletableFuture<>();
             startedAt = System.currentTimeMillis();
-            nextSample();
+            nextSamplePreparedStatement();
             return onBatch;
         }
 
-        private void nextSample() {
+        private CompletableFuture<Long> startWithSimpleQuery() {
+            onBatch = new CompletableFuture<>();
+            startedAt = System.currentTimeMillis();
+            nextSampleSimpleQuery();
+            return onBatch;
+        }
+
+        private void nextSamplePreparedStatement() {
             pool.getConnection()
                     .thenApply(connection ->
                             connection.prepareStatement(SELECT_42)
@@ -143,7 +159,7 @@ public class PerformanceTest {
                     .thenCompose(Function.identity())
                     .thenAccept(v -> {
                         if (++performed < batchSize) {
-                            nextSample();
+                            nextSamplePreparedStatement();
                         } else {
                             long duration = currentTimeMillis() - startedAt;
                             onBatch.complete(duration);
@@ -155,6 +171,22 @@ public class PerformanceTest {
                     });
 
         }
+
+        private void nextSampleSimpleQuery() {
+            pool.completeScript(SELECT_42)
+                    .thenAccept(v -> {
+                        if (++performed < batchSize) {
+                            nextSamplePreparedStatement();
+                        } else {
+                            long duration = currentTimeMillis() - startedAt;
+                            onBatch.complete(duration);
+                        }
+                    })
+                    .exceptionally(th -> {
+                        onBatch.completeExceptionally(th);
+                        return null;
+                    });
+        }
     }
 
     @AfterClass
@@ -162,14 +194,14 @@ public class PerformanceTest {
         out.println();
         out.println("Requests per second, Hz:");
         out.print(" threads");
-        results.keySet().forEach(i -> out.printf("\t%s\t", i));
+        results.keySet().forEach(i -> out.printf("\t%d conn\t", i));
         out.println();
 
         results.values().iterator().next().keySet().forEach(threads -> {
             out.print("    " + threads);
             results.keySet().forEach(connections -> {
                 long batchDuration = results.get(connections).get(threads);
-                double rps = 1000 * batchSize / (double) batchDuration;
+                double rps = 1000 * batchSize * connections / (double) batchDuration;
                 out.printf("\t\t%d", Math.round(rps));
             });
             out.println();
