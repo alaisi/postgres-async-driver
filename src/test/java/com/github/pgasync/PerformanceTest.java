@@ -48,7 +48,7 @@ public class PerformanceTest {
         List<Object[]> testData = new ArrayList<>();
         for (int poolSize = 1; poolSize <= 4; poolSize *= 2) {
             results.putIfAbsent(key(poolSize), new TreeMap<>());
-            for (int threads = 1; threads <= 16; threads *= 2) {
+            for (int threads = 1; threads <= 1; threads *= 2) {
                 testData.add(new Object[]{poolSize, threads});
             }
         }
@@ -59,28 +59,36 @@ public class PerformanceTest {
         return poolSize + " conn";
     }
 
-    private static final int batchSize = 100;
+    private static final int batchSize = 1000;
     private static final int repeats = 5;
     private static SortedMap<String, SortedMap<Integer, Long>> results = new TreeMap<>();
 
     private final int poolSize;
     private final int numThreads;
-    private final ConnectionPool pool;
+    private ConnectionPool pool;
+    private PreparedStatement stmt;
 
     public PerformanceTest(int poolSize, int numThreads) {
         this.poolSize = poolSize;
         this.numThreads = numThreads;
+    }
+
+    @Before
+    public void setup() throws Exception {
         pool = dbr.builder
                 .password("async-pg")
                 .maxConnections(poolSize)
                 .build();
+        stmt = pool.getConnection().get().prepareStatement(SELECT_42).get();
     }
 
     @After
-    public void close() {
-        pool.close();
+    public void tearDown() {
+        stmt.close().join();
+        pool.close().join();
     }
 
+    /*
     @Test(timeout = 2000)
     public void t1_preAllocatePool() throws Exception {
         CompletableFuture.allOf((CompletableFuture<?>[]) IntStream.range(0, poolSize)
@@ -97,13 +105,14 @@ public class PerformanceTest {
                 .toArray(size -> new CompletableFuture<?>[size])
         ).get();
     }
+    */
 
     @Test
     public void t3_run() {
         double mean = LongStream.range(0, repeats)
                 .map(i -> {
                     try {
-                        return performBatch();
+                        return new Batch(batchSize).perform().get();
                     } catch (Exception ex) {
                         throw new RuntimeException(ex);
                     }
@@ -113,6 +122,42 @@ public class PerformanceTest {
                 .put(numThreads, Math.round(mean));
     }
 
+    private class Batch {
+
+        private long batchSize;
+        private long performed;
+        private long startedAt;
+        private CompletableFuture<Long> onBatch;
+
+        Batch(long batchSize) {
+            this.batchSize = batchSize;
+        }
+
+        private CompletableFuture<Long> perform() {
+            onBatch = new CompletableFuture<>();
+            startedAt = System.currentTimeMillis();
+            nextSample();
+            return onBatch;
+        }
+
+        private void nextSample() {
+            stmt.query()
+                    .thenAccept(v -> {
+                        if (++performed < batchSize) {
+                            nextSample();
+                        } else {
+                            long duration = currentTimeMillis() - startedAt;
+                            onBatch.complete(duration);
+                        }
+                    })
+                    .exceptionally(th -> {
+                        onBatch.completeExceptionally(th);
+                        return null;
+                    });
+        }
+    }
+
+    /*
     private long performBatch() throws Exception {
         List<CompletableFuture<Void>> batchFutures = new ArrayList<>();
         long startTime = currentTimeMillis();
@@ -147,10 +192,8 @@ public class PerformanceTest {
                         throw new AssertionError(th);
                     }));
 
-/*
-            batchFutures.add(pool.completeScript("select 42").thenAccept(rs -> {
-            }));
-            */
+            // batchFutures.add(pool.completeScript(SELECT_42).thenAccept(rs -> {
+            // }));
         }
         CompletableFuture
                 .allOf(batchFutures.toArray(new CompletableFuture<?>[]{}))
@@ -158,7 +201,7 @@ public class PerformanceTest {
         long duration = currentTimeMillis() - startTime;
         return duration;
     }
-
+*/
     @AfterClass
     public static void printResults() {
         out.println();
