@@ -14,8 +14,8 @@
 
 package com.github.pgasync;
 
+import com.pgasync.Connection;
 import com.pgasync.ConnectionPool;
-import com.pgasync.PreparedStatement;
 import org.junit.*;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -23,18 +23,16 @@ import org.junit.runners.Parameterized.Parameters;
 
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
 
 import static com.github.pgasync.DatabaseRule.createPoolBuilder;
 import static java.lang.System.currentTimeMillis;
 import static java.lang.System.out;
-import static org.junit.runners.MethodSorters.NAME_ASCENDING;
 
 @RunWith(Parameterized.class)
-@FixMethodOrder(NAME_ASCENDING)
 public class PerformanceTest {
 
     private static final String SELECT_42 = "select 42";
@@ -66,7 +64,6 @@ public class PerformanceTest {
     private final int poolSize;
     private final int numThreads;
     private ConnectionPool pool;
-    private PreparedStatement stmt;
 
     public PerformanceTest(int poolSize, int numThreads) {
         this.poolSize = poolSize;
@@ -74,41 +71,26 @@ public class PerformanceTest {
     }
 
     @Before
-    public void setup() throws Exception {
+    public void setup() {
         pool = dbr.builder
                 .password("async-pg")
                 .maxConnections(poolSize)
                 .build();
-        stmt = pool.getConnection().get().prepareStatement(SELECT_42).get();
+        List<Connection> connections = IntStream.range(0, poolSize)
+                .mapToObj(i -> pool.getConnection().join()).collect(Collectors.toList());
+        connections.forEach(connection -> {
+            connection.prepareStatement(SELECT_42).join().close().join();
+            connection.close().join();
+        });
     }
 
     @After
     public void tearDown() {
-        stmt.close().join();
         pool.close().join();
     }
 
-    /*
-    @Test(timeout = 2000)
-    public void t1_preAllocatePool() throws Exception {
-        CompletableFuture.allOf((CompletableFuture<?>[]) IntStream.range(0, poolSize)
-                .mapToObj(i -> pool.getConnection()
-                        .thenApply(connection ->
-                                connection.prepareStatement(SELECT_42)
-                                        .thenApply(PreparedStatement::close)
-                                        .thenCompose(Function.identity())
-                                        .thenApply(v -> connection.close())
-                                        .thenCompose(Function.identity())
-                        )
-                        .thenCompose(Function.identity())
-                )
-                .toArray(size -> new CompletableFuture<?>[size])
-        ).get();
-    }
-    */
-
     @Test
-    public void t3_run() {
+    public void observeSomeBatches() {
         double mean = LongStream.range(0, repeats)
                 .map(i -> {
                     try {
@@ -141,7 +123,24 @@ public class PerformanceTest {
         }
 
         private void nextSample() {
-            stmt.query()
+            pool.getConnection()
+                    .thenApply(connection ->
+                            connection.prepareStatement(SELECT_42)
+                                    .thenApply(stmt -> stmt.query()
+                                            .thenApply(rs -> stmt.close())
+                                            .exceptionally(th -> stmt.close().whenComplete((v, _th) -> {
+                                                throw new RuntimeException(th);
+                                            }))
+                                            .thenCompose(Function.identity())
+                                            .thenApply(v -> connection.close())
+                                            .exceptionally(th -> connection.close().whenComplete((v, _th) -> {
+                                                throw new RuntimeException(th);
+                                            }))
+                                            .thenCompose(Function.identity())
+                                    )
+                                    .thenCompose(Function.identity())
+                    )
+                    .thenCompose(Function.identity())
                     .thenAccept(v -> {
                         if (++performed < batchSize) {
                             nextSample();
@@ -154,54 +153,10 @@ public class PerformanceTest {
                         onBatch.completeExceptionally(th);
                         return null;
                     });
+
         }
     }
 
-    /*
-    private long performBatch() throws Exception {
-        List<CompletableFuture<Void>> batchFutures = new ArrayList<>();
-        long startTime = currentTimeMillis();
-        for (int i = 0; i < batchSize; i++) {
-
-            batchFutures.add(pool.getConnection()
-                    .thenApply(connection -> connection.prepareStatement(SELECT_42)
-                            .thenApply(stmt -> {
-                                        return stmt.query()
-                                                .handle((v, th) ->
-                                                        stmt.close()
-                                                                .thenAccept(_v -> {
-                                                                    if (th != null) {
-                                                                        throw new RuntimeException(th);
-                                                                    }
-                                                                })
-                                                )
-                                                .thenCompose(Function.identity());
-                                    }
-                            )
-                            .thenCompose(Function.identity())
-                            .handle((v, th) -> connection.close()
-                                    .thenAccept(_v -> {
-                                        if (th != null) {
-                                            throw new RuntimeException(th);
-                                        }
-                                    }))
-                            .thenCompose(Function.identity())
-                    )
-                    .thenCompose(Function.identity())
-                    .exceptionally(th -> {
-                        throw new AssertionError(th);
-                    }));
-
-            // batchFutures.add(pool.completeScript(SELECT_42).thenAccept(rs -> {
-            // }));
-        }
-        CompletableFuture
-                .allOf(batchFutures.toArray(new CompletableFuture<?>[]{}))
-                .get();
-        long duration = currentTimeMillis() - startTime;
-        return duration;
-    }
-*/
     @AfterClass
     public static void printResults() {
         out.println();
