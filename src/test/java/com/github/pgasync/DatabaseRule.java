@@ -1,12 +1,11 @@
 package com.github.pgasync;
 
 import static java.lang.System.getenv;
-import static ru.yandex.qatools.embed.postgresql.distribution.Version.V11_1;
 
-import com.pgasync.ConnectionPool;
-import com.pgasync.ConnectionPoolBuilder;
-import com.pgasync.Db;
+import com.pgasync.ConnectibleBuilder;
+import com.pgasync.Connectible;
 import com.pgasync.ResultSet;
+import de.flapdoodle.embed.process.runtime.Network;
 import org.junit.rules.ExternalResource;
 
 import java.io.IOException;
@@ -20,53 +19,54 @@ import ru.yandex.qatools.embed.postgresql.PostgresProcess;
 import ru.yandex.qatools.embed.postgresql.PostgresStarter;
 import ru.yandex.qatools.embed.postgresql.config.AbstractPostgresConfig;
 import ru.yandex.qatools.embed.postgresql.config.PostgresConfig;
+import ru.yandex.qatools.embed.postgresql.distribution.Version;
 
 /**
  * @author Antti Laisi
  */
 class DatabaseRule extends ExternalResource {
 
-    final ConnectionPoolBuilder builder;
     private static PostgresProcess process;
-    ConnectionPool pool;
+
+    final ConnectibleBuilder builder;
+    Connectible pool;
 
     DatabaseRule() {
         this(createPoolBuilder(1));
     }
 
-    DatabaseRule(ConnectionPoolBuilder builder) {
+    DatabaseRule(ConnectibleBuilder builder) {
         this.builder = builder;
         if (builder instanceof EmbeddedConnectionPoolBuilder) {
-            /*
-            if (process == null) {
-                try {
-                    PostgresStarter<PostgresExecutable, PostgresProcess> runtime = PostgresStarter.getDefaultInstance();
-                    //PostgresConfig config = new PostgresConfig(V11_1, new AbstractPostgresConfig.Net(),
-                    PostgresConfig config = new PostgresConfig(V11_1, new AbstractPostgresConfig.Net("localhost", 54321),
-                            new AbstractPostgresConfig.Storage("async-pg"), new AbstractPostgresConfig.Timeout(),
-                            new AbstractPostgresConfig.Credentials("async-pg", "async-pg"));
-                    PostgresExecutable exec = runtime.prepare(config);
-                    process = exec.start();
+            String port = System.getProperty("asyncpg.test.postgres.port");
+            if (port != null && !port.isBlank()) {
+                builder.hostname("localhost");
+                builder.port(Integer.valueOf(port));
+            } else {
+                if (process == null) {
+                    try {
+                        PostgresStarter<PostgresExecutable, PostgresProcess> runtime = PostgresStarter.getDefaultInstance();
+                        PostgresConfig config = new PostgresConfig(Version.V11_1, new AbstractPostgresConfig.Net(),
+                                new AbstractPostgresConfig.Storage("async-pg"), new AbstractPostgresConfig.Timeout(),
+                                new AbstractPostgresConfig.Credentials("async-pg", "async-pg"));
+                        PostgresExecutable exec = runtime.prepare(config);
+                        process = exec.start();
 
-                    System.out.printf("Started postgres to %s:%d%n", process.getConfig().net().host(), process.getConfig().net().port());
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
+                        System.out.printf("Started postgres to %s:%d%n", process.getConfig().net().host(), process.getConfig().net().port());
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
                 }
+                builder.hostname(process.getConfig().net().host());
+                builder.port(process.getConfig().net().port());
             }
-            builder.hostname(process.getConfig().net().host());
-            builder.port(process.getConfig().net().port());
-            */
-
-            builder.hostname("localhost");
-            builder.port(54321);
-
         }
     }
 
     @Override
     protected void before() {
         if (pool == null) {
-            pool = builder.build();
+            pool = builder.pool();
         }
     }
 
@@ -82,15 +82,15 @@ class DatabaseRule extends ExternalResource {
     }
 
     ResultSet query(String sql) {
-        return block(db().completeQuery(sql));
+        return block(pool().completeQuery(sql));
     }
 
     ResultSet query(String sql, List<?> params) {
-        return block(db().completeQuery(sql, params.toArray()));
+        return block(pool().completeQuery(sql, params.toArray()));
     }
 
     Collection<ResultSet> script(String sql) {
-        return block(db().completeScript(sql));
+        return block(pool().completeScript(sql));
     }
 
     private <T> T block(CompletableFuture<T> future) {
@@ -101,12 +101,17 @@ class DatabaseRule extends ExternalResource {
         }
     }
 
-    Db db() {
+    Connectible pool() {
         before();
         return pool;
     }
 
-    static class EmbeddedConnectionPoolBuilder extends ConnectionPoolBuilder {
+    Connectible plain() {
+        before();
+        return pool;
+    }
+
+    static class EmbeddedConnectionPoolBuilder extends ConnectibleBuilder {
         EmbeddedConnectionPoolBuilder() {
             database("async-pg");
             username("async-pg");
@@ -115,11 +120,11 @@ class DatabaseRule extends ExternalResource {
         }
     }
 
-    static ConnectionPool createPool(int size) {
-        return createPoolBuilder(size).build();
+    static Connectible createPool(int size) {
+        return createPoolBuilder(size).pool();
     }
 
-    static ConnectionPoolBuilder createPoolBuilder(int size) {
+    static ConnectibleBuilder createPoolBuilder(int size) {
         String db = getenv("PG_DATABASE");
         String user = getenv("PG_USERNAME");
         String pass = getenv("PG_PASSWORD");

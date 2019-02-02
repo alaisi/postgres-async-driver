@@ -90,7 +90,7 @@ public class QueryResultTest {
 
     @Test
     public void shouldStreamResultRows() throws Exception {
-        List<Integer> series = dbr.db().completeQuery("select generate_series(1, 5)")
+        List<Integer> series = dbr.pool().completeQuery("select generate_series(1, 5)")
                 .thenApply(rs -> StreamSupport.stream(rs.spliterator(), false)
                         .map(r -> r.getInt(0))
                         .collect(Collectors.toList()))

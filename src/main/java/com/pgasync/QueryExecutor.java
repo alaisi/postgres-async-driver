@@ -8,7 +8,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -38,6 +37,12 @@ public interface QueryExecutor {
             private Map<String, PgColumn> columnsByName;
             private PgColumn[] orderedColumns;
             private List<Row> rows;
+
+            private void reset() {
+                columnsByName = null;
+                orderedColumns = null;
+                rows = null;
+            }
         }
         ResultSetAssembly assembly = new ResultSetAssembly();
         return script(
@@ -47,12 +52,15 @@ public interface QueryExecutor {
                     assembly.rows = new ArrayList<>();
                 },
                 row -> assembly.rows.add(row),
-                affected -> results.add(new PgResultSet(
-                        assembly.columnsByName != null ? assembly.columnsByName : Map.of(),
-                        assembly.orderedColumns != null ? List.of(assembly.orderedColumns) : List.of(),
-                        assembly.rows != null ? assembly.rows : List.of(),
-                        affected
-                )),
+                affected -> {
+                    results.add(new PgResultSet(
+                            assembly.columnsByName != null ? assembly.columnsByName : Map.of(),
+                            assembly.orderedColumns != null ? List.of(assembly.orderedColumns) : List.of(),
+                            assembly.rows != null ? assembly.rows : List.of(),
+                            affected
+                    ));
+                    assembly.reset();
+                },
                 sql
         )
                 .thenApply(v -> results);
@@ -85,19 +93,27 @@ public interface QueryExecutor {
      * @return CompletableFuture of {@link ResultSet}.
      */
     default CompletableFuture<ResultSet> completeQuery(String sql, Object... params) {
-        AtomicReference<Map<String, PgColumn>> columnsByNameRef = new AtomicReference<>();
-        AtomicReference<PgColumn[]> orderedColumnsRef = new AtomicReference<>();
-        List<Row> rows = new ArrayList<>();
+        class ResultSetAssembly {
+            private Map<String, PgColumn> columnsByName;
+            private PgColumn[] orderedColumns;
+            private List<Row> rows;
+        }
+        ResultSetAssembly assembly = new ResultSetAssembly();
         return query(
                 (columnsByName, orderedColumns) -> {
-                    columnsByNameRef.set(columnsByName);
-                    orderedColumnsRef.set(orderedColumns);
+                    assembly.columnsByName = columnsByName;
+                    assembly.orderedColumns = orderedColumns;
+                    assembly.rows = new ArrayList<>();
                 },
-                rows::add,
+                row -> assembly.rows.add(row),
                 sql,
                 params
         )
-                .thenApply(affected -> new PgResultSet(columnsByNameRef.get(), List.of(orderedColumnsRef.get()), rows, affected));
+                .thenApply(affected -> new PgResultSet(
+                        assembly.columnsByName != null ? assembly.columnsByName : Map.of(),
+                        assembly.orderedColumns != null ? List.of(assembly.orderedColumns) : List.of(),
+                        assembly.rows != null ? assembly.rows : List.of(), affected
+                ));
 
     }
 

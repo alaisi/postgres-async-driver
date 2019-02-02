@@ -15,9 +15,9 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
 public class ArrayConversionsTest {
+    
     @ClassRule
     public static DatabaseRule dbr = new DatabaseRule();
-
 
     @BeforeClass
     public static void create() {

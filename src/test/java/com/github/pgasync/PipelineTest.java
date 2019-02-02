@@ -14,8 +14,8 @@
 
 package com.github.pgasync;
 
+import com.pgasync.Connectible;
 import com.pgasync.Connection;
-import com.pgasync.ConnectionPool;
 import com.pgasync.SqlException;
 import org.junit.After;
 import org.junit.Before;
@@ -35,7 +35,7 @@ import static org.hamcrest.CoreMatchers.*;
 import static org.junit.Assert.assertThat;
 
 /**
- * Tests for statement pipelining.
+ * Tests for statements pipelining.
  *
  * @author Mikko Tiihonen
  * @author Marat Gainullin
@@ -46,11 +46,11 @@ public class PipelineTest {
     public static DatabaseRule dbr = new DatabaseRule();
 
     private Connection c;
-    private ConnectionPool pool;
+    private Connectible pool;
 
     @Before
     public void setupPool() {
-        pool = dbr.builder.build();
+        pool = dbr.builder.pool();
     }
 
     @After

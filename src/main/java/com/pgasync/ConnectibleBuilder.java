@@ -16,6 +16,7 @@ package com.pgasync;
 
 import com.github.pgasync.conversion.DataConverter;
 import com.github.pgasync.netty.NettyPgConnectionPool;
+import com.github.pgasync.netty.NettyPgDatabase;
 
 import java.nio.charset.Charset;
 import java.util.ArrayList;
@@ -25,89 +26,100 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 
 /**
- * Builder for creating {@link ConnectionPool} instances.
+ * Builder for creating {@link Connectible} instances.
  *
  * @author Antti Laisi
  */
-public class ConnectionPoolBuilder {
+public class ConnectibleBuilder {
 
-    private final PoolProperties properties = new PoolProperties();
+    private final ConnectibleProperties properties = new ConnectibleProperties();
 
     /**
      * @return Pool ready for use
      */
-    public ConnectionPool build(Executor futureExecutor) {
+    public Connectible pool(Executor futureExecutor) {
         return new NettyPgConnectionPool(properties, futureExecutor);
     }
 
-    public ConnectionPool build() {
-        return build(ForkJoinPool.commonPool());
+    public Connectible pool() {
+        return pool(ForkJoinPool.commonPool());
     }
 
-    public ConnectionPoolBuilder hostname(String hostname) {
+    /**
+     * @return Pool ready for use
+     */
+    public Connectible plain(Executor futureExecutor) {
+        return new NettyPgDatabase(properties, futureExecutor);
+    }
+
+    public Connectible plain() {
+        return plain(ForkJoinPool.commonPool());
+    }
+
+    public ConnectibleBuilder hostname(String hostname) {
         properties.hostname = hostname;
         return this;
     }
 
-    public ConnectionPoolBuilder port(int port) {
+    public ConnectibleBuilder port(int port) {
         properties.port = port;
         return this;
     }
 
-    public ConnectionPoolBuilder username(String username) {
+    public ConnectibleBuilder username(String username) {
         properties.username = username;
         return this;
     }
 
-    public ConnectionPoolBuilder password(String password) {
+    public ConnectibleBuilder password(String password) {
         properties.password = password;
         return this;
     }
 
-    public ConnectionPoolBuilder database(String database) {
+    public ConnectibleBuilder database(String database) {
         properties.database = database;
         return this;
     }
 
-    public ConnectionPoolBuilder maxConnections(int maxConnections) {
+    public ConnectibleBuilder maxConnections(int maxConnections) {
         properties.maxConnections = maxConnections;
         return this;
     }
 
-    public ConnectionPoolBuilder maxStatements(int maxStatements) {
+    public ConnectibleBuilder maxStatements(int maxStatements) {
         properties.maxStatements = maxStatements;
         return this;
     }
 
-    public ConnectionPoolBuilder converters(Converter<?>... converters) {
+    public ConnectibleBuilder converters(Converter<?>... converters) {
         Collections.addAll(properties.converters, converters);
         return this;
     }
 
-    public ConnectionPoolBuilder dataConverter(DataConverter dataConverter) {
+    public ConnectibleBuilder dataConverter(DataConverter dataConverter) {
         properties.dataConverter = dataConverter;
         return this;
     }
 
-    public ConnectionPoolBuilder ssl(boolean ssl) {
+    public ConnectibleBuilder ssl(boolean ssl) {
         properties.useSsl = ssl;
         return this;
     }
 
-    public ConnectionPoolBuilder validationQuery(String validationQuery) {
+    public ConnectibleBuilder validationQuery(String validationQuery) {
         properties.validationQuery = validationQuery;
         return this;
     }
 
-    public ConnectionPoolBuilder encoding(String value) {
+    public ConnectibleBuilder encoding(String value) {
         properties.encoding = value;
         return this;
     }
 
     /**
-     * Configuration for a pool.
+     * Configuration for a connectible.
      */
-    public static class PoolProperties {
+    public static class ConnectibleProperties {
 
         String hostname = "localhost";
         int port = 5432;
@@ -116,7 +128,7 @@ public class ConnectionPoolBuilder {
         String database;
         int maxConnections = 20;
         int maxStatements = 20;
-        DataConverter dataConverter = null;
+        DataConverter dataConverter;
         List<Converter<?>> converters = new ArrayList<>();
         boolean useSsl;
         String encoding = System.getProperty("pg.async.encoding", "utf-8");

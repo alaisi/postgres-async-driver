@@ -80,6 +80,7 @@ public class PgConnection implements Connection {
             Bind bind = new Bind(sname, dataConverter.fromParameters(params));
             Consumer<DataRow> rowProcessor = dataRow -> processor.accept(new PgRow(dataRow, columns.byName, columns.ordered, dataConverter));
             if (columns != null) {
+                onColumns.accept(columns.byName, columns.ordered);
                 return stream
                         .send(bind, rowProcessor);
             } else {

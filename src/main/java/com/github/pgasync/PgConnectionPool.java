@@ -14,22 +14,19 @@
 
 package com.github.pgasync;
 
-import com.github.pgasync.conversion.DataConverter;
 import com.pgasync.Connection;
 import com.pgasync.Listening;
 import com.pgasync.PreparedStatement;
 import com.pgasync.Row;
 import com.pgasync.SqlException;
-import com.pgasync.ConnectionPool;
-import com.pgasync.ConnectionPoolBuilder;
+import com.pgasync.ConnectibleBuilder;
 import com.pgasync.ResultSet;
 import com.pgasync.Transaction;
 
 import javax.annotation.concurrent.GuardedBy;
-import java.net.InetSocketAddress;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.Map;
@@ -42,14 +39,13 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.stream.Collectors;
 
 /**
- * Pool for backend connections.
+ * Resource pool for backend connections.
  *
  * @author Antti Laisi
  */
-public abstract class PgConnectionPool implements ConnectionPool {
+public abstract class PgConnectionPool extends PgConnectible {
 
     private class PooledPgConnection implements Connection {
 
@@ -118,15 +114,29 @@ public abstract class PgConnectionPool implements ConnectionPool {
             return delegate.isConnected();
         }
 
+        private void closeNextStatement(Iterator<PooledPgPreparedStatement> statementsSource, CompletableFuture<Void> onComplete) {
+            if (statementsSource.hasNext()) {
+                statementsSource.next().delegate.close()
+                        .thenAccept(v -> {
+                            statementsSource.remove();
+                            closeNextStatement(statementsSource, onComplete);
+                        })
+                        .exceptionally(th -> {
+                            futuresExecutor.execute(() -> onComplete.completeExceptionally(th));
+                            return null;
+                        });
+            } else {
+                onComplete.completeAsync(() -> null, futuresExecutor);
+            }
+        }
+
         CompletableFuture<Void> shutdown() {
-            CompletableFuture<?>[] closeTasks = statements.values().stream()
-                    .map(stmt -> stmt.delegate.close())
-                    .collect(Collectors.toList()).toArray(new CompletableFuture<?>[]{});
-            statements.clear();
-            return CompletableFuture.allOf(closeTasks)
+            CompletableFuture<Void> onComplete = new CompletableFuture<>();
+            closeNextStatement(statements.values().iterator(), onComplete);
+            return onComplete
                     .thenApply(v -> {
                         if (!statements.isEmpty()) {
-                            Logger.getLogger(PooledPgConnection.class.getName()).log(Level.WARNING, "Stale prepared statements detected {0}", statements.size());
+                            throw new IllegalStateException("Stale prepared statements detected (" + statements.size() + ")");
                         }
                         return delegate.close();
                     })
@@ -155,7 +165,20 @@ public abstract class PgConnectionPool implements ConnectionPool {
 
         @Override
         public CompletableFuture<Integer> query(BiConsumer<Map<String, PgColumn>, PgColumn[]> onColumns, Consumer<Row> onRow, String sql, Object... params) {
-            return delegate.query(onColumns, onRow, sql, params);
+            return prepareStatement(sql, dataConverter.assumeTypes(params))
+                    .thenApply(stmt ->
+                            stmt.fetch(onColumns, onRow, params)
+                                    .handle((affected, th) ->
+                                            stmt.close()
+                                                    .thenApply(v -> {
+                                                        if (th == null) {
+                                                            return affected;
+                                                        } else {
+                                                            throw new RuntimeException(th);
+                                                        }
+                                                    })
+                                    ).thenCompose(Function.identity())
+                    ).thenCompose(Function.identity());
         }
 
         @Override
@@ -171,6 +194,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
 
         private class PooledPgPreparedStatement implements PreparedStatement {
 
+            private static final String DUPLICATED_PREPARED_STATEMENT_DETECTED = "Duplicated prepared statement detected. Closing extra instance. \n{0}";
             private final String sql;
             private final PgConnection.PgPreparedStatement delegate;
 
@@ -181,15 +205,27 @@ public abstract class PgConnectionPool implements ConnectionPool {
 
             @Override
             public CompletableFuture<Void> close() {
-                statements.put(sql, this);
+                PooledPgPreparedStatement already = statements.put(sql, this);
                 if (evicted != null) {
                     try {
-                        return evicted.delegate.close();
+                        if (already != null && already != evicted) {
+                            Logger.getLogger(PgConnectionPool.class.getName()).log(Level.WARNING, DUPLICATED_PREPARED_STATEMENT_DETECTED, already.sql);
+                            return evicted.delegate.close()
+                                    .thenApply(v -> already.delegate.close())
+                                    .thenCompose(Function.identity());
+                        } else {
+                            return evicted.delegate.close();
+                        }
                     } finally {
                         evicted = null;
                     }
                 } else {
-                    return CompletableFuture.completedFuture(null);
+                    if (already != null) {
+                        Logger.getLogger(PgConnectionPool.class.getName()).log(Level.WARNING, DUPLICATED_PREPARED_STATEMENT_DETECTED, already.sql);
+                        return already.delegate.close();
+                    } else {
+                        return CompletableFuture.completedFuture(null);
+                    }
                 }
             }
 
@@ -207,9 +243,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
 
     private final int maxConnections;
     private final int maxStatements;
-    private final String validationQuery;
     private final ReentrantLock lock = new ReentrantLock();
-    protected final Charset encoding;
 
     @GuardedBy("lock")
     private int size;
@@ -220,25 +254,10 @@ public abstract class PgConnectionPool implements ConnectionPool {
     @GuardedBy("lock")
     private final Queue<PooledPgConnection> connections = new LinkedList<>();
 
-    private final InetSocketAddress address;
-    private final String username;
-    private final String password;
-    private final String database;
-    private final DataConverter dataConverter;
-
-    protected final Executor futuresExecutor;
-
-    public PgConnectionPool(ConnectionPoolBuilder.PoolProperties properties, Executor futuresExecutor) {
-        this.address = InetSocketAddress.createUnresolved(properties.getHostname(), properties.getPort());
-        this.username = properties.getUsername();
-        this.password = properties.getPassword();
-        this.database = properties.getDatabase();
+    public PgConnectionPool(ConnectibleBuilder.ConnectibleProperties properties, Executor futuresExecutor) {
+        super(properties, futuresExecutor);
         this.maxConnections = properties.getMaxConnections();
         this.maxStatements = properties.getMaxStatements();
-        this.dataConverter = properties.getDataConverter();
-        this.validationQuery = properties.getValidationQuery();
-        this.encoding = Charset.forName(properties.getEncoding());
-        this.futuresExecutor = futuresExecutor;
     }
 
     @Override
@@ -259,7 +278,7 @@ public abstract class PgConnectionPool implements ConnectionPool {
         } finally {
             lock.unlock();
         }
-        return CompletableFuture.allOf(shutdownTasks.toArray(size -> new CompletableFuture<?>[size]));
+        return CompletableFuture.allOf(shutdownTasks.toArray(CompletableFuture<?>[]::new));
     }
 
     @Override
@@ -280,7 +299,17 @@ public abstract class PgConnectionPool implements ConnectionPool {
                                 .connect(username, password, database)
                                 .thenApply(pooledConnection -> {
                                     if (validationQuery != null && !validationQuery.isBlank()) {
-                                        return pooledConnection.completeQuery(validationQuery).thenApply(rs -> pooledConnection);
+                                        return pooledConnection.completeScript(validationQuery)
+                                                .handle((rss, th) -> {
+                                                    if (th != null) {
+                                                        return ((PooledPgConnection) pooledConnection).delegate.close()
+                                                                .thenApply(v -> CompletableFuture.<Connection>failedFuture(th))
+                                                                .thenCompose(Function.identity());
+                                                    } else {
+                                                        return CompletableFuture.completedFuture(pooledConnection);
+                                                    }
+                                                })
+                                                .thenCompose(Function.identity());
                                     } else {
                                         return CompletableFuture.completedFuture(pooledConnection);
                                     }
@@ -347,56 +376,4 @@ public abstract class PgConnectionPool implements ConnectionPool {
         return shutdownTask;
     }
 
-    @Override
-    public CompletableFuture<Transaction> begin() {
-        return getConnection()
-                .thenApply(Connection::begin)
-                .thenCompose(Function.identity());
-    }
-
-    @Override
-    public CompletableFuture<Void> script(BiConsumer<Map<String, PgColumn>, PgColumn[]> onColumns, Consumer<Row> onRow, Consumer<Integer> onAffected, String sql) {
-        return getConnection()
-                .thenApply(connection ->
-                        connection.script(onColumns, onRow, onAffected, sql)
-                                .handle((message, th) ->
-                                        connection.close()
-                                                .thenApply(v -> {
-                                                    if (th == null) {
-                                                        return message;
-                                                    } else {
-                                                        throw new RuntimeException(th);
-                                                    }
-                                                })
-                                ).thenCompose(Function.identity())
-                )
-                .thenCompose(Function.identity());
-    }
-
-    @Override
-    public CompletableFuture<Integer> query(BiConsumer<Map<String, PgColumn>, PgColumn[]> onColumns, Consumer<Row> onRow, String sql, Object... params) {
-        return getConnection()
-                .thenApply(connection ->
-                        connection.query(onColumns, onRow, sql, params)
-                                .handle((affected, th) ->
-                                        connection.close()
-                                                .thenApply(v -> {
-                                                    if (th == null) {
-                                                        return affected;
-                                                    } else {
-                                                        throw new RuntimeException(th);
-                                                    }
-                                                })
-                                ).thenCompose(Function.identity())
-                )
-                .thenCompose(Function.identity());
-    }
-
-    /**
-     * Creates a new socket stream to the backend.
-     *
-     * @param address Server address
-     * @return Stream with no pending messages
-     */
-    protected abstract PgProtocolStream openStream(InetSocketAddress address);
 }

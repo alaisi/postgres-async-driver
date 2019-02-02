@@ -15,7 +15,7 @@
 package com.github.pgasync;
 
 import com.pgasync.Connection;
-import com.pgasync.ConnectionPool;
+import com.pgasync.Connectible;
 import org.junit.*;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -24,6 +24,7 @@ import org.junit.runners.Parameterized.Parameters;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.Function;
+import java.util.function.IntFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
@@ -42,11 +43,9 @@ public class PerformanceTest {
 
     @Parameters(name = "{index}: maxConnections={0}, threads={1}")
     public static Iterable<Object[]> data() {
-        results = new TreeMap<>();
         List<Object[]> testData = new ArrayList<>();
-        for (int poolSize = 1; poolSize <= 16; poolSize *= 2) {
-            results.putIfAbsent(poolSize, new TreeMap<>());
-            for (int threads = 1; threads <= 16; threads *= 2) {
+        for (int poolSize = 1; poolSize <= 8; poolSize *= 2) {
+            for (int threads = 1; threads <= 8; threads *= 2) {
                 testData.add(new Object[]{poolSize, threads});
             }
         }
@@ -55,11 +54,12 @@ public class PerformanceTest {
 
     private static final int batchSize = 1000;
     private static final int repeats = 5;
-    private static SortedMap<Integer, SortedMap<Integer, Long>> results = new TreeMap<>();
+    private static SortedMap<Integer, SortedMap<Integer, Long>> simpleQueryResults = new TreeMap<>();
+    private static SortedMap<Integer, SortedMap<Integer, Long>> preparedStatementResults = new TreeMap<>();
 
     private final int poolSize;
     private final int numThreads;
-    private ConnectionPool pool;
+    private Connectible pool;
 
     public PerformanceTest(int poolSize, int numThreads) {
         this.poolSize = poolSize;
@@ -71,7 +71,7 @@ public class PerformanceTest {
         pool = dbr.builder
                 .password("async-pg")
                 .maxConnections(poolSize)
-                .build(Executors.newFixedThreadPool(numThreads));
+                .pool(Executors.newFixedThreadPool(numThreads));
         List<Connection> connections = IntStream.range(0, poolSize)
                 .mapToObj(i -> pool.getConnection().join()).collect(Collectors.toList());
         connections.forEach(connection -> {
@@ -86,13 +86,17 @@ public class PerformanceTest {
     }
 
     @Test
-    public void observeSomeBatches() {
+    public void observeBatches() {
+        performBatches(simpleQueryResults, i -> new Batch(batchSize).startWithSimpleQuery());
+        performBatches(preparedStatementResults, i -> new Batch(batchSize).startWithPreparedStatement());
+    }
+
+    private void performBatches(SortedMap<Integer, SortedMap<Integer, Long>> results, IntFunction<CompletableFuture<Long>> batchStarter) {
         double mean = LongStream.range(0, repeats)
                 .map(i -> {
                     try {
                         List<CompletableFuture<Long>> batches = IntStream.range(0, poolSize)
-                                //.mapToObj(ci -> startBatchWithPreparedStatement())
-                                .mapToObj(ci -> startBatchWithSimpleQuery())
+                                .mapToObj(batchStarter)
                                 .collect(Collectors.toList());
                         CompletableFuture.allOf(batches.toArray(new CompletableFuture<?>[]{})).get();
                         return batches.stream().map(CompletableFuture::join).max(Long::compare).get();
@@ -103,14 +107,6 @@ public class PerformanceTest {
                 .average().getAsDouble();
         results.computeIfAbsent(poolSize, k -> new TreeMap<>())
                 .put(numThreads, Math.round(mean));
-    }
-
-    private CompletableFuture<Long> startBatchWithPreparedStatement() {
-        return new Batch(batchSize).startWithPreparedStatement();
-    }
-
-    private CompletableFuture<Long> startBatchWithSimpleQuery() {
-        return new Batch(batchSize).startWithSimpleQuery();
     }
 
     private class Batch {
@@ -193,6 +189,15 @@ public class PerformanceTest {
     public static void printResults() {
         out.println();
         out.println("Requests per second, Hz:");
+        out.println();
+        out.println("Simple query protocol");
+        printResults(simpleQueryResults);
+        out.println();
+        out.println("Extended query protocol (reusing prepared statement)");
+        printResults(preparedStatementResults);
+    }
+
+    private static void printResults(SortedMap<Integer, SortedMap<Integer, Long>> results) {
         out.print(" threads");
         results.keySet().forEach(i -> out.printf("\t%d conn\t", i));
         out.println();

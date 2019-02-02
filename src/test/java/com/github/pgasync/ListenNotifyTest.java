@@ -1,7 +1,10 @@
 package com.github.pgasync;
 
-import com.pgasync.ConnectionPool;
+import com.pgasync.Connectible;
+import com.pgasync.Connection;
 import com.pgasync.Listening;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 
@@ -19,26 +22,43 @@ public class ListenNotifyTest {
     @ClassRule
     public static DatabaseRule dbr = new DatabaseRule(DatabaseRule.createPoolBuilder(5));
 
+    private Connectible pool;
+
+    @Before
+    public void setup() {
+        pool = dbr.pool();
+    }
+
+    @After
+    public void shutdown() {
+        pool.close().join();
+    }
+
     @Test
-    public void shouldReceiveNotificationsOnListenedChannel() throws Exception {
-        ConnectionPool pool = dbr.pool;
+    public void shouldReceiveNotificationsOnListenedChannel() throws InterruptedException {
         BlockingQueue<String> result = new LinkedBlockingQueue<>(5);
 
-        Listening subscription = pool.getConnection().get().subscribe("example", result::offer).get();
+        Connection conn = pool.getConnection().join();
         try {
-            TimeUnit.SECONDS.sleep(2);
+            Listening subscription = conn.subscribe("example", result::offer).join();
+            try {
+                TimeUnit.SECONDS.sleep(2);
 
-            pool.completeScript("notify example, 'msg-1'").get();
-            pool.completeScript("notify example, 'msg-2'").get();
-            pool.completeScript("notify example, 'msg-3'").get();
+                pool.completeScript("notify example, 'msg-1'").join();
+                pool.completeScript("notify example, 'msg-2'").join();
+                pool.completeScript("notify example, 'msg-3'").join();
 
-            assertEquals("msg-1", result.poll(2, TimeUnit.SECONDS));
-            assertEquals("msg-2", result.poll(2, TimeUnit.SECONDS));
-            assertEquals("msg-3", result.poll(2, TimeUnit.SECONDS));
+                assertEquals("msg-1", result.poll(2, TimeUnit.SECONDS));
+                assertEquals("msg-2", result.poll(2, TimeUnit.SECONDS));
+                assertEquals("msg-3", result.poll(2, TimeUnit.SECONDS));
+            } finally {
+                subscription.unlisten().join();
+            }
         } finally {
-            subscription.unlisten();
+            conn.close().join();
         }
-        pool.completeQuery("notify example, 'msg'").get();
+
+        pool.completeQuery("notify example, 'msg'").join();
         assertNull(result.poll(2, TimeUnit.SECONDS));
     }
 
