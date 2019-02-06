@@ -36,10 +36,15 @@ import static java.lang.System.out;
 @RunWith(Parameterized.class)
 public class PerformanceTest {
 
+    private static DatabaseRule dbr;
+
+    static {
+        System.setProperty("io.netty.eventLoopThreads", "1");
+        dbr = new DatabaseRule(createPoolBuilder(1));
+    }
+
     private static final String SELECT_42 = "select 42";
 
-    @ClassRule
-    public static DatabaseRule dbr = new DatabaseRule(createPoolBuilder(1));
 
     @Parameters(name = "{index}: maxConnections={0}, threads={1}")
     public static Iterable<Object[]> data() {
@@ -65,6 +70,7 @@ public class PerformanceTest {
         this.poolSize = poolSize;
         this.numThreads = numThreads;
     }
+
 
     @Before
     public void setup() {

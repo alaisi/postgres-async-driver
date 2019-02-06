@@ -17,7 +17,6 @@ package com.github.pgasync;
 import com.pgasync.Connectible;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 

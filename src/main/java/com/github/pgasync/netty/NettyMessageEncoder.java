@@ -43,7 +43,7 @@ import java.util.stream.Collectors;
  *
  * @author Antti Laisi
  */
-public class ByteBufMessageEncoder extends MessageToByteEncoder<Message> {
+public class NettyMessageEncoder extends MessageToByteEncoder<Message> {
 
     private static final Map<Class<?>, Encoder<?>> ENCODERS = Set.of(
             new SSLRequestEncoder(),
@@ -63,7 +63,7 @@ public class ByteBufMessageEncoder extends MessageToByteEncoder<Message> {
 
     private final Charset encoding;
 
-    public ByteBufMessageEncoder(Charset encoding) {
+    public NettyMessageEncoder(Charset encoding) {
         this.encoding = encoding;
     }
 

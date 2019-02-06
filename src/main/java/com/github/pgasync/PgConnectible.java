@@ -2,12 +2,11 @@ package com.github.pgasync;
 
 import com.github.pgasync.conversion.DataConverter;
 import com.pgasync.Connection;
-import com.pgasync.ConnectibleBuilder;
+import com.pgasync.NettyConnectibleBuilder;
 import com.pgasync.Connectible;
 import com.pgasync.Row;
 import com.pgasync.Transaction;
 
-import java.net.InetSocketAddress;
 import java.nio.charset.Charset;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -19,23 +18,23 @@ import java.util.function.Function;
 public abstract class PgConnectible implements Connectible {
 
     final String validationQuery;
-    final InetSocketAddress address;
     final String username;
     final DataConverter dataConverter;
+    final Executor futuresExecutor;
+    final Function<Executor, ProtocolStream> toStream;
+
     protected final String password;
     protected final String database;
     protected final Charset encoding;
 
-    protected final Executor futuresExecutor;
-
-    PgConnectible(ConnectibleBuilder.ConnectibleProperties properties, Executor futuresExecutor) {
-        this.address = InetSocketAddress.createUnresolved(properties.getHostname(), properties.getPort());
+    PgConnectible(NettyConnectibleBuilder.ConnectibleProperties properties, Function<Executor, ProtocolStream> toStream, Executor futuresExecutor) {
         this.username = properties.getUsername();
         this.password = properties.getPassword();
         this.database = properties.getDatabase();
         this.dataConverter = properties.getDataConverter();
         this.validationQuery = properties.getValidationQuery();
         this.encoding = Charset.forName(properties.getEncoding());
+        this.toStream = toStream;
         this.futuresExecutor = futuresExecutor;
     }
 
@@ -83,11 +82,4 @@ public abstract class PgConnectible implements Connectible {
                 .thenCompose(Function.identity());
     }
 
-    /**
-     * Creates a new socket stream to the backend.
-     *
-     * @param address Server address
-     * @return Stream with no pending messages
-     */
-    protected abstract PgProtocolStream openStream(InetSocketAddress address);
 }

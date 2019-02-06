@@ -2,10 +2,9 @@ package com.github.pgasync;
 
 import static java.lang.System.getenv;
 
-import com.pgasync.ConnectibleBuilder;
+import com.pgasync.NettyConnectibleBuilder;
 import com.pgasync.Connectible;
 import com.pgasync.ResultSet;
-import de.flapdoodle.embed.process.runtime.Network;
 import org.junit.rules.ExternalResource;
 
 import java.io.IOException;
@@ -28,14 +27,14 @@ class DatabaseRule extends ExternalResource {
 
     private static PostgresProcess process;
 
-    final ConnectibleBuilder builder;
+    final NettyConnectibleBuilder builder;
     Connectible pool;
 
     DatabaseRule() {
         this(createPoolBuilder(1));
     }
 
-    DatabaseRule(ConnectibleBuilder builder) {
+    DatabaseRule(NettyConnectibleBuilder builder) {
         this.builder = builder;
         if (builder instanceof EmbeddedConnectionPoolBuilder) {
             String port = System.getProperty("asyncpg.test.postgres.port");
@@ -111,7 +110,7 @@ class DatabaseRule extends ExternalResource {
         return pool;
     }
 
-    static class EmbeddedConnectionPoolBuilder extends ConnectibleBuilder {
+    static class EmbeddedConnectionPoolBuilder extends NettyConnectibleBuilder {
         EmbeddedConnectionPoolBuilder() {
             database("async-pg");
             username("async-pg");
@@ -124,7 +123,7 @@ class DatabaseRule extends ExternalResource {
         return createPoolBuilder(size).pool();
     }
 
-    static ConnectibleBuilder createPoolBuilder(int size) {
+    static NettyConnectibleBuilder createPoolBuilder(int size) {
         String db = getenv("PG_DATABASE");
         String user = getenv("PG_USERNAME");
         String pass = getenv("PG_PASSWORD");

@@ -19,7 +19,7 @@ import com.pgasync.Listening;
 import com.pgasync.PreparedStatement;
 import com.pgasync.Row;
 import com.pgasync.SqlException;
-import com.pgasync.ConnectibleBuilder;
+import com.pgasync.NettyConnectibleBuilder;
 import com.pgasync.ResultSet;
 import com.pgasync.Transaction;
 
@@ -45,7 +45,7 @@ import java.util.logging.Logger;
  *
  * @author Antti Laisi
  */
-public abstract class PgConnectionPool extends PgConnectible {
+public class PgConnectionPool extends PgConnectible {
 
     private class PooledPgConnection implements Connection {
 
@@ -254,8 +254,8 @@ public abstract class PgConnectionPool extends PgConnectible {
     @GuardedBy("lock")
     private final Queue<PooledPgConnection> connections = new LinkedList<>();
 
-    public PgConnectionPool(ConnectibleBuilder.ConnectibleProperties properties, Executor futuresExecutor) {
-        super(properties, futuresExecutor);
+    public PgConnectionPool(NettyConnectibleBuilder.ConnectibleProperties properties, Function<Executor, ProtocolStream> addressToStream, Executor futuresExecutor) {
+        super(properties, addressToStream, futuresExecutor);
         this.maxConnections = properties.getMaxConnections();
         this.maxStatements = properties.getMaxStatements();
     }
@@ -295,7 +295,7 @@ public abstract class PgConnectionPool extends PgConnectible {
                     uponAvailable.completeAsync(() -> connection, futuresExecutor);
                 } else {
                     if (tryIncreaseSize()) {
-                        new PooledPgConnection(new PgConnection(openStream(address), dataConverter, encoding))
+                        new PooledPgConnection(new PgConnection(toStream.apply(futuresExecutor), dataConverter, encoding))
                                 .connect(username, password, database)
                                 .thenApply(pooledConnection -> {
                                     if (validationQuery != null && !validationQuery.isBlank()) {

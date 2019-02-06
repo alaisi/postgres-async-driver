@@ -14,10 +14,15 @@
 
 package com.pgasync;
 
+import com.github.pgasync.PgConnectionPool;
+import com.github.pgasync.PgDatabase;
+import com.github.pgasync.ProtocolStream;
 import com.github.pgasync.conversion.DataConverter;
-import com.github.pgasync.netty.NettyPgConnectionPool;
-import com.github.pgasync.netty.NettyPgDatabase;
+import com.github.pgasync.netty.NettyProtocolStream;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.nio.NioEventLoopGroup;
 
+import java.net.InetSocketAddress;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -29,89 +34,104 @@ import java.util.concurrent.ForkJoinPool;
  * Builder for creating {@link Connectible} instances.
  *
  * @author Antti Laisi
+ * @author Marat Gainullin
  */
-public class ConnectibleBuilder {
+public class NettyConnectibleBuilder {
 
     private final ConnectibleProperties properties = new ConnectibleProperties();
+    // TODO: refactor when Netty will support more advanced threading model
+    //new NioEventLoopGroup(0/*Netty defaults will be used*/, futuresExecutor),
+    private static final EventLoopGroup group = new NioEventLoopGroup();
+
+    private ProtocolStream newProtocolStream(Executor futuresExecutor) {
+        return new NettyProtocolStream(
+                group,
+                new InetSocketAddress(properties.getHostname(), properties.getPort()),
+                properties.getUseSsl(),
+                Charset.forName(properties.getEncoding()),
+                futuresExecutor
+        );
+    }
 
     /**
      * @return Pool ready for use
      */
-    public Connectible pool(Executor futureExecutor) {
-        return new NettyPgConnectionPool(properties, futureExecutor);
+    public Connectible pool(Executor futuresExecutor) {
+        return new PgConnectionPool(properties, this::newProtocolStream, futuresExecutor);
     }
 
     public Connectible pool() {
         return pool(ForkJoinPool.commonPool());
     }
 
+
     /**
      * @return Pool ready for use
      */
-    public Connectible plain(Executor futureExecutor) {
-        return new NettyPgDatabase(properties, futureExecutor);
+    public Connectible plain(Executor futuresExecutor) {
+        return new PgDatabase(properties, this::newProtocolStream, futuresExecutor);
     }
 
     public Connectible plain() {
         return plain(ForkJoinPool.commonPool());
     }
 
-    public ConnectibleBuilder hostname(String hostname) {
+    public NettyConnectibleBuilder hostname(String hostname) {
         properties.hostname = hostname;
         return this;
     }
 
-    public ConnectibleBuilder port(int port) {
+    public NettyConnectibleBuilder port(int port) {
         properties.port = port;
         return this;
     }
 
-    public ConnectibleBuilder username(String username) {
+    public NettyConnectibleBuilder username(String username) {
         properties.username = username;
         return this;
     }
 
-    public ConnectibleBuilder password(String password) {
+    public NettyConnectibleBuilder password(String password) {
         properties.password = password;
         return this;
     }
 
-    public ConnectibleBuilder database(String database) {
+    public NettyConnectibleBuilder database(String database) {
         properties.database = database;
         return this;
     }
 
-    public ConnectibleBuilder maxConnections(int maxConnections) {
+    public NettyConnectibleBuilder maxConnections(int maxConnections) {
         properties.maxConnections = maxConnections;
         return this;
     }
 
-    public ConnectibleBuilder maxStatements(int maxStatements) {
+    public NettyConnectibleBuilder maxStatements(int maxStatements) {
         properties.maxStatements = maxStatements;
         return this;
     }
 
-    public ConnectibleBuilder converters(Converter<?>... converters) {
+    public NettyConnectibleBuilder converters(Converter<?>... converters) {
         Collections.addAll(properties.converters, converters);
         return this;
     }
 
-    public ConnectibleBuilder dataConverter(DataConverter dataConverter) {
+    public NettyConnectibleBuilder dataConverter(DataConverter dataConverter) {
         properties.dataConverter = dataConverter;
         return this;
     }
 
-    public ConnectibleBuilder ssl(boolean ssl) {
+    public NettyConnectibleBuilder ssl(boolean ssl) {
         properties.useSsl = ssl;
         return this;
     }
 
-    public ConnectibleBuilder validationQuery(String validationQuery) {
+    public NettyConnectibleBuilder validationQuery(String validationQuery) {
         properties.validationQuery = validationQuery;
         return this;
     }
 
-    public ConnectibleBuilder encoding(String value) {
+    public NettyConnectibleBuilder encoding(String value) {
         properties.encoding = value;
         return this;
     }

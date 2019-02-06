@@ -129,13 +129,13 @@ public class PgConnection implements Connection {
 
     private static final NameSequence preparedStatementNames = new NameSequence("s-");
 
-    private final PgProtocolStream stream;
+    private final ProtocolStream stream;
     private final DataConverter dataConverter;
     private final Charset encoding;
 
     private Columns currentColumns;
 
-    PgConnection(PgProtocolStream stream, DataConverter dataConverter, Charset encoding) {
+    PgConnection(ProtocolStream stream, DataConverter dataConverter, Charset encoding) {
         this.stream = stream;
         this.dataConverter = dataConverter;
         this.encoding = encoding;

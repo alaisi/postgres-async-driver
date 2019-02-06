@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
  *
  * @author Antti Laisi
  */
-class ByteBufMessageDecoder extends ByteToMessageDecoder {
+class NettyMessageDecoder extends ByteToMessageDecoder {
 
     private static final Map<Byte, Decoder<?>> DECODERS = Set.of(
             new ErrorResponseDecoder(),
@@ -65,7 +65,7 @@ class ByteBufMessageDecoder extends ByteToMessageDecoder {
 
     private final Charset encoding;
 
-    public ByteBufMessageDecoder(Charset encoding) {
+    public NettyMessageDecoder(Charset encoding) {
         this.encoding = encoding;
     }
 

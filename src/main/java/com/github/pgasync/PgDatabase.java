@@ -1,20 +1,21 @@
 package com.github.pgasync;
 
 import com.pgasync.Connection;
-import com.pgasync.ConnectibleBuilder;
+import com.pgasync.NettyConnectibleBuilder;
+
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Function;
 
-public abstract class PgDatabase extends PgConnectible {
+public class PgDatabase extends PgConnectible {
 
-    public PgDatabase(ConnectibleBuilder.ConnectibleProperties properties, Executor futuresExecutor) {
-        super(properties, futuresExecutor);
+    public PgDatabase(NettyConnectibleBuilder.ConnectibleProperties properties, Function<Executor, ProtocolStream> toStream, Executor futuresExecutor) {
+        super(properties, toStream, futuresExecutor);
     }
 
     @Override
     public CompletableFuture<Connection> getConnection() {
-        return new PgConnection(openStream(address), dataConverter, encoding)
+        return new PgConnection(toStream.apply(futuresExecutor), dataConverter, encoding)
                 .connect(username, password, database)
                 .thenApply(connection -> {
                     if (validationQuery != null && !validationQuery.isBlank()) {
