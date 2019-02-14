@@ -127,7 +127,7 @@ public class PgConnection implements Connection {
         }
     }
 
-    private static final NameSequence preparedStatementNames = new NameSequence("s-");
+    private final NameSequence preparedStatementNames = new NameSequence("s-");
 
     private final ProtocolStream stream;
     private final DataConverter dataConverter;
