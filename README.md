@@ -35,7 +35,7 @@ Querying for rows returns an [rx.Observable](http://reactivex.io/documentation/o
 
 ```java
 Db db = ...;
-db.queryRows("select unnest('{ hello, world }'::text[] as message)")
+db.queryRows("select unnest('{ hello, world }'::text[]) as message")
     .map(row -> row.getString("message"))
     .subscribe(System.out::println)
 
